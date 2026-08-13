@@ -1,0 +1,7 @@
+services:
+  frontend:
+    build: .
+    image: asistencias-frontend:latest
+    container_name: frontend_asistencias
+    ports:
+      - "80:80"
