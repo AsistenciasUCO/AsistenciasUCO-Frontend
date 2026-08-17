@@ -1,0 +1,37 @@
+import { Course } from '../models/course.model';
+
+export const MOCK_COURSES: Course[] = [
+  {
+    id: 'crs-1',
+    code: 'MAT-301',
+    name: 'Matemática Avanzada III',
+    section: 'Sección A',
+    schedule: 'Lun, Mié 08:00 - 10:00 AM',
+    room: 'Aula A-204',
+    enrolledStudentsCount: 32,
+    docenteName: 'Dra. María Elena Rostagno',
+    colorCategory: 'emerald',
+  },
+  {
+    id: 'crs-2',
+    code: 'FIS-202',
+    name: 'Física Cuántica Aplicada',
+    section: 'Sección B',
+    schedule: 'Mar, Jue 10:30 - 12:30 PM',
+    room: 'Laboratorio L-102',
+    enrolledStudentsCount: 28,
+    docenteName: 'Dra. María Elena Rostagno',
+    colorCategory: 'amber',
+  },
+  {
+    id: 'crs-3',
+    code: 'ALG-105',
+    name: 'Álgebra Lineal y Matrices',
+    section: 'Sección C',
+    schedule: 'Viernes 14:00 - 18:00 PM',
+    room: 'Auditorio Principal',
+    enrolledStudentsCount: 45,
+    docenteName: 'Dra. María Elena Rostagno',
+    colorCategory: 'blue',
+  },
+];
