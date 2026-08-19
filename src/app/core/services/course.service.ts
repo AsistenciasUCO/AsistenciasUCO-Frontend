@@ -1,0 +1,52 @@
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable, of, delay, map, catchError } from 'rxjs';
+import { environment } from '../../../environments/environment';
+import { ApiResponse } from '../models/api-response.model';
+import { Course } from '../models/course.model';
+import { MOCK_COURSES } from '../mocks/course.mock';
+
+@Injectable({
+  providedIn: 'root',
+})
+export class CourseService {
+  constructor(private http: HttpClient) {}
+
+  getTeacherCourses(docenteId: string): Observable<ApiResponse<Course[]>> {
+    if (environment.useMocks) {
+      return of({
+        idTransaccion: 'mock-tx-courses-001',
+        exitoso: true,
+        total: MOCK_COURSES.length,
+        datos: MOCK_COURSES,
+      }).pipe(delay(400));
+    }
+
+    return this.http.get<any[]>(`${environment.apiUrl}/grupos`).pipe(
+      map((grupos: any[]) => ({
+        idTransaccion: 'tx-courses-001',
+        exitoso: true,
+        total: grupos ? grupos.length : 0,
+        datos: grupos ? grupos.map((g, idx) => ({
+          id: g.id,
+          code: g.codigoGrupo || g.codigo || `GRP-00${idx + 1}`,
+          name: g.nombreMateria || g.nombre || 'Asignatura',
+          section: g.seccion || 'Sección A',
+          schedule: g.horario || 'Por definir',
+          room: g.aula || 'Aula Principal',
+          enrolledStudentsCount: g.estudiantesActivos || g.totalEstudiantes || 0,
+          docenteName: g.nombreDocente || 'Docente UCO',
+          colorCategory: (['emerald', 'amber', 'blue', 'purple'][idx % 4]) as any,
+        })) : []
+      })),
+      catchError(() =>
+        of({
+          idTransaccion: 'tx-courses-fallback',
+          exitoso: true,
+          total: MOCK_COURSES.length,
+          datos: MOCK_COURSES,
+        })
+      )
+    );
+  }
+}

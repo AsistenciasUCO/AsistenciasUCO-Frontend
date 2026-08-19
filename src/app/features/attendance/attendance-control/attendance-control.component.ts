@@ -1,15 +1,20 @@
-import { Component, signal, computed, HostListener } from '@angular/core';
+import { Component, signal, computed, HostListener, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { AttendanceService } from '../../../core/services/attendance.service';
+import { StudentService } from '../../../core/services/student.service';
 import { CardComponent } from '../../../shared/components/card/card.component';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { BadgeComponent } from '../../../shared/components/badge/badge.component';
 import { ToastComponent } from '../../../shared/components/toast/toast.component';
 import { ModalComponent } from '../../../shared/components/modal/modal.component';
+import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
 import { FormSelectComponent, SelectOption } from '../../../shared/components/form-select/form-select.component';
-import { MOCK_SESSIONS } from '../../../core/mocks/attendance.mock';
-import { MOCK_COURSES } from '../../../core/mocks/course.mock';
+import { SessionService } from '../../../core/services/session.service';
+import { CatalogService } from '../../../core/services/catalog.service';
+import { CourseService } from '../../../core/services/course.service';
+import { Course } from '../../../core/models/course.model';
 import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core/models/attendance.model';
 
 @Component({
@@ -23,6 +28,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
     BadgeComponent,
     ToastComponent,
     ModalComponent,
+    AvatarComponent,
     FormFieldComponent,
     FormSelectComponent,
   ],
@@ -34,7 +40,11 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-warm-100 pb-3.5">
           <div>
             <div class="flex items-center gap-2 mb-0.5">
-              <app-badge variant="success" size="sm">Clase Habilitada</app-badge>
+              @if (currentSession()?.status === 'CONCLUIDA') {
+                <app-badge variant="neutral" size="sm">🔒 Asistencia Consolidada</app-badge>
+              } @else {
+                <app-badge variant="success" size="sm">🟢 Clase Activa</app-badge>
+              }
               <span class="text-xs font-bold text-warm-500 uppercase tracking-widest">
                 {{ currentCourse()?.code }} • {{ currentCourse()?.section }}
               </span>
@@ -45,16 +55,6 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
           </div>
 
           <div class="flex items-center gap-2">
-            <button
-              type="button"
-              (click)="toggleKeyboardHelper()"
-              class="px-2.5 py-1.5 rounded-xl border border-warm-300 bg-warm-100/70 hover:bg-warm-200 text-warm-800 text-xs font-bold transition-all flex items-center gap-1"
-              title="Atajos de teclado"
-            >
-              <kbd class="px-1 bg-white border border-warm-300 rounded text-[10px]">⌨️</kbd>
-              <span class="hidden sm:inline">Atajos</span>
-            </button>
-
             <app-button
               variant="accent"
               size="sm"
@@ -111,20 +111,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
         </div>
       </header>
 
-      <!-- Guía Rápida de Atajos desplegable (Opcional) -->
-      @if (showKeyboardHelper()) {
-        <div class="bg-primary-950 text-white p-3 rounded-xl border border-primary-800 text-xs flex items-center justify-between gap-2 animate-fade-in">
-          <span class="font-mono text-warm-200">
-            Atajos: <kbd class="bg-black/40 px-1 rounded text-white font-bold">1-4</kbd> Estado |
-            <kbd class="bg-black/40 px-1 rounded text-white font-bold">←/→</kbd> Rotar Estado |
-            <kbd class="bg-black/40 px-1 rounded text-white font-bold">↓/↑</kbd> Mover Alumno
-          </span>
-
-          <button (click)="showKeyboardHelper.set(false)" class="text-warm-400 hover:text-white">✕</button>
-        </div>
-      }
-
-      <!-- 2. Barra Unificada Compacta: Buscador + Contadores + Filtros (Inmediatamente sobre la lista) -->
+      <!-- 2. Barra Unificada Compacta: Buscador + Filtros -->
       <section class="flex flex-col md:flex-row gap-3 items-center justify-between bg-white p-3.5 rounded-2xl border border-warm-200 shadow-warm-sm">
         <!-- Buscador -->
         <div class="relative w-full md:w-72">
@@ -140,22 +127,6 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
           </svg>
         </div>
 
-        <!-- Contadores Rápidos Tipo Badge (Sustituyen las tarjetas Bento altas) -->
-        <div class="flex items-center gap-2 overflow-x-auto py-1 w-full md:w-auto">
-          <span class="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200/80 text-xs font-bold shrink-0">
-            🟢 {{ presentCount() }} Pres. ({{ presentPercentage() }}%)
-          </span>
-          <span class="px-2.5 py-1 rounded-lg bg-red-50 text-red-800 border border-red-200/80 text-xs font-bold shrink-0">
-            🔴 {{ absentCount() }} Faltas
-          </span>
-          <span class="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200/80 text-xs font-bold shrink-0">
-            🟡 {{ lateCount() }} Tard.
-          </span>
-          <span class="px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800 border border-sky-200/80 text-xs font-bold shrink-0">
-            🔵 {{ excusedCount() }} Justif.
-          </span>
-        </div>
-
         <!-- Filtros Rápidos -->
         <div class="flex items-center bg-warm-100/80 p-1 rounded-xl gap-1 shrink-0 w-full md:w-auto justify-end">
           <button
@@ -167,22 +138,29 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
           </button>
           <button
             type="button"
-            (click)="filterStatus.set('PRESENTE')"
-            [class]="filterBtnClasses('PRESENTE')"
+            (click)="filterStatus.set('AN')"
+            [class]="filterBtnClasses('AN')"
           >
-            Presentes
+            Asistencia Normal
           </button>
           <button
             type="button"
-            (click)="filterStatus.set('AUSENTE')"
-            [class]="filterBtnClasses('AUSENTE')"
+            (click)="filterStatus.set('SJC')"
+            [class]="filterBtnClasses('SJC')"
           >
-            Ausentes
+            Sin Justa Causa
+          </button>
+          <button
+            type="button"
+            (click)="filterStatus.set('EX')"
+            [class]="filterBtnClasses('EX')"
+          >
+            Excusa
           </button>
         </div>
       </section>
 
-      <!-- 3. Lista de Estudiantes (Inmediatamente visible sin scroll masivo) -->
+      <!-- 3. Lista de Estudiantes -->
       @if (isLoadingSession()) {
         <div class="space-y-2.5">
           @for (item of [1, 2, 3, 4]; track item) {
@@ -208,61 +186,37 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
             >
               <div class="flex items-center justify-between gap-3">
                 <div class="flex items-center gap-2.5 min-w-0">
-                  <img
-                    [src]="student.avatarUrl"
-                    [alt]="student.studentName"
-                    class="w-9 h-9 rounded-xl object-cover ring-1 ring-warm-200 shrink-0"
-                  />
+                  <app-avatar [name]="student.studentName"></app-avatar>
                   <div class="min-w-0">
                     <p class="font-semibold text-warm-900 text-xs truncate leading-tight">{{ student.studentName }}</p>
                     <p class="text-[10px] font-mono text-warm-500 mt-0.5">{{ student.studentCode }}</p>
                   </div>
                 </div>
-                @if (student.arrivalTime) {
-                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-warm-100 text-warm-700 shrink-0">
-                    {{ student.arrivalTime }}
-                  </span>
-                }
               </div>
 
-              <div class="grid grid-cols-4 gap-1.5">
+              <div class="grid grid-cols-3 gap-1.5">
                 <button
                   type="button"
-                  (click)="setStatus(student.studentId, 'PRESENTE')"
-                  [class]="mobileStatusBtnClasses(student.status, 'PRESENTE')"
+                  (click)="setStatus(student.studentId, 'AN')"
+                  [class]="mobileStatusBtnClasses(student.status, 'AN')"
                 >
-                  🟢 Pres.
+                  🟢 Asistencia Normal
                 </button>
                 <button
                   type="button"
-                  (click)="setStatus(student.studentId, 'AUSENTE')"
-                  [class]="mobileStatusBtnClasses(student.status, 'AUSENTE')"
+                  (click)="setStatus(student.studentId, 'SJC')"
+                  [class]="mobileStatusBtnClasses(student.status, 'SJC')"
                 >
-                  🔴 Falta
+                  🔴 Sin Justa Causa
                 </button>
                 <button
                   type="button"
-                  (click)="setStatus(student.studentId, 'TARDANZA')"
-                  [class]="mobileStatusBtnClasses(student.status, 'TARDANZA')"
+                  (click)="setStatus(student.studentId, 'EX')"
+                  [class]="mobileStatusBtnClasses(student.status, 'EX')"
                 >
-                  🟡 Tarde
-                </button>
-                <button
-                  type="button"
-                  (click)="setStatus(student.studentId, 'JUSTIFICADO')"
-                  [class]="mobileStatusBtnClasses(student.status, 'JUSTIFICADO')"
-                >
-                  🔵 Just.
+                  🔵 Excusa
                 </button>
               </div>
-
-              <input
-                type="text"
-                [value]="student.notes || ''"
-                (change)="updateNotes(student.studentId, $event)"
-                placeholder="Añadir motivo..."
-                class="w-full bg-warm-50 text-warm-900 border border-warm-200 rounded-xl px-3 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
             </div>
           }
 
@@ -289,9 +243,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
                   <tr>
                     <th class="py-3 px-4">Estudiante</th>
                     <th class="py-3 px-4">Código</th>
-                    <th class="py-3 px-4">Hora Llegada</th>
-                    <th class="py-3 px-4 text-center">Estado Segmentado</th>
-                    <th class="py-3 px-4">Observación / Nota</th>
+                    <th class="py-3 px-4 text-center">Estado de Asistencia</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-warm-100">
@@ -302,19 +254,11 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
                     >
                       <td class="py-2.5 px-4">
                         <div class="flex items-center gap-3">
-                          <img
-                            [src]="student.avatarUrl"
-                            [alt]="student.studentName"
-                            class="w-9 h-9 rounded-xl object-cover ring-1 ring-warm-200 shrink-0"
-                          />
+                          <app-avatar [name]="student.studentName"></app-avatar>
                           <div>
                             <p class="font-semibold text-warm-900 text-xs flex items-center gap-1.5">
                               {{ student.studentName }}
-                              @if (activeFocusedIndex() === idx) {
-                                <span class="px-1.5 py-0.5 rounded bg-primary-100 text-primary-800 text-[10px] font-mono font-bold">Foco</span>
-                              }
                             </p>
-                            <p class="text-[10px] text-warm-500 font-mono">Matemática III</p>
                           </div>
                         </div>
                       </td>
@@ -323,51 +267,30 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
                         {{ student.studentCode }}
                       </td>
 
-                      <td class="py-2.5 px-4 text-warm-600 font-medium">
-                        {{ student.arrivalTime || '—' }}
-                      </td>
-
                       <td class="py-2.5 px-4">
-                        <div class="flex items-center justify-center gap-1 bg-warm-100/80 p-0.5 rounded-xl border border-warm-200/80 max-w-fit mx-auto shadow-xs">
+                        <div class="flex items-center justify-center gap-1.5 bg-warm-100/80 p-0.5 rounded-xl border border-warm-200/80 max-w-fit mx-auto shadow-xs">
                           <button
                             type="button"
-                            (click)="setStatus(student.studentId, 'PRESENTE')"
-                            [class]="segmentedChipClasses(student.status, 'PRESENTE')"
+                            (click)="setStatus(student.studentId, 'AN')"
+                            [class]="segmentedChipClasses(student.status, 'AN')"
                           >
-                            Presente
+                            Asistencia Normal
                           </button>
                           <button
                             type="button"
-                            (click)="setStatus(student.studentId, 'AUSENTE')"
-                            [class]="segmentedChipClasses(student.status, 'AUSENTE')"
+                            (click)="setStatus(student.studentId, 'SJC')"
+                            [class]="segmentedChipClasses(student.status, 'SJC')"
                           >
-                            Falta
+                            Sin Justa Causa
                           </button>
                           <button
                             type="button"
-                            (click)="setStatus(student.studentId, 'TARDANZA')"
-                            [class]="segmentedChipClasses(student.status, 'TARDANZA')"
+                            (click)="setStatus(student.studentId, 'EX')"
+                            [class]="segmentedChipClasses(student.status, 'EX')"
                           >
-                            Tarde
-                          </button>
-                          <button
-                            type="button"
-                            (click)="setStatus(student.studentId, 'JUSTIFICADO')"
-                            [class]="segmentedChipClasses(student.status, 'JUSTIFICADO')"
-                          >
-                            Justif.
+                            Excusa
                           </button>
                         </div>
-                      </td>
-
-                      <td class="py-2.5 px-4">
-                        <input
-                          type="text"
-                          [value]="student.notes || ''"
-                          (change)="updateNotes(student.studentId, $event)"
-                          placeholder="Añadir nota..."
-                          class="w-full bg-white text-warm-900 border border-warm-200 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        />
                       </td>
                     </tr>
                   }
@@ -401,22 +324,51 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
       <form (submit)="onRegisterStudentSubmit($event)" class="space-y-4">
         <p class="text-xs text-warm-500">Registra directamente al alumno en la asignatura activa.</p>
 
-        <app-form-field label="Apellidos y Nombres" [required]="true">
-          <input
-            type="text"
-            [(ngModel)]="newStudentName"
-            name="newStudentName"
-            placeholder="Ej. Ramírez Méndez, Lucía Sofía"
-            class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
+        <app-form-field label="Tipo de Documento" [required]="true">
+          <app-form-select
+            [options]="docTypeOptions()"
+            [value]="newStudentDocType()"
+            (valueChange)="newStudentDocType.set($event)"
+            placeholder="Seleccione..."
+          ></app-form-select>
         </app-form-field>
 
-        <app-form-field label="Código Estudiantil Institucional" [required]="true">
+        <app-form-field label="Número de Identificación" [required]="true">
           <input
             type="text"
             [(ngModel)]="newStudentCode"
             name="newStudentCode"
-            placeholder="2026-10450"
+            placeholder="Ej. 1017123456"
+            class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </app-form-field>
+
+        <app-form-field label="Nombres" [required]="true">
+          <input
+            type="text"
+            [(ngModel)]="newStudentFirstName"
+            name="newStudentFirstName"
+            placeholder="Ej. Juan Carlos"
+            class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </app-form-field>
+
+        <app-form-field label="Apellidos" [required]="true">
+          <input
+            type="text"
+            [(ngModel)]="newStudentLastName"
+            name="newStudentLastName"
+            placeholder="Ej. Pérez Gómez"
+            class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </app-form-field>
+
+        <app-form-field label="Correo Electrónico Institucional" [required]="true">
+          <input
+            type="email"
+            [(ngModel)]="newStudentEmail"
+            name="newStudentEmail"
+            placeholder="juan.perez@uco.edu.co"
             class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </app-form-field>
@@ -425,7 +377,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
           <app-button variant="ghost" size="sm" (clicked)="isRegisterModalOpen.set(false)">
             Cancelar
           </app-button>
-          <app-button variant="primary" size="sm" type="submit">
+          <app-button variant="primary" size="sm" type="submit" [loading]="isEnrolling()">
             Matricular en Curso
           </app-button>
         </div>
@@ -442,10 +394,12 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
   `,
 })
 export class AttendanceControlComponent {
-  courses = MOCK_COURSES;
-  sessions = signal<ClassSession[]>(MOCK_SESSIONS);
+  private courseService = inject(CourseService);
 
-  selectedCourseId = signal<string>('crs-1');
+  courses: Course[] = [];
+  sessions = signal<ClassSession[]>([]);
+
+  selectedCourseId = signal<string>('');
   selectedSessionId = signal<string>('ses-101');
 
   searchQuery = signal<string>('');
@@ -456,24 +410,64 @@ export class AttendanceControlComponent {
   showKeyboardHelper = signal<boolean>(false);
   activeFocusedIndex = signal<number>(0);
 
+  private catalogService = inject(CatalogService);
+
   isRegisterModalOpen = signal<boolean>(false);
-  newStudentName = signal<string>('');
+  isEnrolling = signal<boolean>(false);
+
+  newStudentDocType = signal<string>('');
   newStudentCode = signal<string>('');
+  newStudentFirstName = signal<string>('');
+  newStudentLastName = signal<string>('');
+  newStudentEmail = signal<string>('');
+
+  docTypes = signal<any[]>([]);
 
   showToast = signal<boolean>(false);
   toastMessage = signal<string>('');
   toastType = signal<'success' | 'info' | 'warning' | 'error'>('success');
   private toastRotationIndex = 0;
 
-  courseOptions: SelectOption[] = MOCK_COURSES.map((c) => ({
-    value: c.id,
-    label: `${c.code} - ${c.name} (${c.section})`,
-  }));
+  courseOptions: SelectOption[] = [];
+
+  docTypeOptions = computed<SelectOption[]>(() =>
+    this.docTypes().map((dt) => ({
+      value: dt.id,
+      label: `${dt.tipoIdentificacion} - ${dt.nombre}`,
+    }))
+  );
+
+  constructor() {
+    this.catalogService.getIdentityDocumentTypes().subscribe({
+      next: (res) => {
+        if (res.exitoso && res.datos) {
+          this.docTypes.set(res.datos);
+          if (res.datos.length > 0) {
+            this.newStudentDocType.set(res.datos[0].id);
+          }
+        }
+      },
+    });
+
+    this.courseService.getTeacherCourses('docente-1').subscribe({
+      next: (res) => {
+        if (res.exitoso && res.datos) {
+          this.courses = res.datos;
+          this.courseOptions = res.datos.map((c) => ({
+            value: c.id,
+            label: `${c.code} - ${c.name} (${c.section})`,
+          }));
+          if (res.datos.length > 0) {
+            this.onCourseSelect(res.datos[0].id);
+          }
+        }
+      },
+    });
+  }
 
   sessionOptions = computed<SelectOption[]>(() => {
     const courseId = this.selectedCourseId();
     return this.sessions()
-      .filter((s) => s.courseId === courseId)
       .map((s) => ({
         value: s.id,
         label: `Sesión #${s.sessionNumber} (${s.date}): ${s.title}`,
@@ -489,21 +483,6 @@ export class AttendanceControlComponent {
   );
 
   students = computed(() => this.currentSession()?.records || []);
-
-  presentCount = computed(() => this.students().filter((s) => s.status === 'PRESENTE').length);
-  absentCount = computed(() => this.students().filter((s) => s.status === 'AUSENTE').length);
-  lateCount = computed(() => this.students().filter((s) => s.status === 'TARDANZA').length);
-  excusedCount = computed(() => this.students().filter((s) => s.status === 'JUSTIFICADO').length);
-
-  presentPercentage = computed(() => {
-    const total = this.students().length;
-    return total > 0 ? Math.round((this.presentCount() / total) * 100) : 0;
-  });
-
-  absentPercentage = computed(() => {
-    const total = this.students().length;
-    return total > 0 ? Math.round((this.absentCount() / total) * 100) : 0;
-  });
 
   filteredStudents = computed(() => {
     const query = this.searchQuery().toLowerCase().trim();
@@ -532,7 +511,7 @@ export class AttendanceControlComponent {
 
     const idx = this.activeFocusedIndex();
     const currentStudent = currentList[idx];
-    const statusOrder: AttendanceStatus[] = ['PRESENTE', 'AUSENTE', 'TARDANZA', 'JUSTIFICADO'];
+    const statusOrder: AttendanceStatus[] = ['AN', 'SJC', 'EX'];
 
     if (event.key === 'ArrowDown') {
       event.preventDefault();
@@ -551,29 +530,51 @@ export class AttendanceControlComponent {
       const prevStatus = statusOrder[(currentPos - 1 + statusOrder.length) % statusOrder.length];
       this.setStatus(currentStudent.studentId, prevStatus);
     } else if (event.key === '1') {
-      this.setStatus(currentStudent.studentId, 'PRESENTE');
+      this.setStatus(currentStudent.studentId, 'AN');
     } else if (event.key === '2') {
-      this.setStatus(currentStudent.studentId, 'AUSENTE');
+      this.setStatus(currentStudent.studentId, 'SJC');
     } else if (event.key === '3') {
-      this.setStatus(currentStudent.studentId, 'TARDANZA');
-    } else if (event.key === '4') {
-      this.setStatus(currentStudent.studentId, 'JUSTIFICADO');
+      this.setStatus(currentStudent.studentId, 'EX');
     }
   }
-
 
   toggleKeyboardHelper() {
     this.showKeyboardHelper.update((val) => !val);
   }
 
+  private sessionService = inject(SessionService);
+
   onCourseSelect(courseId: string) {
     this.selectedCourseId.set(courseId);
-    const available = this.sessions().filter((s) => s.courseId === courseId);
-    if (available.length > 0) {
-      this.triggerSkeleton(() => {
-        this.selectedSessionId.set(available[0].id);
-      });
-    }
+    this.isLoadingSession.set(true);
+
+    this.studentService.getStudentsByGroup(courseId).subscribe({
+      next: (stdRes) => {
+        const records = stdRes.exitoso && stdRes.datos ? stdRes.datos : [];
+
+        this.sessionService.getSessionsByGroup(courseId).subscribe({
+          next: (sesRes) => {
+            if (sesRes.exitoso && sesRes.datos) {
+              const sessionsWithRecords = sesRes.datos.map((session) => ({
+                ...session,
+                records,
+              }));
+              this.sessions.set(sessionsWithRecords);
+              if (sessionsWithRecords.length > 0) {
+                this.selectedSessionId.set(sessionsWithRecords[0].id);
+              }
+            }
+            this.isLoadingSession.set(false);
+          },
+          error: () => {
+            this.isLoadingSession.set(false);
+          },
+        });
+      },
+      error: () => {
+        this.isLoadingSession.set(false);
+      },
+    });
   }
 
   onSessionSelect(sessionId: string) {
@@ -597,8 +598,7 @@ export class AttendanceControlComponent {
         if (session.id === sessionId) {
           const updatedRecords = session.records.map((s) => {
             if (s.studentId === studentId) {
-              const arrivalTime = status === 'PRESENTE' || status === 'TARDANZA' ? '08:00 AM' : undefined;
-              return { ...s, status, arrivalTime };
+              return { ...s, status };
             }
             return s;
           });
@@ -632,8 +632,7 @@ export class AttendanceControlComponent {
         if (session.id === sessionId) {
           const updatedRecords = session.records.map((s) => ({
             ...s,
-            status: 'PRESENTE' as AttendanceStatus,
-            arrivalTime: '08:00 AM',
+            status: 'AN' as AttendanceStatus,
           }));
           return { ...session, records: updatedRecords };
         }
@@ -641,7 +640,7 @@ export class AttendanceControlComponent {
       })
     );
     this.toastType.set('success');
-    this.toastMessage.set('Inicialización completada: Todos los alumnos marcados como Presentes.');
+    this.toastMessage.set('Inicialización completada: Todos los alumnos marcados con Asistencia Normal.');
     this.showToast.set(true);
   }
 
@@ -652,8 +651,7 @@ export class AttendanceControlComponent {
         if (session.id === sessionId) {
           const updatedRecords = session.records.map((s) => ({
             ...s,
-            status: 'AUSENTE' as AttendanceStatus,
-            arrivalTime: undefined,
+            status: 'SJC' as AttendanceStatus,
           }));
           return { ...session, records: updatedRecords };
         }
@@ -661,61 +659,90 @@ export class AttendanceControlComponent {
       })
     );
     this.toastType.set('warning');
-    this.toastMessage.set('Inicialización completada: Todos los alumnos marcados como Ausentes.');
+    this.toastMessage.set('Inicialización completada: Todos los alumnos marcados Sin Justa Causa.');
     this.showToast.set(true);
   }
 
 
+  private attendanceService = inject(AttendanceService);
+  private studentService = inject(StudentService);
+
   saveAttendance() {
     this.isSaving.set(true);
-    setTimeout(() => {
+    const sessionId = this.selectedSessionId();
+    const currentList = this.students();
+
+    if (currentList.length === 0) {
       this.isSaving.set(false);
-
-      const toastDemos: Array<{ type: 'success' | 'info' | 'warning' | 'error'; msg: string }> = [
-        { type: 'success', msg: '¡Éxito! Asistencia de la sesión guardada y consolidada.' },
-        { type: 'info', msg: 'Información: Se envió una copia del reporte al departamento académico.' },
-        { type: 'warning', msg: 'Atención: 2 estudiantes registran más de 3 inasistencias en el semestre.' },
-        { type: 'error', msg: 'Error de Red: Simulación de fallo temporal de conexión con el servidor.' },
-      ];
-
-      const currentDemo = toastDemos[this.toastRotationIndex % toastDemos.length];
-      this.toastRotationIndex++;
-
-      this.toastType.set(currentDemo.type);
-      this.toastMessage.set(currentDemo.msg);
+      this.toastType.set('warning');
+      this.toastMessage.set('No hay estudiantes en la lista para registrar.');
       this.showToast.set(true);
-    }, 600);
+      return;
+    }
+
+    this.attendanceService
+      .saveAttendanceBatch(sessionId, currentList)
+      .subscribe({
+        next: (res) => {
+          this.isSaving.set(false);
+          // Marcar la sesión actual como CONCLUIDA
+          this.sessions.update((list) =>
+            list.map((s) => (s.id === sessionId ? { ...s, status: 'CONCLUIDA' } : s))
+          );
+          this.toastType.set('success');
+          this.toastMessage.set(res.mensajeUsuario || '¡Éxito! Registro masivo de asistencia guardado en la base de datos.');
+          this.showToast.set(true);
+        },
+        error: (err) => {
+          this.isSaving.set(false);
+          this.toastType.set('error');
+          this.toastMessage.set(err?.error?.mensajeUsuario || 'Error al consolidar la asistencia masiva.');
+          this.showToast.set(true);
+        },
+      });
   }
 
 
   onRegisterStudentSubmit(event: Event) {
     event.preventDefault();
-    if (!this.newStudentName() || !this.newStudentCode()) return;
+    if (!this.newStudentDocType() || !this.newStudentCode() || !this.newStudentFirstName() || !this.newStudentLastName() || !this.newStudentEmail()) return;
 
-    const newStudent: StudentAttendance = {
-      studentId: `std-${Date.now()}`,
-      studentName: this.newStudentName(),
-      studentCode: this.newStudentCode(),
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150',
-      status: 'PRESENTE',
-      arrivalTime: '08:05 AM',
-    };
+    this.isEnrolling.set(true);
+    const grupoId = this.selectedCourseId();
 
-    const sessionId = this.selectedSessionId();
-    this.sessions.update((list) =>
-      list.map((session) => {
-        if (session.id === sessionId) {
-          return { ...session, records: [newStudent, ...session.records] };
-        }
-        return session;
+    this.studentService
+      .enrollStudentInGroup({
+        grupo: grupoId,
+        tipoDocumento: this.newStudentDocType(),
+        numeroIdentificacion: this.newStudentCode(),
+        primerNombre: this.newStudentFirstName(),
+        primerApellido: this.newStudentLastName(),
+        correoElectronico: this.newStudentEmail(),
       })
-    );
+      .subscribe({
+        next: (res) => {
+          this.isEnrolling.set(false);
+          this.isRegisterModalOpen.set(false);
+          this.newStudentCode.set('');
+          this.newStudentFirstName.set('');
+          this.newStudentLastName.set('');
+          this.newStudentEmail.set('');
 
-    this.isRegisterModalOpen.set(false);
-    this.newStudentName.set('');
-    this.newStudentCode.set('');
-    this.toastMessage.set('¡Estudiante matriculado y añadido a la lista!');
-    this.showToast.set(true);
+          this.toastType.set('success');
+          this.toastMessage.set(res.mensajeUsuario || '¡Estudiante matriculado exitosamente en el grupo!');
+          this.showToast.set(true);
+
+          if (grupoId) {
+            this.onCourseSelect(grupoId);
+          }
+        },
+        error: (err) => {
+          this.isEnrolling.set(false);
+          this.toastType.set('error');
+          this.toastMessage.set(err?.error?.mensajeUsuario || 'Error al matricular el estudiante.');
+          this.showToast.set(true);
+        },
+      });
   }
 
   resetFilters() {
@@ -757,13 +784,11 @@ export class AttendanceControlComponent {
     }
 
     switch (target) {
-      case 'PRESENTE':
+      case 'AN':
         return `${base} bg-emerald-600 text-white border-emerald-700 shadow-xs scale-105`;
-      case 'AUSENTE':
+      case 'SJC':
         return `${base} bg-red-600 text-white border-red-700 shadow-xs scale-105`;
-      case 'TARDANZA':
-        return `${base} bg-amber-500 text-white border-amber-600 shadow-xs scale-105`;
-      case 'JUSTIFICADO':
+      case 'EX':
         return `${base} bg-sky-600 text-white border-sky-700 shadow-xs scale-105`;
     }
   }
@@ -777,13 +802,11 @@ export class AttendanceControlComponent {
     }
 
     switch (target) {
-      case 'PRESENTE':
+      case 'AN':
         return `${base} bg-emerald-600 text-white border-emerald-700 shadow-xs`;
-      case 'AUSENTE':
+      case 'SJC':
         return `${base} bg-red-600 text-white border-red-700 shadow-xs`;
-      case 'TARDANZA':
-        return `${base} bg-amber-500 text-white border-amber-600 shadow-xs`;
-      case 'JUSTIFICADO':
+      case 'EX':
         return `${base} bg-sky-600 text-white border-sky-700 shadow-xs`;
     }
   }

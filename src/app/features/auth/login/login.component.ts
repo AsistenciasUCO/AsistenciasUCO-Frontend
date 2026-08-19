@@ -2,6 +2,7 @@ import { Component, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { AuthService } from '../../../core/services/auth.service';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
 import { CardComponent } from '../../../shared/components/card/card.component';
@@ -132,17 +133,6 @@ import { ModalComponent } from '../../../shared/components/modal/modal.component
             }
           </app-button>
         </form>
-
-        <!-- Pie Informativo de Restricción -->
-        <div class="mt-6 pt-4 border-t border-warm-200 text-center text-xs text-warm-500 space-y-1">
-          <p class="flex items-center justify-center gap-1.5 font-medium text-warm-700">
-            <svg class="w-4 h-4 text-primary-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-            Acceso restringido a personal docente registrado.
-          </p>
-          <p class="text-[11px] text-warm-400">Los estudiantes son matriculados por el docente en cada asignatura.</p>
-        </div>
       </app-card>
 
       <!-- MODAL: Recuperación de Contraseña -->
@@ -189,9 +179,10 @@ import { ModalComponent } from '../../../shared/components/modal/modal.component
 })
 export class LoginComponent {
   private router = inject(Router);
+  private authService = inject(AuthService);
 
   email = signal<string>('maria.rostagno@aurora.edu.pe');
-  password = signal<string>('123456');
+  password = signal<string>('HashBackend_AbCdEf1234567890');
   rememberMe = signal<boolean>(true);
   showPassword = signal<boolean>(false);
   isLoading = signal<boolean>(false);
@@ -227,16 +218,29 @@ export class LoginComponent {
 
     this.isLoading.set(true);
 
-    setTimeout(() => {
-      this.isLoading.set(false);
-      this.toastType.set('success');
-      this.toastMessage.set('¡Autenticación exitosa! Bienvenido(a) Dra. María Elena');
-      this.showToast.set(true);
-
-      setTimeout(() => {
-        this.router.navigate(['/app/dashboard']);
-      }, 700);
-    }, 900);
+    this.authService.login(this.email(), this.password()).subscribe({
+      next: (res) => {
+        this.isLoading.set(false);
+        if (res.exitoso) {
+          this.toastType.set('success');
+          this.toastMessage.set(res.mensajeUsuario || '¡Autenticación exitosa! Bienvenido(a)');
+          this.showToast.set(true);
+          setTimeout(() => {
+            this.router.navigate(['/app/dashboard']);
+          }, 600);
+        } else {
+          this.toastType.set('error');
+          this.toastMessage.set(res.mensajeUsuario || 'Error al autenticar');
+          this.showToast.set(true);
+        }
+      },
+      error: (err) => {
+        this.isLoading.set(false);
+        this.toastType.set('error');
+        this.toastMessage.set(err?.error?.mensajeUsuario || 'No se pudo conectar con el servidor de autenticación');
+        this.showToast.set(true);
+      },
+    });
   }
 
   onForgotPasswordSubmit(event: Event) {

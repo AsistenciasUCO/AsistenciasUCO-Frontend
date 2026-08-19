@@ -1,7 +1,7 @@
 import { User } from '../models/user.model';
 
 export const MOCK_CURRENT_USER: User = {
-  id: 'usr-101',
+  id: 'F1A2B3C4-0000-0000-0000-000000000003',
   name: 'Dra. María Elena Rostagno',
   email: 'maria.rostagno@aurora.edu.pe',
   role: 'DOCENTE',

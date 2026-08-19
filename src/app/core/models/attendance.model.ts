@@ -1,4 +1,4 @@
-export type AttendanceStatus = 'PRESENTE' | 'AUSENTE' | 'TARDANZA' | 'JUSTIFICADO';
+export type AttendanceStatus = 'AN' | 'SJC' | 'EX';
 
 export interface StudentAttendance {
   studentId: string;

@@ -3,10 +3,12 @@ import { CommonModule } from '@angular/common';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { MOCK_CURRENT_USER } from '../../core/mocks/user.mock';
 
+import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
+
 @Component({
   selector: 'app-dashboard-layout',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, AvatarComponent],
   template: `
     <div class="h-dvh max-h-dvh w-full bg-warm-50 flex flex-col md:flex-row overflow-hidden">
       <!-- Mobile Top Navbar -->
@@ -101,11 +103,7 @@ import { MOCK_CURRENT_USER } from '../../core/mocks/user.mock';
         <!-- User Profile Card Footer (Bottom - Fixed Shrink 0) -->
         <div class="p-4 border-t border-warm-200/80 bg-warm-50/50 shrink-0">
           <div class="flex items-center gap-3 p-2 rounded-xl bg-white border border-warm-200 shadow-warm-sm">
-            <img
-              [src]="user.avatarUrl"
-              [alt]="user.name"
-              class="w-9 h-9 rounded-lg object-cover ring-2 ring-primary-500/20 shrink-0"
-            />
+            <app-avatar [name]="user.name"></app-avatar>
             @if (!isCollapsed()) {
               <div class="flex-1 min-w-0">
                 <p class="text-xs font-semibold text-warm-900 truncate">{{ user.name }}</p>
@@ -138,9 +136,6 @@ import { MOCK_CURRENT_USER } from '../../core/mocks/user.mock';
           </div>
 
           <div class="flex items-center gap-4">
-            <span class="text-xs font-medium text-warm-500">
-              Fecha: <strong class="text-warm-900">Sábado, 15 de Agosto 2026</strong>
-            </span>
           </div>
         </div>
 

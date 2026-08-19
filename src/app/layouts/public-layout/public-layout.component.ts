@@ -22,20 +22,13 @@ import { RouterOutlet } from '@angular/router';
         </div>
 
         <div class="relative z-10 my-auto">
-          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-accent-300 text-xs font-semibold uppercase tracking-wider mb-6 backdrop-blur-md">
-            Plataforma Institucional v2.0
-          </div>
           <h1 class="font-serif text-4xl lg:text-5xl font-semibold leading-tight text-white tracking-tight">
             Control de asistencia transparente y eficiente.
           </h1>
-          <p class="mt-4 text-warm-300 text-base max-w-md leading-relaxed font-sans">
-            Gestiona sesiones de clase, registra faltas y puntualidad en tiempo real y matricula estudiantes directamente por asignatura.
-          </p>
         </div>
 
         <div class="relative z-10 text-xs text-warm-400 border-t border-white/10 pt-6 flex items-center justify-between">
-          <span>© 2026 Aurora Education Systems</span>
-          <span class="text-accent-400 font-medium">Seguridad ISO-27001</span>
+          <span>© 2026</span>
         </div>
       </div>
 
