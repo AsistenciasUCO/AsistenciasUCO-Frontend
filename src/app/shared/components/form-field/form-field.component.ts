@@ -46,7 +46,7 @@ let fieldIdCounter = 0;
 export class FormFieldComponent {
   label = input<string>('');
   helperText = input<string>('');
-  errorMessage = input<string>('');
+  errorMessage = input<string>('', { alias: 'error' });
   required = input<boolean>(false);
   fieldId = input<string>(`form-field-ctrl-${++fieldIdCounter}`);
 }

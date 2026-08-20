@@ -324,21 +324,21 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
       <form (submit)="onRegisterStudentSubmit($event)" class="space-y-4">
         <p class="text-xs text-warm-500">Registra directamente al alumno en la asignatura activa.</p>
 
-        <app-form-field label="Tipo de Documento" [required]="true">
+        <app-form-field label="Tipo de Documento" [required]="true" [error]="docTypeError()">
           <app-form-select
             [options]="docTypeOptions()"
             [value]="newStudentDocType()"
-            (valueChange)="newStudentDocType.set($event)"
+            (valueChange)="onDocTypeChange($event)"
             placeholder="Seleccione..."
           ></app-form-select>
         </app-form-field>
 
-        <app-form-field label="Número de Identificación" [required]="true">
+        <app-form-field label="Número de Identificación" [required]="true" [error]="codeError()">
           <input
             type="text"
             maxlength="10"
             [ngModel]="newStudentCode()"
-            (ngModelChange)="newStudentCode.set($event)"
+            (ngModelChange)="onCodeChange($event)"
             name="newStudentCode"
             placeholder="Ej. 1017123456"
             class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -347,22 +347,22 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
 
         <!-- Primer y Segundo Nombre -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <app-form-field label="Primer Nombre" [required]="true">
+          <app-form-field label="Primer Nombre" [required]="true" [error]="firstNameError()">
             <input
               type="text"
               [ngModel]="newStudentFirstName()"
-              (ngModelChange)="newStudentFirstName.set($event)"
+              (ngModelChange)="onFirstNameChange($event)"
               name="newStudentFirstName"
               placeholder="Ej. Juan"
               class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </app-form-field>
 
-          <app-form-field label="Segundo Nombre (Opcional)">
+          <app-form-field label="Segundo Nombre (Opcional)" [error]="secondNameError()">
             <input
               type="text"
               [ngModel]="newStudentSecondName()"
-              (ngModelChange)="newStudentSecondName.set($event)"
+              (ngModelChange)="onSecondNameChange($event)"
               name="newStudentSecondName"
               placeholder="Ej. Carlos"
               class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -372,22 +372,22 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
 
         <!-- Primer y Segundo Apellido -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <app-form-field label="Primer Apellido" [required]="true">
+          <app-form-field label="Primer Apellido" [required]="true" [error]="lastNameError()">
             <input
               type="text"
               [ngModel]="newStudentLastName()"
-              (ngModelChange)="newStudentLastName.set($event)"
+              (ngModelChange)="onLastNameChange($event)"
               name="newStudentLastName"
               placeholder="Ej. Pérez"
               class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </app-form-field>
 
-          <app-form-field label="Segundo Apellido (Opcional)">
+          <app-form-field label="Segundo Apellido (Opcional)" [error]="secondLastNameError()">
             <input
               type="text"
               [ngModel]="newStudentSecondLastName()"
-              (ngModelChange)="newStudentSecondLastName.set($event)"
+              (ngModelChange)="onSecondLastNameChange($event)"
               name="newStudentSecondLastName"
               placeholder="Ej. Gómez"
               class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -395,11 +395,11 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
           </app-form-field>
         </div>
 
-        <app-form-field label="Correo Electrónico Institucional" [required]="true">
+        <app-form-field label="Correo Electrónico Institucional" [required]="true" [error]="emailError()">
           <input
             type="email"
             [ngModel]="newStudentEmail()"
-            (ngModelChange)="newStudentEmail.set($event)"
+            (ngModelChange)="onEmailChange($event)"
             name="newStudentEmail"
             placeholder="juan.perez@uco.edu.co"
             class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -410,7 +410,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
           <app-button variant="ghost" size="sm" (clicked)="isRegisterModalOpen.set(false)">
             Cancelar
           </app-button>
-          <app-button variant="primary" size="sm" type="submit" [loading]="isEnrolling()">
+          <app-button variant="primary" size="sm" type="submit" [loading]="isEnrolling()" [disabled]="!isFormValid()">
             Matricular en Curso
           </app-button>
         </div>
@@ -456,7 +456,116 @@ export class AttendanceControlComponent {
   newStudentSecondLastName = signal<string>('');
   newStudentEmail = signal<string>('');
 
+  docTypeError = signal<string>('');
+  codeError = signal<string>('');
+  firstNameError = signal<string>('');
+  secondNameError = signal<string>('');
+  lastNameError = signal<string>('');
+  secondLastNameError = signal<string>('');
+  emailError = signal<string>('');
+
   docTypes = signal<any[]>([]);
+
+  // Validaciones de formato
+  private regexTexto = /^[A-Za-zÁÉÍÓÚáéíóúÑñ\s]+$/;
+  private regexNumero = /^[0-9]+$/;
+  private regexCorreo = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  onDocTypeChange(val: string) {
+    this.newStudentDocType.set(val);
+    if (!val) {
+      this.docTypeError.set('Debe seleccionar un tipo de documento.');
+    } else {
+      this.docTypeError.set('');
+    }
+  }
+
+  onCodeChange(val: string) {
+    this.newStudentCode.set(val);
+    const trimmed = val.trim();
+    if (!trimmed) {
+      this.codeError.set('El número de identificación es obligatorio.');
+    } else if (!this.regexNumero.test(trimmed)) {
+      this.codeError.set('Solo se permiten números.');
+    } else if (trimmed.length < 6 || trimmed.length > 10) {
+      this.codeError.set('Debe tener entre 6 y 10 dígitos.');
+    } else {
+      this.codeError.set('');
+    }
+  }
+
+  onFirstNameChange(val: string) {
+    this.newStudentFirstName.set(val);
+    const trimmed = val.trim();
+    if (!trimmed) {
+      this.firstNameError.set('El primer nombre es obligatorio.');
+    } else if (!this.regexTexto.test(trimmed)) {
+      this.firstNameError.set('Solo se permiten letras y espacios.');
+    } else {
+      this.firstNameError.set('');
+    }
+  }
+
+  onSecondNameChange(val: string) {
+    this.newStudentSecondName.set(val);
+    const trimmed = val.trim();
+    if (trimmed && !this.regexTexto.test(trimmed)) {
+      this.secondNameError.set('Solo se permiten letras y espacios.');
+    } else {
+      this.secondNameError.set('');
+    }
+  }
+
+  onLastNameChange(val: string) {
+    this.newStudentLastName.set(val);
+    const trimmed = val.trim();
+    if (!trimmed) {
+      this.lastNameError.set('El primer apellido es obligatorio.');
+    } else if (!this.regexTexto.test(trimmed)) {
+      this.lastNameError.set('Solo se permiten letras y espacios.');
+    } else {
+      this.lastNameError.set('');
+    }
+  }
+
+  onSecondLastNameChange(val: string) {
+    this.newStudentSecondLastName.set(val);
+    const trimmed = val.trim();
+    if (trimmed && !this.regexTexto.test(trimmed)) {
+      this.secondLastNameError.set('Solo se permiten letras y espacios.');
+    } else {
+      this.secondLastNameError.set('');
+    }
+  }
+
+  onEmailChange(val: string) {
+    this.newStudentEmail.set(val);
+    const trimmed = val.trim();
+    if (!trimmed) {
+      this.emailError.set('El correo electrónico es obligatorio.');
+    } else if (!this.regexCorreo.test(trimmed)) {
+      this.emailError.set('Formato de correo electrónico inválido (ej: usuario@uco.edu.co).');
+    } else {
+      this.emailError.set('');
+    }
+  }
+
+  isFormValid(): boolean {
+    return (
+      !!this.newStudentDocType() &&
+      !this.docTypeError() &&
+      !!this.newStudentCode().trim() &&
+      !this.codeError() &&
+      !!this.newStudentFirstName().trim() &&
+      !this.firstNameError() &&
+      !this.secondNameError() &&
+      !!this.newStudentLastName().trim() &&
+      !this.lastNameError() &&
+      !this.secondLastNameError() &&
+      !!this.newStudentEmail().trim() &&
+      !this.emailError()
+    );
+  }
 
   showToast = signal<boolean>(false);
   toastMessage = signal<string>('');
@@ -779,6 +888,14 @@ export class AttendanceControlComponent {
           this.newStudentLastName.set('');
           this.newStudentSecondLastName.set('');
           this.newStudentEmail.set('');
+
+          this.docTypeError.set('');
+          this.codeError.set('');
+          this.firstNameError.set('');
+          this.secondNameError.set('');
+          this.lastNameError.set('');
+          this.secondLastNameError.set('');
+          this.emailError.set('');
 
           this.toastType.set('success');
           this.toastMessage.set(res.mensajeUsuario || '¡Estudiante matriculado exitosamente en el grupo!');
