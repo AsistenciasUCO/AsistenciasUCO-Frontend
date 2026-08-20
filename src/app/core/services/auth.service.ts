@@ -3,6 +3,8 @@ import { Observable, of } from 'rxjs';
 import Keycloak from 'keycloak-js';
 import { ApiResponse, UserAuthResponse } from '../models/api-response.model';
 
+import { environment } from '../../../environments/environment';
+
 @Injectable({
   providedIn: 'root',
 })
@@ -15,9 +17,9 @@ export class AuthService {
 
   async initKeycloak(): Promise<boolean> {
     this.keycloakInstance = new Keycloak({
-      url: 'http://127.0.0.1:8081',
-      realm: 'asistencias-uco',
-      clientId: 'asistencias-uco-frontend',
+      url: environment.keycloak.url,
+      realm: environment.keycloak.realm,
+      clientId: environment.keycloak.clientId,
     });
 
     try {
