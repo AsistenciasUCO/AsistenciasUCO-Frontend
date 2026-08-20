@@ -50,7 +50,7 @@ import { AvatarComponent } from '../../shared/components/avatar/avatar.component
             @if (!isCollapsed()) {
               <div>
                 <h1 class="font-serif font-bold text-warm-900 text-base leading-tight tracking-tight">Gestió Asistencia</h1>
-                <p class="text-[10px] uppercase font-bold text-primary-700 tracking-wider">Aurora System</p>
+                <p class="text-[10px] uppercase font-bold text-primary-700 tracking-wider">Universidad Católica de Oriente</p>
               </div>
             }
           </div>
