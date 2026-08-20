@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of, delay, catchError, map } from 'rxjs';
+import { Observable, delay, map, of } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 
@@ -45,16 +45,14 @@ export class StudentService {
       password: dto.password || `Uco2026*${dto.numeroIdentificacion}`,
     };
 
-    return this.http
-      .post<any>(`${environment.apiUrl}/grupos/${dto.grupo}/estudiantes`, payload)
-      .pipe(
-        map((res) => ({
-          idTransaccion: res.idTransaccion || 'tx-enroll-001',
-          exitoso: true,
-          mensajeUsuario: 'Estudiante matriculado y vinculado al grupo exitosamente.',
-          datos: undefined,
-        }))
-      );
+    return this.http.post<any>(`${environment.apiUrl}/grupos/${dto.grupo}/estudiantes`, payload).pipe(
+      map((res) => ({
+        idTransaccion: res.idTransaccion || 'tx-enroll-001',
+        exitoso: true,
+        mensajeUsuario: 'Estudiante matriculado y vinculado al grupo exitosamente.',
+        datos: undefined,
+      }))
+    );
   }
 
   getStudentsByGroup(grupoId: string): Observable<ApiResponse<any[]>> {
@@ -74,10 +72,10 @@ export class StudentService {
       .pipe(
         map((res: any) => {
           const items = res.elementos || res.items || (Array.isArray(res) ? res : []);
-          const mapped = items.map((s: any, idx: number) => ({
-            studentId: s.id || `std-${idx}`,
-            studentName: s.nombreCompleto || `${s.primerNombre || s.nombre || ''} ${s.primerApellido || s.apellido || ''}`.trim() || 'Estudiante UCO',
-            studentCode: s.numeroIdentificacion ? String(s.numeroIdentificacion) : `2026-${1000 + idx}`,
+          const mapped = items.map((s: any) => ({
+            studentId: s.id || s.estudiante || '',
+            studentName: s.nombreCompleto || `${s.primerNombre || s.nombre || ''} ${s.primerApellido || s.apellido || ''}`.trim(),
+            studentCode: s.numeroIdentificacion ? String(s.numeroIdentificacion) : '',
             status: 'AN' as const,
           }));
 
@@ -87,15 +85,7 @@ export class StudentService {
             total: res.totalElementos || mapped.length,
             datos: mapped,
           };
-        }),
-        catchError(() =>
-          of({
-            idTransaccion: 'tx-std-fallback',
-            exitoso: true,
-            total: 0,
-            datos: [],
-          })
-        )
+        })
       );
   }
 
@@ -105,17 +95,7 @@ export class StudentService {
         idTransaccion: 'tx-std-id-001',
         exitoso: true,
         datos: res,
-      })),
-      catchError(() =>
-        of({
-          idTransaccion: 'tx-std-id-fallback',
-          exitoso: true,
-          datos: {
-            id: estudianteId,
-            nombreCompleto: 'Estudiante Registrado',
-          },
-        })
-      )
+      }))
     );
   }
 }

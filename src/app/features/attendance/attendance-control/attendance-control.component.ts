@@ -433,7 +433,7 @@ export class AttendanceControlComponent {
   sessions = signal<ClassSession[]>([]);
 
   selectedCourseId = signal<string>('');
-  selectedSessionId = signal<string>('ses-101');
+  selectedSessionId = signal<string>('');
 
   searchQuery = signal<string>('');
   filterStatus = signal<'TODOS' | AttendanceStatus>('TODOS');
@@ -484,7 +484,7 @@ export class AttendanceControlComponent {
       },
     });
 
-    this.courseService.getTeacherCourses('docente-1').subscribe({
+    this.courseService.getTeacherCourses().subscribe({
       next: (res) => {
         if (res.exitoso && res.datos) {
           this.courses = res.datos;
@@ -591,27 +591,14 @@ export class AttendanceControlComponent {
 
         this.sessionService.getSessionsByGroup(courseId).subscribe({
           next: (sesRes) => {
-            const sessionList = sesRes.exitoso && sesRes.datos && sesRes.datos.length > 0 ? sesRes.datos : [
-              {
-                id: 'ses-def-01',
-                courseId: courseId,
-                sessionNumber: 1,
-                date: new Date().toISOString().split('T')[0],
-                startTime: '08:00',
-                endTime: '10:00',
-                title: 'Sesión Ordinaria #1',
-                topic: 'Control de Asistencia Ordinario',
-                status: 'PROGRAMADA' as const,
-                records: [],
-              }
-            ];
+            const sessionList = sesRes.exitoso && sesRes.datos ? sesRes.datos : [];
 
             const sessionsWithRecords = sessionList.map((session) => ({
               ...session,
               records,
             }));
             this.sessions.set(sessionsWithRecords);
-            this.selectedSessionId.set(sessionsWithRecords[0].id);
+            this.selectedSessionId.set(sessionsWithRecords[0]?.id || '');
             this.isLoadingSession.set(false);
           },
           error: () => {
@@ -756,7 +743,14 @@ export class AttendanceControlComponent {
     if (!this.newStudentDocType() || !this.newStudentCode() || !this.newStudentFirstName() || !this.newStudentLastName() || !this.newStudentEmail()) return;
 
     this.isEnrolling.set(true);
-    const grupoId = this.selectedCourseId() || 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d';
+    const grupoId = this.selectedCourseId();
+    if (!grupoId) {
+      this.isEnrolling.set(false);
+      this.toastType.set('error');
+      this.toastMessage.set('Selecciona un grupo antes de matricular el estudiante.');
+      this.showToast.set(true);
+      return;
+    }
 
     this.studentService
       .enrollStudentInGroup({

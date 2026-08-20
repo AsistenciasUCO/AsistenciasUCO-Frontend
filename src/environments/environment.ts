@@ -5,6 +5,6 @@ export const environment = {
   keycloak: {
     url: (window as any)['env']?.['KEYCLOAK_URL'] || 'http://127.0.0.1:8081',
     realm: (window as any)['env']?.['KEYCLOAK_REALM'] || 'asistencias-uco',
-    clientId: (window as any)['env']?.['KEYCLOAK_CLIENT_ID'] || 'asistencias-uco-frontend',
+    clientId: (window as any)['env']?.['KEYCLOAK_CLIENT_ID'] || 'asistencias-frontend',
   },
 };

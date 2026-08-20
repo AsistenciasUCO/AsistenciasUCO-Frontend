@@ -6,7 +6,7 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { CourseService } from '../../../core/services/course.service';
 import { Course } from '../../../core/models/course.model';
-import { MOCK_CURRENT_USER } from '../../../core/mocks/user.mock';
+import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
   selector: 'app-overview',
@@ -121,14 +121,24 @@ import { MOCK_CURRENT_USER } from '../../../core/mocks/user.mock';
 })
 export class OverviewComponent {
   private courseService = inject(CourseService);
+  private authService = inject(AuthService);
 
-  user = MOCK_CURRENT_USER;
   courses: Course[] = [];
 
   isLoading = signal<boolean>(true);
 
+  get user() {
+    const currentUser = this.authService.currentUser();
+    const name = [currentUser?.nombres, currentUser?.apellidos].filter(Boolean).join(' ');
+
+    return {
+      name: name || currentUser?.username || 'Usuario autenticado',
+      institutionName: 'UCO',
+    };
+  }
+
   constructor() {
-    this.courseService.getTeacherCourses(this.user.id).subscribe({
+    this.courseService.getTeacherCourses().subscribe({
       next: (res) => {
         if (res.exitoso && res.datos) {
           this.courses = res.datos;

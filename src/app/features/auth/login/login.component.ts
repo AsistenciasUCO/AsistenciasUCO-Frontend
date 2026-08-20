@@ -1,5 +1,6 @@
-﻿import { Component, signal, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { CardComponent } from '../../../shared/components/card/card.component';
@@ -45,10 +46,12 @@ import { CardComponent } from '../../../shared/components/card/card.component';
 })
 export class LoginComponent {
   private authService = inject(AuthService);
+  private route = inject(ActivatedRoute);
   isLoading = signal<boolean>(false);
 
   onLogin() {
     this.isLoading.set(true);
-    this.authService.loginWithKeycloak();
+    const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl') || '/app/dashboard';
+    this.authService.loginWithKeycloak(returnUrl);
   }
 }

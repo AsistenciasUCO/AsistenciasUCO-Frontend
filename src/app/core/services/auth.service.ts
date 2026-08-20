@@ -1,92 +1,135 @@
-import { Injectable, signal, computed } from '@angular/core';
-import { Observable, of } from 'rxjs';
+import { Injectable, computed, signal } from '@angular/core';
 import Keycloak from 'keycloak-js';
-import { ApiResponse, UserAuthResponse } from '../models/api-response.model';
-
 import { environment } from '../../../environments/environment';
+import { AuthenticatedUser } from '../models/api-response.model';
+
+const VALID_API_ROLES = ['AD', 'DE', 'CD', 'DO', 'ES'] as const;
 
 @Injectable({
   providedIn: 'root',
 })
 export class AuthService {
   private keycloakInstance: Keycloak | null = null;
+  private authenticated = signal<boolean>(false);
 
-  currentUser = signal<UserAuthResponse | null>(null);
-  token = signal<string | null>(null);
-  isAuthenticated = computed(() => !!this.token());
+  currentUser = signal<AuthenticatedUser | null>(null);
+  isAuthenticated = computed(() => this.authenticated());
 
   async initKeycloak(): Promise<boolean> {
-    this.keycloakInstance = new Keycloak({
-      url: environment.keycloak.url,
-      realm: environment.keycloak.realm,
-      clientId: environment.keycloak.clientId,
-    });
+    if (!this.keycloakInstance) {
+      this.keycloakInstance = new Keycloak({
+        url: environment.keycloak.url,
+        realm: environment.keycloak.realm,
+        clientId: environment.keycloak.clientId,
+      });
+    }
 
     try {
       const authenticated = await this.keycloakInstance.init({
-        onLoad: 'login-required',
+        onLoad: 'check-sso',
         pkceMethod: 'S256',
         checkLoginIframe: false,
+        silentCheckSsoRedirectUri: window.location.origin + '/assets/silent-check-sso.html',
       });
 
-      if (authenticated && this.keycloakInstance.token) {
+      if (authenticated) {
         this.updateState();
+      } else {
+        this.clearSession();
       }
 
       return authenticated;
     } catch (error) {
       console.error('Error al inicializar Keycloak OIDC:', error);
+      this.clearSession();
       return false;
     }
   }
 
-  async loginWithKeycloak(): Promise<void> {
-    if (this.keycloakInstance) {
-      await this.keycloakInstance.login({
-        redirectUri: window.location.origin + '/app/dashboard',
-        prompt: 'login',
-      });
+  async loginWithKeycloak(returnUrl = '/app/dashboard'): Promise<void> {
+    if (!this.keycloakInstance) {
+      await this.initKeycloak();
     }
-  }
 
-  login(correo?: string, contrasena?: string): Observable<ApiResponse<UserAuthResponse>> {
-    this.loginWithKeycloak();
-    return of({
-      idTransaccion: 'tx-keycloak-redirect',
-      exitoso: true,
-      mensajeUsuario: 'Redirigiendo a Keycloak para autenticación segura...',
-      datos: undefined as any,
+    await this.keycloakInstance?.login({
+      redirectUri: window.location.origin + returnUrl,
+      prompt: 'login',
     });
   }
 
   async logout(): Promise<void> {
-    if (this.keycloakInstance) {
-      this.token.set(null);
-      this.currentUser.set(null);
-      await this.keycloakInstance.logout({
-        redirectUri: window.location.origin + '/login',
-      });
+    if (!this.keycloakInstance) {
+      this.clearSession();
+      return;
+    }
+
+    this.clearSession();
+    await this.keycloakInstance.logout({
+      redirectUri: window.location.origin + '/login',
+    });
+  }
+
+  async refreshToken(minValidity = 30): Promise<boolean> {
+    if (!this.keycloakInstance?.authenticated) {
+      this.clearSession();
+      return false;
+    }
+
+    try {
+      await this.keycloakInstance.updateToken(minValidity);
+      this.updateState();
+      return true;
+    } catch {
+      this.clearSession();
+      return false;
     }
   }
 
-  private updateState(): void {
-    if (!this.keycloakInstance || !this.keycloakInstance.token) return;
+  clearSession(): void {
+    this.currentUser.set(null);
+    this.authenticated.set(false);
+  }
 
-    const tokenStr = this.keycloakInstance.token;
-    this.token.set(tokenStr);
+  getAccessToken(): string | undefined {
+    return this.keycloakInstance?.token;
+  }
+
+  // Client-side role checks are only for UX; Spring Security enforces real authorization.
+  hasRole(role: string): boolean {
+    return this.currentUser()?.roles.includes(role) ?? false;
+  }
+
+  // Client-side role checks are only for UX; Spring Security enforces real authorization.
+  hasAnyRole(roles: string[]): boolean {
+    return roles.some((role) => this.hasRole(role));
+  }
+
+  private updateState(): void {
+    if (!this.keycloakInstance?.token) {
+      this.clearSession();
+      return;
+    }
 
     const tokenParsed = this.keycloakInstance.tokenParsed as any;
-    if (tokenParsed) {
-      const roles: string[] = tokenParsed.resource_access?.['asistencias-api']?.roles || [];
-      const primaryRole = roles.length > 0 ? roles[0] : 'DOCENTE';
-
-      this.currentUser.set({
-        id: tokenParsed.idUsuario || tokenParsed.sub,
-        nombres: tokenParsed.given_name || tokenParsed.preferred_username || 'Usuario',
-        apellidos: tokenParsed.family_name || '',
-        correo: tokenParsed.email || '',
-        rol: primaryRole,
-      });
+    if (!tokenParsed?.sub) {
+      this.clearSession();
+      return;
     }
+
+    const apiRoles = tokenParsed.resource_access?.['asistencias-api']?.roles;
+    const roles = Array.isArray(apiRoles)
+      ? apiRoles.filter((role: string) => VALID_API_ROLES.includes(role as any))
+      : [];
+
+    this.currentUser.set({
+      keycloakSub: tokenParsed.sub,
+      idUsuario: tokenParsed.idUsuario,
+      username: tokenParsed.preferred_username || '',
+      nombres: tokenParsed.given_name || tokenParsed.preferred_username || '',
+      apellidos: tokenParsed.family_name || '',
+      correo: tokenParsed.email || '',
+      roles,
+    });
+    this.authenticated.set(true);
   }
 }

@@ -8,10 +8,12 @@ export interface ApiResponse<T> {
   token?: string;
 }
 
-export interface UserAuthResponse {
-  id: string;
+export interface AuthenticatedUser {
+  keycloakSub: string;
+  idUsuario?: string;
+  username: string;
   nombres: string;
   apellidos: string;
   correo: string;
-  rol: string;
+  roles: string[];
 }

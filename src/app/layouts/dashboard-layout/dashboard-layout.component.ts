@@ -1,7 +1,7 @@
-import { Component, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
-import { MOCK_CURRENT_USER } from '../../core/mocks/user.mock';
+import { AuthService } from '../../core/services/auth.service';
 
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
 
@@ -109,15 +109,16 @@ import { AvatarComponent } from '../../shared/components/avatar/avatar.component
                 <p class="text-xs font-semibold text-warm-900 truncate">{{ user.name }}</p>
                 <p class="text-[11px] text-warm-500 truncate">{{ user.email }}</p>
               </div>
-              <a
-                routerLink="/login"
+              <button
+                type="button"
+                (click)="logout()"
                 class="p-1 text-warm-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors shrink-0"
                 title="Cerrar sesión"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
-              </a>
+              </button>
             }
           </div>
         </div>
@@ -148,9 +149,21 @@ import { AvatarComponent } from '../../shared/components/avatar/avatar.component
   `,
 })
 export class DashboardLayoutComponent {
-  user = MOCK_CURRENT_USER;
+  private authService = inject(AuthService);
   isCollapsed = signal<boolean>(false);
   isMobileMenuOpen = signal<boolean>(false);
+
+  get user() {
+    const currentUser = this.authService.currentUser();
+    const name = [currentUser?.nombres, currentUser?.apellidos].filter(Boolean).join(' ');
+
+    return {
+      name: name || currentUser?.username || 'Usuario autenticado',
+      email: currentUser?.correo || currentUser?.username || '',
+      institutionName: 'UCO',
+      department: currentUser?.roles[0] || 'Sin rol asignado',
+    };
+  }
 
   toggleCollapsed() {
     this.isCollapsed.update((val) => !val);
@@ -158,6 +171,10 @@ export class DashboardLayoutComponent {
 
   toggleMobileMenu() {
     this.isMobileMenuOpen.update((val) => !val);
+  }
+
+  logout() {
+    this.authService.logout();
   }
 
   sidebarClasses() {

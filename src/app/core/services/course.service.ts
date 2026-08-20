@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of, delay, map, catchError } from 'rxjs';
+import { Observable, delay, map, of } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 import { Course } from '../models/course.model';
@@ -12,7 +12,7 @@ import { MOCK_COURSES } from '../mocks/course.mock';
 export class CourseService {
   constructor(private http: HttpClient) {}
 
-  getTeacherCourses(docenteId: string): Observable<ApiResponse<Course[]>> {
+  getTeacherCourses(): Observable<ApiResponse<Course[]>> {
     if (environment.useMocks) {
       return of({
         idTransaccion: 'mock-tx-courses-001',
@@ -27,26 +27,20 @@ export class CourseService {
         idTransaccion: 'tx-courses-001',
         exitoso: true,
         total: grupos ? grupos.length : 0,
-        datos: grupos ? grupos.map((g, idx) => ({
-          id: g.id,
-          code: g.codigo || g.codigoGrupo || `GRP-00${idx + 1}`,
-          name: g.nombreAsignatura || g.nombreMateria || g.nombre || 'Asignatura',
-          section: g.nombre || g.seccion || 'Sección A',
-          schedule: g.horario || 'Lun, Mié 08:00 - 10:00 AM',
-          room: g.aula || 'Aula Principal',
-          enrolledStudentsCount: g.estudiantesActivos || g.totalEstudiantes || 0,
-          docenteName: g.nombreDocente || 'Docente UCO',
-          colorCategory: (['emerald', 'amber', 'blue', 'purple'][idx % 4]) as any,
-        })) : []
-      })),
-      catchError(() =>
-        of({
-          idTransaccion: 'tx-courses-error',
-          exitoso: true,
-          total: 0,
-          datos: [],
-        })
-      )
+        datos: grupos
+          ? grupos.map((g, idx) => ({
+              id: g.id,
+              code: g.codigo || g.codigoGrupo || `GRP-00${idx + 1}`,
+              name: g.nombreAsignatura || g.nombreMateria || g.nombre || 'Asignatura',
+              section: g.nombre || g.seccion || 'Seccion A',
+              schedule: g.horario || '',
+              room: g.aula || '',
+              enrolledStudentsCount: g.estudiantesActivos || g.totalEstudiantes || 0,
+              docenteName: g.nombreDocente || '',
+              colorCategory: (['emerald', 'amber', 'blue', 'purple'][idx % 4]) as any,
+            }))
+          : [],
+      }))
     );
   }
 }
