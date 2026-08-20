@@ -1,10 +1,8 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of, delay, catchError } from 'rxjs';
+import { Observable, of, delay, catchError, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
-
-import { map } from 'rxjs';
 
 export interface EnrollStudentDTO {
   grupo: string;
@@ -17,6 +15,7 @@ export interface EnrollStudentDTO {
   segundoApellido?: string;
   correoElectronico: string;
   telefono?: string;
+  password?: string;
 }
 
 @Injectable({
@@ -37,11 +36,13 @@ export class StudentService {
 
     const payload = {
       tipoIdentificacionId: dto.tipoDocumento,
-      numeroIdentificacion: dto.numeroIdentificacion,
-      nombre: [dto.primerNombre, dto.segundoNombre].filter(Boolean).join(' '),
-      apellido: [dto.primerApellido, dto.segundoApellido].filter(Boolean).join(' '),
+      numeroIdentificacion: Number(dto.numeroIdentificacion),
+      primerNombre: dto.primerNombre,
+      segundoNombre: dto.segundoNombre || '',
+      primerApellido: dto.primerApellido,
+      segundoApellido: dto.segundoApellido || '',
       correo: dto.correoElectronico,
-      telefono: dto.telefono || '3000000000',
+      password: dto.password || `Uco2026*${dto.numeroIdentificacion}`,
     };
 
     return this.http
@@ -55,6 +56,7 @@ export class StudentService {
         }))
       );
   }
+
   getStudentsByGroup(grupoId: string): Observable<ApiResponse<any[]>> {
     if (environment.useMocks) {
       return of({
@@ -74,7 +76,7 @@ export class StudentService {
           const items = res.elementos || res.items || (Array.isArray(res) ? res : []);
           const mapped = items.map((s: any, idx: number) => ({
             studentId: s.id || `std-${idx}`,
-            studentName: s.nombreCompleto || `${s.nombre || ''} ${s.apellido || ''}`.trim() || 'Estudiante UCO',
+            studentName: s.nombreCompleto || `${s.primerNombre || s.nombre || ''} ${s.primerApellido || s.apellido || ''}`.trim() || 'Estudiante UCO',
             studentCode: s.numeroIdentificacion ? String(s.numeroIdentificacion) : `2026-${1000 + idx}`,
             status: 'AN' as const,
           }));

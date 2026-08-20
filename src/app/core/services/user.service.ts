@@ -5,7 +5,7 @@ import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 
 export interface CreateUserDTO {
-  tipoIdentificacionId: string;
+  tipoIdIdentificacion: string;
   numeroIdentificacion: number | string;
   primerNombre: string;
   segundoNombre?: string;

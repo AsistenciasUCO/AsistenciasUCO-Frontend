@@ -22,7 +22,9 @@ export class SessionService {
         map((res: any) => {
           const raw = res.datos || res.elementos || (Array.isArray(res) ? res : []);
           const list = Array.isArray(raw) ? raw : [raw];
-          const mapped: ClassSession[] = list.length > 0 && list[0] ? list.map((s: any, idx: number) => ({
+          const hasValidSession = list.length > 0 && list[0] && (list[0].id || list[0].sesion);
+
+          const mapped: ClassSession[] = hasValidSession ? list.map((s: any, idx: number) => ({
             id: s.id || s.sesion || `ses-${idx + 1}`,
             courseId: s.grupo || grupoId,
             sessionNumber: s.numero || (idx + 1),
@@ -41,7 +43,7 @@ export class SessionService {
               date: new Date().toISOString().split('T')[0],
               startTime: '08:00',
               endTime: '10:00',
-              title: 'Sesión Activa de Clase',
+              title: 'Sesión Ordinaria #1',
               topic: 'Control de Asistencia Ordinario',
               status: 'PROGRAMADA',
               records: [],

@@ -1,68 +1,90 @@
 import { Injectable, signal, computed } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, of, tap, delay } from 'rxjs';
-import { environment } from '../../../environments/environment';
+import { Observable, of } from 'rxjs';
+import Keycloak from 'keycloak-js';
 import { ApiResponse, UserAuthResponse } from '../models/api-response.model';
 
 @Injectable({
   providedIn: 'root',
 })
 export class AuthService {
-  private readonly TOKEN_KEY = 'auth_jwt_token';
-  private readonly USER_KEY = 'auth_user_data';
+  private keycloakInstance: Keycloak | null = null;
 
-  currentUser = signal<UserAuthResponse | null>(this.getStoredUser());
-  token = signal<string | null>(this.getStoredToken());
-
+  currentUser = signal<UserAuthResponse | null>(null);
+  token = signal<string | null>(null);
   isAuthenticated = computed(() => !!this.token());
 
-  constructor(private http: HttpClient) {}
+  async initKeycloak(): Promise<boolean> {
+    this.keycloakInstance = new Keycloak({
+      url: 'http://127.0.0.1:8081',
+      realm: 'asistencias-uco',
+      clientId: 'asistencias-uco-frontend',
+    });
 
-  login(correo: string, contrasena: string): Observable<ApiResponse<UserAuthResponse>> {
-    const mockResponse: ApiResponse<UserAuthResponse> = {
-      idTransaccion: 'mock-tx-login-001',
+    try {
+      const authenticated = await this.keycloakInstance.init({
+        onLoad: 'login-required',
+        pkceMethod: 'S256',
+        checkLoginIframe: false,
+      });
+
+      if (authenticated && this.keycloakInstance.token) {
+        this.updateState();
+      }
+
+      return authenticated;
+    } catch (error) {
+      console.error('Error al inicializar Keycloak OIDC:', error);
+      return false;
+    }
+  }
+
+  async loginWithKeycloak(): Promise<void> {
+    if (this.keycloakInstance) {
+      await this.keycloakInstance.login({
+        redirectUri: window.location.origin + '/app/dashboard',
+        prompt: 'login',
+      });
+    }
+  }
+
+  login(correo?: string, contrasena?: string): Observable<ApiResponse<UserAuthResponse>> {
+    this.loginWithKeycloak();
+    return of({
+      idTransaccion: 'tx-keycloak-redirect',
       exitoso: true,
-      mensajeUsuario: '¡Autenticación exitosa! Bienvenido(a)',
-      token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.mock_token_dra_maria_elena',
-      datos: {
-        id: 'E1F2A3B4-0000-0000-0000-000000000003',
-        nombres: 'María Elena',
-        apellidos: 'Rostagno Valencia',
-        correo: correo || 'maria.rostagno@uco.edu.co',
-        rol: 'DOCENTE',
-      },
-    };
-
-    return of(mockResponse).pipe(
-      delay(300),
-      tap((res) => {
-        if (res.exitoso && res.token) {
-          this.setSession(res.token, res.datos);
-        }
-      })
-    );
+      mensajeUsuario: 'Redirigiendo a Keycloak para autenticación segura...',
+      datos: undefined as any,
+    });
   }
 
-  logout(): void {
-    sessionStorage.removeItem(this.TOKEN_KEY);
-    sessionStorage.removeItem(this.USER_KEY);
-    this.token.set(null);
-    this.currentUser.set(null);
+  async logout(): Promise<void> {
+    if (this.keycloakInstance) {
+      this.token.set(null);
+      this.currentUser.set(null);
+      await this.keycloakInstance.logout({
+        redirectUri: window.location.origin + '/login',
+      });
+    }
   }
 
-  private setSession(token: string, user: UserAuthResponse): void {
-    sessionStorage.setItem(this.TOKEN_KEY, token);
-    sessionStorage.setItem(this.USER_KEY, JSON.stringify(user));
-    this.token.set(token);
-    this.currentUser.set(user);
-  }
+  private updateState(): void {
+    if (!this.keycloakInstance || !this.keycloakInstance.token) return;
 
-  private getStoredToken(): string | null {
-    return sessionStorage.getItem(this.TOKEN_KEY);
-  }
+    const tokenStr = this.keycloakInstance.token;
+    this.token.set(tokenStr);
 
-  private getStoredUser(): UserAuthResponse | null {
-    const data = sessionStorage.getItem(this.USER_KEY);
-    return data ? JSON.parse(data) : null;
+    const tokenParsed = this.keycloakInstance.tokenParsed as any;
+    if (tokenParsed) {
+      const roles: string[] = tokenParsed.resource_access?.['asistencias-api']?.roles || [];
+      const primaryRole = roles.length > 0 ? roles[0] : 'DOCENTE';
+
+      this.currentUser.set({
+        id: tokenParsed.idUsuario || tokenParsed.sub,
+        nombres: tokenParsed.given_name || tokenParsed.preferred_username || 'Usuario',
+        apellidos: tokenParsed.family_name || '',
+        correo: tokenParsed.email || '',
+        rol: primaryRole,
+      });
+    }
   }
 }

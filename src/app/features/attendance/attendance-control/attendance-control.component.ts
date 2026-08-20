@@ -95,7 +95,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
         <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center text-xs">
           <div class="md:col-span-5">
             <app-form-select
-              [options]="courseOptions"
+              [options]="courseOptions()"
               [value]="selectedCourseId()"
               (valueChange)="onCourseSelect($event)"
             ></app-form-select>
@@ -336,37 +336,70 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
         <app-form-field label="Número de Identificación" [required]="true">
           <input
             type="text"
-            [(ngModel)]="newStudentCode"
+            maxlength="10"
+            [ngModel]="newStudentCode()"
+            (ngModelChange)="newStudentCode.set($event)"
             name="newStudentCode"
             placeholder="Ej. 1017123456"
             class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </app-form-field>
 
-        <app-form-field label="Nombres" [required]="true">
-          <input
-            type="text"
-            [(ngModel)]="newStudentFirstName"
-            name="newStudentFirstName"
-            placeholder="Ej. Juan Carlos"
-            class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-        </app-form-field>
+        <!-- Primer y Segundo Nombre -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <app-form-field label="Primer Nombre" [required]="true">
+            <input
+              type="text"
+              [ngModel]="newStudentFirstName()"
+              (ngModelChange)="newStudentFirstName.set($event)"
+              name="newStudentFirstName"
+              placeholder="Ej. Juan"
+              class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </app-form-field>
 
-        <app-form-field label="Apellidos" [required]="true">
-          <input
-            type="text"
-            [(ngModel)]="newStudentLastName"
-            name="newStudentLastName"
-            placeholder="Ej. Pérez Gómez"
-            class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-        </app-form-field>
+          <app-form-field label="Segundo Nombre (Opcional)">
+            <input
+              type="text"
+              [ngModel]="newStudentSecondName()"
+              (ngModelChange)="newStudentSecondName.set($event)"
+              name="newStudentSecondName"
+              placeholder="Ej. Carlos"
+              class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </app-form-field>
+        </div>
+
+        <!-- Primer y Segundo Apellido -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <app-form-field label="Primer Apellido" [required]="true">
+            <input
+              type="text"
+              [ngModel]="newStudentLastName()"
+              (ngModelChange)="newStudentLastName.set($event)"
+              name="newStudentLastName"
+              placeholder="Ej. Pérez"
+              class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </app-form-field>
+
+          <app-form-field label="Segundo Apellido (Opcional)">
+            <input
+              type="text"
+              [ngModel]="newStudentSecondLastName()"
+              (ngModelChange)="newStudentSecondLastName.set($event)"
+              name="newStudentSecondLastName"
+              placeholder="Ej. Gómez"
+              class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </app-form-field>
+        </div>
 
         <app-form-field label="Correo Electrónico Institucional" [required]="true">
           <input
             type="email"
-            [(ngModel)]="newStudentEmail"
+            [ngModel]="newStudentEmail()"
+            (ngModelChange)="newStudentEmail.set($event)"
             name="newStudentEmail"
             placeholder="juan.perez@uco.edu.co"
             class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -418,7 +451,9 @@ export class AttendanceControlComponent {
   newStudentDocType = signal<string>('');
   newStudentCode = signal<string>('');
   newStudentFirstName = signal<string>('');
+  newStudentSecondName = signal<string>('');
   newStudentLastName = signal<string>('');
+  newStudentSecondLastName = signal<string>('');
   newStudentEmail = signal<string>('');
 
   docTypes = signal<any[]>([]);
@@ -428,7 +463,7 @@ export class AttendanceControlComponent {
   toastType = signal<'success' | 'info' | 'warning' | 'error'>('success');
   private toastRotationIndex = 0;
 
-  courseOptions: SelectOption[] = [];
+  courseOptions = signal<SelectOption[]>([]);
 
   docTypeOptions = computed<SelectOption[]>(() =>
     this.docTypes().map((dt) => ({
@@ -453,10 +488,12 @@ export class AttendanceControlComponent {
       next: (res) => {
         if (res.exitoso && res.datos) {
           this.courses = res.datos;
-          this.courseOptions = res.datos.map((c) => ({
-            value: c.id,
-            label: `${c.code} - ${c.name} (${c.section})`,
-          }));
+          this.courseOptions.set(
+            res.datos.map((c) => ({
+              value: c.id,
+              label: `${c.code} - ${c.name} (${c.section})`,
+            }))
+          );
           if (res.datos.length > 0) {
             this.onCourseSelect(res.datos[0].id);
           }
@@ -554,16 +591,27 @@ export class AttendanceControlComponent {
 
         this.sessionService.getSessionsByGroup(courseId).subscribe({
           next: (sesRes) => {
-            if (sesRes.exitoso && sesRes.datos) {
-              const sessionsWithRecords = sesRes.datos.map((session) => ({
-                ...session,
-                records,
-              }));
-              this.sessions.set(sessionsWithRecords);
-              if (sessionsWithRecords.length > 0) {
-                this.selectedSessionId.set(sessionsWithRecords[0].id);
+            const sessionList = sesRes.exitoso && sesRes.datos && sesRes.datos.length > 0 ? sesRes.datos : [
+              {
+                id: 'ses-def-01',
+                courseId: courseId,
+                sessionNumber: 1,
+                date: new Date().toISOString().split('T')[0],
+                startTime: '08:00',
+                endTime: '10:00',
+                title: 'Sesión Ordinaria #1',
+                topic: 'Control de Asistencia Ordinario',
+                status: 'PROGRAMADA' as const,
+                records: [],
               }
-            }
+            ];
+
+            const sessionsWithRecords = sessionList.map((session) => ({
+              ...session,
+              records,
+            }));
+            this.sessions.set(sessionsWithRecords);
+            this.selectedSessionId.set(sessionsWithRecords[0].id);
             this.isLoadingSession.set(false);
           },
           error: () => {
@@ -708,7 +756,7 @@ export class AttendanceControlComponent {
     if (!this.newStudentDocType() || !this.newStudentCode() || !this.newStudentFirstName() || !this.newStudentLastName() || !this.newStudentEmail()) return;
 
     this.isEnrolling.set(true);
-    const grupoId = this.selectedCourseId();
+    const grupoId = this.selectedCourseId() || 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d';
 
     this.studentService
       .enrollStudentInGroup({
@@ -716,7 +764,9 @@ export class AttendanceControlComponent {
         tipoDocumento: this.newStudentDocType(),
         numeroIdentificacion: this.newStudentCode(),
         primerNombre: this.newStudentFirstName(),
+        segundoNombre: this.newStudentSecondName(),
         primerApellido: this.newStudentLastName(),
+        segundoApellido: this.newStudentSecondLastName(),
         correoElectronico: this.newStudentEmail(),
       })
       .subscribe({
@@ -725,7 +775,9 @@ export class AttendanceControlComponent {
           this.isRegisterModalOpen.set(false);
           this.newStudentCode.set('');
           this.newStudentFirstName.set('');
+          this.newStudentSecondName.set('');
           this.newStudentLastName.set('');
+          this.newStudentSecondLastName.set('');
           this.newStudentEmail.set('');
 
           this.toastType.set('success');
@@ -739,7 +791,13 @@ export class AttendanceControlComponent {
         error: (err) => {
           this.isEnrolling.set(false);
           this.toastType.set('error');
-          this.toastMessage.set(err?.error?.mensajeUsuario || 'Error al matricular el estudiante.');
+          const errorMsg =
+            err?.error?.message ||
+            err?.error?.mensajeUsuario ||
+            err?.error?.mensaje ||
+            err?.message ||
+            'Error al matricular el estudiante.';
+          this.toastMessage.set(errorMsg);
           this.showToast.set(true);
         },
       });

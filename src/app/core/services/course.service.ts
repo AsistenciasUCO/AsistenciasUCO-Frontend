@@ -29,10 +29,10 @@ export class CourseService {
         total: grupos ? grupos.length : 0,
         datos: grupos ? grupos.map((g, idx) => ({
           id: g.id,
-          code: g.codigoGrupo || g.codigo || `GRP-00${idx + 1}`,
-          name: g.nombreMateria || g.nombre || 'Asignatura',
-          section: g.seccion || 'Sección A',
-          schedule: g.horario || 'Por definir',
+          code: g.codigo || g.codigoGrupo || `GRP-00${idx + 1}`,
+          name: g.nombreAsignatura || g.nombreMateria || g.nombre || 'Asignatura',
+          section: g.nombre || g.seccion || 'Sección A',
+          schedule: g.horario || 'Lun, Mié 08:00 - 10:00 AM',
           room: g.aula || 'Aula Principal',
           enrolledStudentsCount: g.estudiantesActivos || g.totalEstudiantes || 0,
           docenteName: g.nombreDocente || 'Docente UCO',
@@ -41,10 +41,10 @@ export class CourseService {
       })),
       catchError(() =>
         of({
-          idTransaccion: 'tx-courses-fallback',
+          idTransaccion: 'tx-courses-error',
           exitoso: true,
-          total: MOCK_COURSES.length,
-          datos: MOCK_COURSES,
+          total: 0,
+          datos: [],
         })
       )
     );
