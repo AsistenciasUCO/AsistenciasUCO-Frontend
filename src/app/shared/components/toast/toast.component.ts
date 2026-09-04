@@ -1,7 +1,50 @@
-import { Component, input, output, signal, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, input, output, signal, OnChanges, SimpleChanges, Injectable, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
+
+export interface ToastData {
+  visible: boolean;
+  message: string;
+  type: ToastType;
+}
+
+@Injectable({
+  providedIn: 'root',
+})
+export class ToastService {
+  private state = signal<ToastData>({
+    visible: false,
+    message: '',
+    type: 'success',
+  });
+
+  currentToast = this.state.asReadonly();
+
+  show(message: string, type: ToastType = 'success'): void {
+    this.state.set({ visible: true, message, type });
+  }
+
+  success(message: string): void {
+    this.show(message, 'success');
+  }
+
+  error(message: string): void {
+    this.show(message, 'error');
+  }
+
+  info(message: string): void {
+    this.show(message, 'info');
+  }
+
+  warning(message: string): void {
+    this.show(message, 'warning');
+  }
+
+  dismiss(): void {
+    this.state.update((s) => ({ ...s, visible: false }));
+  }
+}
 
 @Component({
   selector: 'app-toast',
@@ -74,9 +117,9 @@ export class ToastComponent implements OnChanges {
   dismissed = output<void>();
 
   isExiting = signal<boolean>(false);
-  private timerId: any = null;
+  private timerId: ReturnType<typeof setTimeout> | null = null;
 
-  ngOnChanges(changes: SimpleChanges) {
+  ngOnChanges(changes: SimpleChanges): void {
     if (changes['visible']) {
       if (this.visible()) {
         this.isExiting.set(false);
@@ -85,14 +128,14 @@ export class ToastComponent implements OnChanges {
     }
   }
 
-  private startAutoDismissTimer() {
+  private startAutoDismissTimer(): void {
     this.clearTimer();
     this.timerId = setTimeout(() => {
       this.triggerDismiss();
     }, this.duration());
   }
 
-  triggerDismiss() {
+  triggerDismiss(): void {
     this.clearTimer();
     this.isExiting.set(true);
 
@@ -102,14 +145,14 @@ export class ToastComponent implements OnChanges {
     }, 250);
   }
 
-  private clearTimer() {
+  private clearTimer(): void {
     if (this.timerId) {
       clearTimeout(this.timerId);
       this.timerId = null;
     }
   }
 
-  containerClasses() {
+  containerClasses(): string {
     const base = 'fixed top-16 right-6 z-50 flex flex-col gap-2 p-3.5 bg-warm-950 text-white rounded-2xl shadow-warm-lg border border-primary-800/80 max-w-xs sm:max-w-sm w-full select-none';
     const anim = this.isExiting() ? 'animate-toast-exit' : 'animate-toast-enter';
     return `${base} ${anim}`;

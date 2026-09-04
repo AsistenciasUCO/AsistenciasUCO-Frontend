@@ -8,7 +8,9 @@ export interface Course {
   schedule: string;
   room: string;
   enrolledStudentsCount: number;
+  cupoMaximo?: number;
   docenteName: string;
+  docenteId?: string;
   colorCategory: 'emerald' | 'amber' | 'blue' | 'purple';
   sessions?: ClassSession[];
 }

@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'DOCENTE' | 'ESTUDIANTE' | 'PREFECTO';
+export type UserRole = 'ADMINISTRADOR' | 'DECANO' | 'COORDINADOR' | 'DOCENTE' | 'ESTUDIANTE' | 'ADMIN';
 
 export interface User {
   id: string;
@@ -15,6 +15,8 @@ export interface User {
   avatarUrl?: string;
   institutionName: string;
   department?: string;
+  telefono?: string;
+  correoAlternativo?: string;
   status: 'active' | 'inactive';
 }
 

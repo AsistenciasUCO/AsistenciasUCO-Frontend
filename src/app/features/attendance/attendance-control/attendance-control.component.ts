@@ -33,7 +33,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
     FormSelectComponent,
   ],
   template: `
-    <div class="space-y-4 animate-fade-in max-w-7xl mx-auto pb-12 relative">
+    <div class="space-y-6 animate-fade-in relative">
       <!-- 1. Header Compacto Consolidado: Curso, Sesión y Acciones (Alta Densidad Visual) -->
       <header class="bg-white p-4 sm:p-5 rounded-2xl border border-warm-200 shadow-warm-sm space-y-4">
         <!-- Fila Superior: Título + Botones de Gestión -->
