@@ -1,85 +1,105 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, map } from 'rxjs';
+import { Observable, map, switchMap, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { ApiResponse } from '../models/api-response.model';
-
-export interface TeacherDTO {
-  id: string;
-  idUsuario?: string;
-  numeroIdentificacion?: number;
-  nombreCompleto?: string;
-  estaActivoUsuario?: boolean;
-}
+import { ApiDataResponse } from '../api/models/api-data-response.model';
+import { ApiListResponse } from '../api/models/api-list-response.model';
+import {
+  AsignacionDocenteApiDto,
+  DocenteApiDto,
+  DocenteDetalleApiDto,
+} from '../api/models/docente-api-dto.model';
+import { AsignarDocenteGrupoRequest } from '../api/models/asignar-docente-grupo-request.model';
+import { OperationResultResponse } from '../api/models/operation-result-response.model';
+import { RegistrarDocenteRequest } from '../api/models/registrar-docente-request.model';
+import { AuthService } from './auth.service';
 
 @Injectable({
   providedIn: 'root',
 })
 export class TeacherService {
-  constructor(private http: HttpClient) {}
+  constructor(
+    private http: HttpClient,
+    private authService: AuthService
+  ) {}
 
-  getAllTeachers(): Observable<ApiResponse<TeacherDTO[]>> {
-    return this.http.get<TeacherDTO[]>(`${environment.apiUrl}/docentes`).pipe(
-      map((datos) => ({
-        idTransaccion: 'tx-doc-001',
-        exitoso: true,
-        total: datos ? datos.length : 0,
-        datos: datos || [],
-      }))
+  getAllTeachers(): Observable<DocenteApiDto[]> {
+    return this.http.get<DocenteApiDto[]>(`${environment.apiUrl}/docentes`);
+  }
+
+  getTeacherById(
+    docenteId: string
+  ): Observable<ApiDataResponse<DocenteDetalleApiDto>> {
+    return this.http.get<ApiDataResponse<DocenteDetalleApiDto>>(
+      `${environment.apiUrl}/docentes/${docenteId}`
     );
   }
 
-  getTeacherById(docenteId: string): Observable<ApiResponse<TeacherDTO>> {
-    return this.http
-      .post<any>(`${environment.apiUrl}/docentes/consultas/id`, { docente: docenteId })
-      .pipe(
-        map((res) => ({
-          idTransaccion: res.idTransaccion || 'tx-doc-id-001',
-          exitoso: true,
-          datos: res.datos,
-        }))
-      );
+  getTeacherAssignments(
+    docenteId: string
+  ): Observable<ApiListResponse<AsignacionDocenteApiDto>> {
+    return this.http.get<ApiListResponse<AsignacionDocenteApiDto>>(
+      `${environment.apiUrl}/docentes/${docenteId}/asignaciones`
+    );
   }
 
-  getTeacherAssignments(docenteId: string): Observable<ApiResponse<any[]>> {
-    return this.http
-      .post<any>(`${environment.apiUrl}/docentes/consultas/asignaciones`, { docente: docenteId })
-      .pipe(
-        map((res) => ({
-          idTransaccion: res.idTransaccion || 'tx-doc-asig-001',
-          exitoso: true,
-          total: res.total || 0,
-          datos: res.datos || [],
-        }))
-      );
-  }
+  getCurrentTeacher(): Observable<DocenteApiDto> {
+    const currentUserId = this.authService.currentUser()?.idUsuario;
 
-  registerTeacherFromUser(usuarioId: string): Observable<ApiResponse<any>> {
-    return this.http
-      .post<any>(`${environment.apiUrl}/docentes`, { usuario: usuarioId })
-      .pipe(
-        map((res) => ({
-          idTransaccion: res.idTransaccion || 'tx-doc-reg-001',
-          exitoso: true,
-          mensajeUsuario: 'Docente registrado exitosamente desde el usuario.',
-          datos: res,
-        }))
+    if (!currentUserId) {
+      return throwError(
+        () => new Error('El usuario autenticado no tiene idUsuario.')
       );
-  }
+    }
 
-  assignTeacherToGroup(docenteId: string, grupoId: string): Observable<ApiResponse<any>> {
-    return this.http
-      .post<any>(`${environment.apiUrl}/docentes/asignaciones/grupo`, {
-        docente: docenteId,
-        grupo: grupoId,
+    return this.getAllTeachers().pipe(
+      map((teachers) => {
+        const currentTeacher = teachers.find(
+          (teacher) => teacher.idUsuario === currentUserId
+        );
+
+        if (!currentTeacher) {
+          throw new Error(
+            'No se encontró un docente asociado al usuario autenticado.'
+          );
+        }
+
+        return currentTeacher;
       })
-      .pipe(
-        map((res) => ({
-          idTransaccion: res.idTransaccion || 'tx-doc-asig-grp-001',
-          exitoso: true,
-          mensajeUsuario: 'Docente asignado al grupo correctamente.',
-          datos: res,
-        }))
-      );
+    );
+  }
+
+  getCurrentTeacherAssignments(): Observable<
+    ApiListResponse<AsignacionDocenteApiDto>
+  > {
+    return this.getCurrentTeacher().pipe(
+      switchMap((teacher) => this.getTeacherAssignments(teacher.id))
+    );
+  }
+
+  registerTeacherFromUser(
+    usuarioId: string
+  ): Observable<OperationResultResponse> {
+    const request: RegistrarDocenteRequest = { usuario: usuarioId };
+
+    return this.http.post<OperationResultResponse>(
+      `${environment.apiUrl}/docentes`,
+      request
+    );
+  }
+
+  assignTeacherToGroup(
+    docenteId: string,
+    grupoId: string
+  ): Observable<OperationResultResponse> {
+    const request: AsignarDocenteGrupoRequest = {
+      docente: docenteId,
+      grupo: grupoId,
+    };
+
+    return this.http.post<OperationResultResponse>(
+      `${environment.apiUrl}/docentes/asignaciones/grupo`,
+      request
+    );
   }
 }

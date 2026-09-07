@@ -1,19 +1,9 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, map } from 'rxjs';
+import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { ApiResponse } from '../models/api-response.model';
-
-export interface CreateUserDTO {
-  tipoIdIdentificacion: string;
-  numeroIdentificacion: number | string;
-  primerNombre: string;
-  segundoNombre?: string;
-  primerApellido: string;
-  segundoApellido?: string;
-  correo: string;
-  password?: string;
-}
+import { CrearUsuarioRequest } from '../api/models/crear-usuario-request.model';
+import { OperationResultResponse } from '../api/models/operation-result-response.model';
 
 @Injectable({
   providedIn: 'root',
@@ -21,14 +11,12 @@ export interface CreateUserDTO {
 export class UserService {
   constructor(private http: HttpClient) {}
 
-  createUser(dto: CreateUserDTO): Observable<ApiResponse<any>> {
-    return this.http.post<any>(`${environment.apiUrl}/usuarios`, dto).pipe(
-      map((res) => ({
-        idTransaccion: res.idTransaccion || 'tx-usr-001',
-        exitoso: true,
-        mensajeUsuario: 'Usuario registrado correctamente en el sistema.',
-        datos: res,
-      }))
+  createUser(
+    request: CrearUsuarioRequest
+  ): Observable<OperationResultResponse> {
+    return this.http.post<OperationResultResponse>(
+      `${environment.apiUrl}/usuarios`,
+      request
     );
   }
 }

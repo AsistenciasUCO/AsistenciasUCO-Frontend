@@ -8,7 +8,7 @@ Set-Location "$PSScriptRoot\.."
 
 if (-not (Test-Path "node_modules")) {
     Write-Host "[INFO] Instalando dependencias de Node.js..." -ForegroundColor Yellow
-    npm install
+    npm ci
 }
 
 Write-Host "[INFO] Ejecutando servidor de desarrollo Angular..." -ForegroundColor Green

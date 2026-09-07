@@ -1,7 +1,6 @@
 import { Component, signal, computed, HostListener, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { AttendanceService } from '../../../core/services/attendance.service';
 import { StudentService } from '../../../core/services/student.service';
 import { CardComponent } from '../../../shared/components/card/card.component';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
@@ -11,11 +10,30 @@ import { ModalComponent } from '../../../shared/components/modal/modal.component
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
 import { FormSelectComponent, SelectOption } from '../../../shared/components/form-select/form-select.component';
-import { SessionService } from '../../../core/services/session.service';
 import { CatalogService } from '../../../core/services/catalog.service';
 import { CourseService } from '../../../core/services/course.service';
+import {
+  getApiErrorMessage,
+  getApiFieldError,
+} from '../../../core/api/errors/api-error.util';
+import { TipoIdentificacionApiDto } from '../../../core/api/models/tipo-identificacion-api-dto.model';
 import { Course } from '../../../core/models/course.model';
-import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core/models/attendance.model';
+import { ClassSession, AttendanceStatus } from '../../../core/models/attendance.model';
+import { environment } from '../../../../environments/environment';
+import {
+  getPasswordValidationError,
+  parseIdentificationNumber,
+} from '../../../core/validation/request-form-validation.util';
+
+type StudentEnrollmentField =
+  | 'tipoIdentificacionId'
+  | 'primerNombre'
+  | 'segundoNombre'
+  | 'primerApellido'
+  | 'segundoApellido'
+  | 'correo'
+  | 'numeroIdentificacion'
+  | 'password';
 
 @Component({
   selector: 'app-attendance-control',
@@ -34,13 +52,21 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
   ],
   template: `
     <div class="space-y-4 animate-fade-in max-w-7xl mx-auto pb-12 relative">
+      @if (!sessionsEnabled || !attendanceEnabled) {
+        <p class="text-xs text-warm-600 bg-warm-100 border border-warm-200 rounded-xl px-4 py-2" role="status">
+          Las sesiones y la toma de asistencia están temporalmente deshabilitadas. La matrícula de estudiantes continúa disponible.
+        </p>
+      }
+
       <!-- 1. Header Compacto Consolidado: Curso, Sesión y Acciones (Alta Densidad Visual) -->
       <header class="bg-white p-4 sm:p-5 rounded-2xl border border-warm-200 shadow-warm-sm space-y-4">
         <!-- Fila Superior: Título + Botones de Gestión -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-warm-100 pb-3.5">
           <div>
             <div class="flex items-center gap-2 mb-0.5">
-              @if (currentSession()?.status === 'CONCLUIDA') {
+              @if (!sessionsEnabled || !attendanceEnabled) {
+                <app-badge variant="neutral" size="sm">Sesiones deshabilitadas</app-badge>
+              } @else if (currentSession()?.status === 'CONCLUIDA') {
                 <app-badge variant="neutral" size="sm">🔒 Asistencia Consolidada</app-badge>
               } @else {
                 <app-badge variant="success" size="sm">🟢 Clase Activa</app-badge>
@@ -58,6 +84,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
             <app-button
               variant="accent"
               size="sm"
+              [disabled]="!sessionsEnabled || !attendanceEnabled"
               (clicked)="markAllPresent()"
             >
               <svg class="w-4 h-4 mr-1 text-warm-950 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -69,6 +96,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
             <app-button
               variant="danger"
               size="sm"
+              [disabled]="!sessionsEnabled || !attendanceEnabled"
               (clicked)="markAllAbsent()"
             >
               <svg class="w-4 h-4 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -80,7 +108,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
             <app-button
               variant="secondary"
               size="sm"
-              (clicked)="isRegisterModalOpen.set(true)"
+              (clicked)="openStudentRegistration()"
             >
               <svg class="w-4 h-4 mr-1 text-primary-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
@@ -105,6 +133,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
             <app-form-select
               [options]="sessionOptions()"
               [value]="selectedSessionId()"
+              [disabled]="!sessionsEnabled"
               (valueChange)="onSessionSelect($event)"
             ></app-form-select>
           </div>
@@ -197,6 +226,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
               <div class="grid grid-cols-3 gap-1.5">
                 <button
                   type="button"
+                  [disabled]="!sessionsEnabled || !attendanceEnabled"
                   (click)="setStatus(student.studentId, 'AN')"
                   [class]="mobileStatusBtnClasses(student.status, 'AN')"
                 >
@@ -204,6 +234,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
                 </button>
                 <button
                   type="button"
+                  [disabled]="!sessionsEnabled || !attendanceEnabled"
                   (click)="setStatus(student.studentId, 'SJC')"
                   [class]="mobileStatusBtnClasses(student.status, 'SJC')"
                 >
@@ -211,6 +242,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
                 </button>
                 <button
                   type="button"
+                  [disabled]="!sessionsEnabled || !attendanceEnabled"
                   (click)="setStatus(student.studentId, 'EX')"
                   [class]="mobileStatusBtnClasses(student.status, 'EX')"
                 >
@@ -227,6 +259,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
               size="md"
               [fullWidth]="true"
               [loading]="isSaving()"
+              [disabled]="!sessionsEnabled || !attendanceEnabled"
               (clicked)="saveAttendance()"
             >
               Guardar y Consolidar Asistencia
@@ -271,6 +304,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
                         <div class="flex items-center justify-center gap-1.5 bg-warm-100/80 p-0.5 rounded-xl border border-warm-200/80 max-w-fit mx-auto shadow-xs">
                           <button
                             type="button"
+                            [disabled]="!sessionsEnabled || !attendanceEnabled"
                             (click)="setStatus(student.studentId, 'AN')"
                             [class]="segmentedChipClasses(student.status, 'AN')"
                           >
@@ -278,6 +312,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
                           </button>
                           <button
                             type="button"
+                            [disabled]="!sessionsEnabled || !attendanceEnabled"
                             (click)="setStatus(student.studentId, 'SJC')"
                             [class]="segmentedChipClasses(student.status, 'SJC')"
                           >
@@ -285,6 +320,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
                           </button>
                           <button
                             type="button"
+                            [disabled]="!sessionsEnabled || !attendanceEnabled"
                             (click)="setStatus(student.studentId, 'EX')"
                             [class]="segmentedChipClasses(student.status, 'EX')"
                           >
@@ -305,6 +341,7 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
                 variant="primary"
                 size="md"
                 [loading]="isSaving()"
+                [disabled]="!sessionsEnabled || !attendanceEnabled"
                 (clicked)="saveAttendance()"
               >
                 Guardar y Consolidar Asistencia
@@ -324,7 +361,11 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
       <form (submit)="onRegisterStudentSubmit($event)" class="space-y-4">
         <p class="text-xs text-warm-500">Registra directamente al alumno en la asignatura activa.</p>
 
-        <app-form-field label="Tipo de Documento" [required]="true">
+        <app-form-field
+          label="Tipo de Documento"
+          [required]="true"
+          [errorMessage]="studentFieldErrors().tipoIdentificacionId ?? ''"
+        >
           <app-form-select
             [options]="docTypeOptions()"
             [value]="newStudentDocType()"
@@ -333,12 +374,17 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
           ></app-form-select>
         </app-form-field>
 
-        <app-form-field label="Número de Identificación" [required]="true">
+        <app-form-field
+          label="Número de Identificación"
+          [required]="true"
+          [errorMessage]="studentFieldErrors().numeroIdentificacion ?? ''"
+        >
           <input
             type="text"
+            inputmode="numeric"
             maxlength="10"
-            [ngModel]="newStudentCode()"
-            (ngModelChange)="newStudentCode.set($event)"
+              [ngModel]="newStudentCode()"
+              (ngModelChange)="newStudentCode.set($event)"
             name="newStudentCode"
             placeholder="Ej. 1017123456"
             class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -347,9 +393,14 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
 
         <!-- Primer y Segundo Nombre -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <app-form-field label="Primer Nombre" [required]="true">
+          <app-form-field
+            label="Primer Nombre"
+            [required]="true"
+            [errorMessage]="studentFieldErrors().primerNombre ?? ''"
+          >
             <input
               type="text"
+              maxlength="50"
               [ngModel]="newStudentFirstName()"
               (ngModelChange)="newStudentFirstName.set($event)"
               name="newStudentFirstName"
@@ -358,9 +409,13 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
             />
           </app-form-field>
 
-          <app-form-field label="Segundo Nombre (Opcional)">
+          <app-form-field
+            label="Segundo Nombre (Opcional)"
+            [errorMessage]="studentFieldErrors().segundoNombre ?? ''"
+          >
             <input
               type="text"
+              maxlength="50"
               [ngModel]="newStudentSecondName()"
               (ngModelChange)="newStudentSecondName.set($event)"
               name="newStudentSecondName"
@@ -372,9 +427,14 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
 
         <!-- Primer y Segundo Apellido -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <app-form-field label="Primer Apellido" [required]="true">
+          <app-form-field
+            label="Primer Apellido"
+            [required]="true"
+            [errorMessage]="studentFieldErrors().primerApellido ?? ''"
+          >
             <input
               type="text"
+              maxlength="50"
               [ngModel]="newStudentLastName()"
               (ngModelChange)="newStudentLastName.set($event)"
               name="newStudentLastName"
@@ -383,9 +443,13 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
             />
           </app-form-field>
 
-          <app-form-field label="Segundo Apellido (Opcional)">
+          <app-form-field
+            label="Segundo Apellido (Opcional)"
+            [errorMessage]="studentFieldErrors().segundoApellido ?? ''"
+          >
             <input
               type="text"
+              maxlength="50"
               [ngModel]="newStudentSecondLastName()"
               (ngModelChange)="newStudentSecondLastName.set($event)"
               name="newStudentSecondLastName"
@@ -395,13 +459,35 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
           </app-form-field>
         </div>
 
-        <app-form-field label="Correo Electrónico Institucional" [required]="true">
+        <app-form-field
+          label="Correo Electrónico Institucional"
+          [required]="true"
+          [errorMessage]="studentFieldErrors().correo ?? ''"
+        >
           <input
             type="email"
+            maxlength="100"
             [ngModel]="newStudentEmail()"
             (ngModelChange)="newStudentEmail.set($event)"
             name="newStudentEmail"
             placeholder="juan.perez@uco.edu.co"
+            class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </app-form-field>
+
+        <app-form-field
+          label="Contraseña"
+          [required]="true"
+          [errorMessage]="studentFieldErrors().password ?? ''"
+        >
+          <input
+            type="password"
+            minlength="8"
+            maxlength="255"
+            [ngModel]="newStudentPassword()"
+            (ngModelChange)="newStudentPassword.set($event)"
+            name="newStudentPassword"
+            placeholder="Mínimo 8 caracteres"
             class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </app-form-field>
@@ -429,6 +515,9 @@ import { ClassSession, StudentAttendance, AttendanceStatus } from '../../../core
 export class AttendanceControlComponent {
   private courseService = inject(CourseService);
 
+  readonly sessionsEnabled = environment.features.sessionsEnabled;
+  readonly attendanceEnabled = environment.features.attendanceEnabled;
+
   courses: Course[] = [];
   sessions = signal<ClassSession[]>([]);
 
@@ -455,8 +544,12 @@ export class AttendanceControlComponent {
   newStudentLastName = signal<string>('');
   newStudentSecondLastName = signal<string>('');
   newStudentEmail = signal<string>('');
+  newStudentPassword = signal<string>('');
+  studentFieldErrors = signal<
+    Partial<Record<StudentEnrollmentField, string>>
+  >({});
 
-  docTypes = signal<any[]>([]);
+  docTypes = signal<TipoIdentificacionApiDto[]>([]);
 
   showToast = signal<boolean>(false);
   toastMessage = signal<string>('');
@@ -474,36 +567,31 @@ export class AttendanceControlComponent {
 
   constructor() {
     this.catalogService.getIdentityDocumentTypes().subscribe({
-      next: (res) => {
-        if (res.exitoso && res.datos) {
-          this.docTypes.set(res.datos);
-          if (res.datos.length > 0) {
-            this.newStudentDocType.set(res.datos[0].id);
-          }
+      next: (documentTypes) => {
+        this.docTypes.set(documentTypes);
+        if (documentTypes.length > 0) {
+          this.newStudentDocType.set(documentTypes[0].id);
         }
       },
     });
 
     this.courseService.getTeacherCourses().subscribe({
-      next: (res) => {
-        if (res.exitoso && res.datos) {
-          this.courses = res.datos;
-          this.courseOptions.set(
-            res.datos.map((c) => ({
-              value: c.id,
-              label: `${c.code} - ${c.name} (${c.section})`,
-            }))
-          );
-          if (res.datos.length > 0) {
-            this.onCourseSelect(res.datos[0].id);
-          }
+      next: (courses) => {
+        this.courses = courses;
+        this.courseOptions.set(
+          courses.map((course) => ({
+            value: course.id,
+            label: `${course.code} - ${course.name} (${course.section})`,
+          }))
+        );
+        if (courses.length > 0) {
+          this.onCourseSelect(courses[0].id);
         }
       },
     });
   }
 
   sessionOptions = computed<SelectOption[]>(() => {
-    const courseId = this.selectedCourseId();
     return this.sessions()
       .map((s) => ({
         value: s.id,
@@ -539,6 +627,10 @@ export class AttendanceControlComponent {
 
   @HostListener('window:keydown', ['$event'])
   handleKeyboardEvent(event: KeyboardEvent) {
+    if (!this.sessionsEnabled || !this.attendanceEnabled) {
+      return;
+    }
+
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
       return;
     }
@@ -579,40 +671,19 @@ export class AttendanceControlComponent {
     this.showKeyboardHelper.update((val) => !val);
   }
 
-  private sessionService = inject(SessionService);
-
   onCourseSelect(courseId: string) {
     this.selectedCourseId.set(courseId);
     this.isLoadingSession.set(true);
-
-    this.studentService.getStudentsByGroup(courseId).subscribe({
-      next: (stdRes) => {
-        const records = stdRes.exitoso && stdRes.datos ? stdRes.datos : [];
-
-        this.sessionService.getSessionsByGroup(courseId).subscribe({
-          next: (sesRes) => {
-            const sessionList = sesRes.exitoso && sesRes.datos ? sesRes.datos : [];
-
-            const sessionsWithRecords = sessionList.map((session) => ({
-              ...session,
-              records,
-            }));
-            this.sessions.set(sessionsWithRecords);
-            this.selectedSessionId.set(sessionsWithRecords[0]?.id || '');
-            this.isLoadingSession.set(false);
-          },
-          error: () => {
-            this.isLoadingSession.set(false);
-          },
-        });
-      },
-      error: () => {
-        this.isLoadingSession.set(false);
-      },
-    });
+    this.sessions.set([]);
+    this.selectedSessionId.set('');
+    this.isLoadingSession.set(false);
   }
 
   onSessionSelect(sessionId: string) {
+    if (!this.sessionsEnabled) {
+      return;
+    }
+
     this.triggerSkeleton(() => {
       this.selectedSessionId.set(sessionId);
     });
@@ -627,6 +698,10 @@ export class AttendanceControlComponent {
   }
 
   setStatus(studentId: string, status: AttendanceStatus) {
+    if (!this.sessionsEnabled || !this.attendanceEnabled) {
+      return;
+    }
+
     const sessionId = this.selectedSessionId();
     this.sessions.update((list) =>
       list.map((session) => {
@@ -661,6 +736,10 @@ export class AttendanceControlComponent {
   }
 
   markAllPresent() {
+    if (!this.sessionsEnabled || !this.attendanceEnabled) {
+      return;
+    }
+
     const sessionId = this.selectedSessionId();
     this.sessions.update((list) =>
       list.map((session) => {
@@ -680,6 +759,10 @@ export class AttendanceControlComponent {
   }
 
   markAllAbsent() {
+    if (!this.sessionsEnabled || !this.attendanceEnabled) {
+      return;
+    }
+
     const sessionId = this.selectedSessionId();
     this.sessions.update((list) =>
       list.map((session) => {
@@ -699,48 +782,64 @@ export class AttendanceControlComponent {
   }
 
 
-  private attendanceService = inject(AttendanceService);
   private studentService = inject(StudentService);
 
   saveAttendance() {
-    this.isSaving.set(true);
-    const sessionId = this.selectedSessionId();
-    const currentList = this.students();
+    this.isSaving.set(false);
+    this.toastType.set('info');
+    this.toastMessage.set('Las sesiones y la toma de asistencia están temporalmente deshabilitadas.');
+    this.showToast.set(true);
+  }
 
-    if (currentList.length === 0) {
-      this.isSaving.set(false);
-      this.toastType.set('warning');
-      this.toastMessage.set('No hay estudiantes en la lista para registrar.');
+  openStudentRegistration() {
+    this.studentFieldErrors.set({});
+    this.isRegisterModalOpen.set(true);
+  }
+
+  onRegisterStudentSubmit(event: Event) {
+    event.preventDefault();
+
+    this.studentFieldErrors.set({});
+
+    const identificationResult = parseIdentificationNumber(
+      this.newStudentCode()
+    );
+    const passwordError = getPasswordValidationError(
+      this.newStudentPassword(),
+      this.newStudentCode()
+    );
+    const fieldErrors: Partial<Record<StudentEnrollmentField, string>> = {};
+
+    if (!identificationResult.valid) {
+      fieldErrors.numeroIdentificacion = identificationResult.error;
+    }
+    if (!this.newStudentFirstName().trim()) {
+      fieldErrors.primerNombre = 'El primer nombre es obligatorio.';
+    }
+    if (!this.newStudentLastName().trim()) {
+      fieldErrors.primerApellido = 'El primer apellido es obligatorio.';
+    }
+    if (!this.newStudentEmail().trim()) {
+      fieldErrors.correo = 'El correo es obligatorio.';
+    }
+    if (passwordError) {
+      fieldErrors.password = passwordError;
+    }
+
+    if (!this.newStudentDocType() || Object.keys(fieldErrors).length > 0) {
+      if (!this.newStudentDocType()) {
+        fieldErrors.tipoIdentificacionId = 'El tipo de documento es obligatorio.';
+      }
+      this.studentFieldErrors.set(fieldErrors);
+      this.toastType.set('error');
+      this.toastMessage.set('Revise los campos del formulario.');
       this.showToast.set(true);
       return;
     }
 
-    this.attendanceService
-      .saveAttendanceBatch(sessionId, currentList)
-      .subscribe({
-        next: (res) => {
-          this.isSaving.set(false);
-          // Marcar la sesión actual como CONCLUIDA
-          this.sessions.update((list) =>
-            list.map((s) => (s.id === sessionId ? { ...s, status: 'CONCLUIDA' } : s))
-          );
-          this.toastType.set('success');
-          this.toastMessage.set(res.mensajeUsuario || '¡Éxito! Registro masivo de asistencia guardado en la base de datos.');
-          this.showToast.set(true);
-        },
-        error: (err) => {
-          this.isSaving.set(false);
-          this.toastType.set('error');
-          this.toastMessage.set(err?.error?.mensajeUsuario || 'Error al consolidar la asistencia masiva.');
-          this.showToast.set(true);
-        },
-      });
-  }
-
-
-  onRegisterStudentSubmit(event: Event) {
-    event.preventDefault();
-    if (!this.newStudentDocType() || !this.newStudentCode() || !this.newStudentFirstName() || !this.newStudentLastName() || !this.newStudentEmail()) return;
+    if (!identificationResult.valid) {
+      return;
+    }
 
     this.isEnrolling.set(true);
     const grupoId = this.selectedCourseId();
@@ -756,12 +855,13 @@ export class AttendanceControlComponent {
       .enrollStudentInGroup({
         grupo: grupoId,
         tipoDocumento: this.newStudentDocType(),
-        numeroIdentificacion: this.newStudentCode(),
-        primerNombre: this.newStudentFirstName(),
-        segundoNombre: this.newStudentSecondName(),
-        primerApellido: this.newStudentLastName(),
-        segundoApellido: this.newStudentSecondLastName(),
-        correoElectronico: this.newStudentEmail(),
+        numeroIdentificacion: identificationResult.value,
+        primerNombre: this.newStudentFirstName().trim(),
+        segundoNombre: this.newStudentSecondName().trim(),
+        primerApellido: this.newStudentLastName().trim(),
+        segundoApellido: this.newStudentSecondLastName().trim(),
+        correoElectronico: this.newStudentEmail().trim(),
+        password: this.newStudentPassword(),
       })
       .subscribe({
         next: (res) => {
@@ -773,6 +873,8 @@ export class AttendanceControlComponent {
           this.newStudentLastName.set('');
           this.newStudentSecondLastName.set('');
           this.newStudentEmail.set('');
+          this.newStudentPassword.set('');
+          this.studentFieldErrors.set({});
 
           this.toastType.set('success');
           this.toastMessage.set(res.mensajeUsuario || '¡Estudiante matriculado exitosamente en el grupo!');
@@ -782,19 +884,37 @@ export class AttendanceControlComponent {
             this.onCourseSelect(grupoId);
           }
         },
-        error: (err) => {
+        error: (error: unknown) => {
           this.isEnrolling.set(false);
           this.toastType.set('error');
-          const errorMsg =
-            err?.error?.message ||
-            err?.error?.mensajeUsuario ||
-            err?.error?.mensaje ||
-            err?.message ||
-            'Error al matricular el estudiante.';
-          this.toastMessage.set(errorMsg);
+          this.setStudentApiFieldErrors(error);
+          this.toastMessage.set(getApiErrorMessage(error));
           this.showToast.set(true);
         },
       });
+  }
+
+  private setStudentApiFieldErrors(error: unknown): void {
+    const fields: StudentEnrollmentField[] = [
+      'tipoIdentificacionId',
+      'primerNombre',
+      'segundoNombre',
+      'primerApellido',
+      'segundoApellido',
+      'correo',
+      'numeroIdentificacion',
+      'password',
+    ];
+    const fieldErrors: Partial<Record<StudentEnrollmentField, string>> = {};
+
+    for (const field of fields) {
+      const message = getApiFieldError(error, field);
+      if (message) {
+        fieldErrors[field] = message;
+      }
+    }
+
+    this.studentFieldErrors.set(fieldErrors);
   }
 
   resetFilters() {

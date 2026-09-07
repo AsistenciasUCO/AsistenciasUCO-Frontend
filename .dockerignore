@@ -1,5 +1,9 @@
 node_modules
 dist
 .git
+.env
+.angular
+out-tsc
+*.log
 .vscode
 .editorconfig

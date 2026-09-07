@@ -7,6 +7,7 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
 import { CourseService } from '../../../core/services/course.service';
 import { Course } from '../../../core/models/course.model';
 import { AuthService } from '../../../core/services/auth.service';
+import { environment } from '../../../../environments/environment';
 
 @Component({
   selector: 'app-overview',
@@ -42,14 +43,23 @@ import { AuthService } from '../../../core/services/auth.service';
           </p>
 
           <div class="pt-2 flex flex-wrap items-center gap-3">
-            <a routerLink="/app/asistencia">
-              <app-button variant="accent" size="md">
+            @if (attendanceAvailable) {
+              <a routerLink="/app/asistencia">
+                <app-button variant="accent" size="md">
+                  <svg class="w-4 h-4 mr-1.5 text-warm-950 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                  Tomar Asistencia Ahora
+                </app-button>
+              </a>
+            } @else {
+              <app-button variant="accent" size="md" [disabled]="true">
                 <svg class="w-4 h-4 mr-1.5 text-warm-950 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                 </svg>
-                Tomar Asistencia Ahora
+                Asistencia temporalmente no disponible
               </app-button>
-            </a>
+            }
           </div>
         </div>
       </section>
@@ -95,7 +105,8 @@ import { AuthService } from '../../../core/services/auth.service';
                   <div class="flex items-center justify-between pt-3 border-t border-warm-100">
                     <span class="text-warm-500 font-medium">Alumnos Matriculados:</span>
                     <span class="font-bold text-warm-900 bg-warm-100 px-2.5 py-0.5 rounded-full text-xs">
-                      {{ course.enrolledStudentsCount }} alumnos
+                      {{ course.enrolledStudentsCount ?? 'No disponible' }}
+                      @if (course.enrolledStudentsCount !== null) { alumnos }
                     </span>
                   </div>
                 </div>
@@ -103,7 +114,7 @@ import { AuthService } from '../../../core/services/auth.service';
                 <div card-footer class="mt-4 pt-3 border-t border-warm-100 flex items-center justify-end">
                   <a routerLink="/app/asistencia" class="w-full">
                     <app-button variant="secondary" size="sm" [fullWidth]="true">
-                      Acceder a Sesiones y Asistencia
+                      Gestionar estudiantes
                     </app-button>
                   </a>
                 </div>
@@ -123,6 +134,9 @@ export class OverviewComponent {
   private courseService = inject(CourseService);
   private authService = inject(AuthService);
 
+  readonly attendanceAvailable =
+    environment.features.sessionsEnabled && environment.features.attendanceEnabled;
+
   courses: Course[] = [];
 
   isLoading = signal<boolean>(true);
@@ -139,10 +153,8 @@ export class OverviewComponent {
 
   constructor() {
     this.courseService.getTeacherCourses().subscribe({
-      next: (res) => {
-        if (res.exitoso && res.datos) {
-          this.courses = res.datos;
-        }
+      next: (courses) => {
+        this.courses = courses;
         this.isLoading.set(false);
       },
       error: () => {

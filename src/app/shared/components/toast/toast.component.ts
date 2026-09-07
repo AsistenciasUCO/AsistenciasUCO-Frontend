@@ -74,7 +74,7 @@ export class ToastComponent implements OnChanges {
   dismissed = output<void>();
 
   isExiting = signal<boolean>(false);
-  private timerId: any = null;
+  private timerId: ReturnType<typeof setTimeout> | null = null;
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes['visible']) {

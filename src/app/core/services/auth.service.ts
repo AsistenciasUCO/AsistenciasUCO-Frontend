@@ -1,9 +1,12 @@
 import { Injectable, computed, signal } from '@angular/core';
 import Keycloak from 'keycloak-js';
 import { environment } from '../../../environments/environment';
-import { AuthenticatedUser } from '../models/api-response.model';
+import {
+  ApiRole,
+  AuthenticatedUser,
+} from '../models/authenticated-user.model';
 
-const VALID_API_ROLES = ['AD', 'DE', 'CD', 'DO', 'ES'] as const;
+const VALID_API_ROLES: readonly ApiRole[] = ['AD', 'DE', 'CD', 'DO', 'ES'];
 
 @Injectable({
   providedIn: 'root',
@@ -95,12 +98,12 @@ export class AuthService {
   }
 
   // Client-side role checks are only for UX; Spring Security enforces real authorization.
-  hasRole(role: string): boolean {
+  hasRole(role: ApiRole): boolean {
     return this.currentUser()?.roles.includes(role) ?? false;
   }
 
   // Client-side role checks are only for UX; Spring Security enforces real authorization.
-  hasAnyRole(roles: string[]): boolean {
+  hasAnyRole(roles: ApiRole[]): boolean {
     return roles.some((role) => this.hasRole(role));
   }
 
@@ -110,26 +113,76 @@ export class AuthService {
       return;
     }
 
-    const tokenParsed = this.keycloakInstance.tokenParsed as any;
-    if (!tokenParsed?.sub) {
+    const tokenParsed: unknown = this.keycloakInstance.tokenParsed;
+    const sub = this.readStringClaim(tokenParsed, 'sub');
+    const idUsuario = this.readStringClaim(tokenParsed, 'idUsuario');
+
+    if (!sub || !idUsuario) {
       this.clearSession();
       return;
     }
 
-    const apiRoles = tokenParsed.resource_access?.['asistencias-api']?.roles;
-    const roles = Array.isArray(apiRoles)
-      ? apiRoles.filter((role: string) => VALID_API_ROLES.includes(role as any))
-      : [];
+    const username = this.readStringClaim(tokenParsed, 'preferred_username');
+    const givenName = this.readStringClaim(tokenParsed, 'given_name');
+    const familyName = this.readStringClaim(tokenParsed, 'family_name');
+    const email = this.readStringClaim(tokenParsed, 'email');
+    const roles = this.extractApiRoles(tokenParsed);
 
     this.currentUser.set({
-      keycloakSub: tokenParsed.sub,
-      idUsuario: tokenParsed.idUsuario,
-      username: tokenParsed.preferred_username || '',
-      nombres: tokenParsed.given_name || tokenParsed.preferred_username || '',
-      apellidos: tokenParsed.family_name || '',
-      correo: tokenParsed.email || '',
+      keycloakSub: sub,
+      idUsuario,
+      username: username ?? '',
+      nombres: givenName ?? username ?? '',
+      apellidos: familyName ?? '',
+      correo: email ?? '',
       roles,
     });
     this.authenticated.set(true);
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+  }
+
+  private readStringClaim(
+    tokenParsed: unknown,
+    claimName: string
+  ): string | undefined {
+    if (!this.isRecord(tokenParsed)) {
+      return undefined;
+    }
+
+    const value = tokenParsed[claimName];
+    return typeof value === 'string' && value.trim() ? value : undefined;
+  }
+
+  private extractApiRoles(tokenParsed: unknown): ApiRole[] {
+    if (!this.isRecord(tokenParsed)) {
+      return [];
+    }
+
+    const resourceAccess = tokenParsed['resource_access'];
+    if (!this.isRecord(resourceAccess)) {
+      return [];
+    }
+
+    const apiAccess = resourceAccess['asistencias-api'];
+    if (!this.isRecord(apiAccess)) {
+      return [];
+    }
+
+    const roles = apiAccess['roles'];
+    if (!Array.isArray(roles)) {
+      return [];
+    }
+
+    return roles.filter((role): role is ApiRole => this.isApiRole(role));
+  }
+
+  private isApiRole(value: unknown): value is ApiRole {
+    return (
+      typeof value === 'string' &&
+      VALID_API_ROLES.some((role) => role === value)
+    );
   }
 }

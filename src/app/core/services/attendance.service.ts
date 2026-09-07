@@ -1,18 +1,12 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, delay, of } from 'rxjs';
+import { Observable, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { ApiResponse } from '../models/api-response.model';
-import { StudentAttendance } from '../models/attendance.model';
-
-export interface SaveAttendanceDTO {
-  asistencia?: string;
-  estudiante: string;
-  grupo: string;
-  sesion: string;
-  presente: boolean;
-  observacion?: string;
-}
+import { ApiListResponse } from '../api/models/api-list-response.model';
+import { ApiMessageResponse } from '../api/models/api-message-response.model';
+import { AsistenciaConsultadaApiDto } from '../api/models/asistencia-consultada-api-dto.model';
+import { RegistrarAsistenciaRequest } from '../api/models/registrar-asistencia-request.model';
+import { SolicitarRevisionAsistenciaRequest } from '../api/models/solicitar-revision-asistencia-request.model';
 
 @Injectable({
   providedIn: 'root',
@@ -20,60 +14,71 @@ export interface SaveAttendanceDTO {
 export class AttendanceService {
   constructor(private http: HttpClient) {}
 
-  getStudentsByGroupAndSession(grupoId: string, sesionId: string): Observable<ApiResponse<StudentAttendance[]>> {
-    return this.http.post<ApiResponse<StudentAttendance[]>>(`${environment.apiUrl}/asistencias/consultas/grupo`, {
-      grupo: grupoId,
-      sesion: sesionId,
-    });
-  }
-
-  saveAttendance(data: SaveAttendanceDTO): Observable<ApiResponse<void>> {
-    if (environment.useMocks) {
-      return of({
-        idTransaccion: 'mock-tx-save-001',
-        exitoso: true,
-        mensajeUsuario: 'Asistencia registrada correctamente.',
-        datos: undefined,
-      }).pipe(delay(250));
+  getAttendancesByGroup(
+    grupoId: string,
+    sesionId?: string
+  ): Observable<ApiListResponse<AsistenciaConsultadaApiDto>> {
+    if (!environment.features.attendanceEnabled) {
+      return throwError(
+        () =>
+          new Error(
+            'Funcionalidad de asistencia temporalmente no disponible.'
+          )
+      );
     }
 
-    return this.http.post<ApiResponse<void>>(`${environment.apiUrl}/asistencias`, data);
+    return this.http.get<ApiListResponse<AsistenciaConsultadaApiDto>>(
+      `${environment.apiUrl}/grupos/${grupoId}/asistencias`,
+      {
+        params: sesionId ? { sesionId } : {},
+      }
+    );
   }
 
-  saveAttendanceBatch(sesionId: string, records: StudentAttendance[]): Observable<ApiResponse<void>> {
-    const jsonList = records.map((r) => ({
-      idEstudiante: r.studentId,
-      estado: r.status,
-    }));
-
-    if (environment.useMocks) {
-      return of({
-        idTransaccion: 'mock-tx-save-batch-001',
-        exitoso: true,
-        mensajeUsuario: 'Registro de asistencias consolidado correctamente.',
-        datos: undefined,
-      }).pipe(delay(200));
+  registerAttendance(
+    request: RegistrarAsistenciaRequest
+  ): Observable<ApiMessageResponse> {
+    if (!environment.features.attendanceEnabled) {
+      return throwError(
+        () =>
+          new Error(
+            'Funcionalidad de asistencia temporalmente no disponible.'
+          )
+      );
     }
 
-    return this.http.post<ApiResponse<void>>(`${environment.apiUrl}/asistencias`, {
-      sesion: sesionId,
-      asistenciaJSON: JSON.stringify(jsonList),
-    });
+    return this.http.post<ApiMessageResponse>(
+      `${environment.apiUrl}/asistencias`,
+      request
+    );
   }
 
-  requestAttendanceRevision(asistenciaId: string, observacion: string): Observable<ApiResponse<void>> {
-    if (environment.useMocks) {
-      return of({
-        idTransaccion: 'mock-tx-rev-001',
-        exitoso: true,
-        mensajeUsuario: 'Solicitud de revision registrada correctamente.',
-        datos: undefined,
-      }).pipe(delay(200));
+  requestAttendanceRevision(
+    request: SolicitarRevisionAsistenciaRequest
+  ): Observable<ApiMessageResponse> {
+    if (!environment.features.attendanceEnabled) {
+      return throwError(
+        () =>
+          new Error(
+            'Funcionalidad de asistencia temporalmente no disponible.'
+          )
+      );
     }
 
-    return this.http.post<ApiResponse<void>>(`${environment.apiUrl}/asistencias/revisiones`, {
-      asistencia: asistenciaId,
-      observacion,
-    });
+    const motivo = request.motivo.trim();
+
+    if (motivo.length < 10 || motivo.length > 300) {
+      return throwError(
+        () => new Error('El motivo debe contener entre 10 y 300 caracteres.')
+      );
+    }
+
+    return this.http.post<ApiMessageResponse>(
+      `${environment.apiUrl}/asistencias/revisiones`,
+      {
+        asistencia: request.asistencia,
+        motivo,
+      }
+    );
   }
 }
