@@ -173,21 +173,11 @@ import { ToastService } from '../../shared/components/toast/toast.component';
                     <span class="text-warm-500 block text-[10px] uppercase font-bold tracking-wider">Segundo Apellido</span>
                     <span class="font-semibold text-warm-900 text-sm mt-0.5 block">{{ formModel.segundoApellido || '—' }}</span>
                   </div>
-
-                  <div class="bg-warm-50/70 p-3.5 rounded-xl border border-warm-200/80">
-                    <span class="text-warm-500 block text-[10px] uppercase font-bold tracking-wider">Teléfono / Celular</span>
-                    <span class="font-mono font-semibold text-warm-900 text-xs mt-0.5 block">{{ formModel.telefono || 'Sin registrar' }}</span>
-                  </div>
-
-                  <div class="bg-warm-50/70 p-3.5 rounded-xl border border-warm-200/80">
-                    <span class="text-warm-500 block text-[10px] uppercase font-bold tracking-wider">Correo Alternativo / Personal</span>
-                    <span class="font-mono text-warm-800 text-xs mt-0.5 block truncate">{{ formModel.correoAlternativo || 'Sin registrar' }}</span>
-                  </div>
                 </div>
 
                 <div class="bg-warm-50 p-4 rounded-xl border border-warm-200 text-xs text-warm-600 flex items-center justify-between gap-3">
                   <span class="text-[11px]">
-                    Para modificar tus nombres, apellidos o canales de contacto, presiona el botón <strong>"Editar"</strong>.
+                    Para modificar tus nombres o apellidos, presiona el botón <strong>"Editar"</strong>.
                   </span>
                   <app-button variant="accent" size="sm" type="button" (click)="enableEditing()">
                     Editar Datos
@@ -239,28 +229,6 @@ import { ToastService } from '../../shared/components/toast/toast.component';
                       [(ngModel)]="formModel.segundoApellido"
                       class="w-full text-xs py-2 px-3 bg-white border border-warm-300 rounded-xl text-warm-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
                       placeholder="Ej. Cardona"
-                    />
-                  </app-form-field>
-
-                  <!-- Teléfono de Contacto -->
-                  <app-form-field label="Teléfono / Celular">
-                    <input
-                      type="tel"
-                      name="telefono"
-                      [(ngModel)]="formModel.telefono"
-                      class="w-full text-xs py-2 px-3 bg-white border border-warm-300 rounded-xl text-warm-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                      placeholder="Ej. 310 123 4567"
-                    />
-                  </app-form-field>
-
-                  <!-- Correo Alternativo -->
-                  <app-form-field label="Correo Alternativo / Personal">
-                    <input
-                      type="email"
-                      name="correoAlternativo"
-                      [(ngModel)]="formModel.correoAlternativo"
-                      class="w-full text-xs py-2 px-3 bg-white border border-warm-300 rounded-xl text-warm-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                      placeholder="Ej. usuario.personal@gmail.com"
                     />
                   </app-form-field>
                 </div>
@@ -360,8 +328,6 @@ export class ProfileComponent implements OnInit {
     segundoNombre: '',
     primerApellido: '',
     segundoApellido: '',
-    telefono: '',
-    correoAlternativo: '',
   };
 
   computedFullName = computed(() => {
@@ -376,6 +342,9 @@ export class ProfileComponent implements OnInit {
 
   ngOnInit(): void {
     this.resetForm();
+    this.authService.fetchProfileFromBackend().then(() => {
+      this.resetForm();
+    });
   }
 
   enableEditing(): void {
@@ -395,15 +364,17 @@ export class ProfileComponent implements OnInit {
         segundoNombre: current.segundoNombre || '',
         primerApellido: current.primerApellido || '',
         segundoApellido: current.segundoApellido || '',
-        telefono: current.telefono || '',
-        correoAlternativo: current.correoAlternativo || '',
       };
     }
   }
 
   saveProfile(): void {
-    if (!this.formModel.primerNombre.trim() || !this.formModel.primerApellido.trim()) {
-      this.toastService.show('El primer nombre y el primer apellido son obligatorios.', 'error');
+    if (!this.formModel.primerNombre.trim()) {
+      this.toastService.show('El campo Primer Nombre es obligatorio.', 'warning');
+      return;
+    }
+    if (!this.formModel.primerApellido.trim()) {
+      this.toastService.show('El campo Primer Apellido es obligatorio.', 'warning');
       return;
     }
 
@@ -414,8 +385,6 @@ export class ProfileComponent implements OnInit {
       segundoNombre: this.formModel.segundoNombre.trim(),
       primerApellido: this.formModel.primerApellido.trim(),
       segundoApellido: this.formModel.segundoApellido.trim(),
-      telefono: this.formModel.telefono.trim(),
-      correoAlternativo: this.formModel.correoAlternativo.trim(),
     }).subscribe({
       next: (res) => {
         this.isSaving.set(false);

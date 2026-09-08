@@ -8,7 +8,13 @@ import {
   EspacioFisicoItem,
   FacultadItem,
   AreaConocimientoItem,
+  PlanEstudioItem,
+  AsignaturaPlanItem,
 } from '../../../core/models/role-management.model';
+import {
+  MOCK_PLANES_ESTUDIO,
+  MOCK_ASIGNATURAS_PLAN,
+} from '../../../core/mocks/role-management.mock';
 
 type TabCatalogo = 'SEDES' | 'ESPACIOS' | 'FACULTADES' | 'AREAS';
 type SubVista = 'LISTA' | 'FORM_SEDE' | 'FORM_ESPACIO' | 'FORM_FACULTAD' | 'FORM_AREA';
@@ -29,7 +35,7 @@ type SubVista = 'LISTA' | 'FORM_SEDE' | 'FORM_ESPACIO' | 'FORM_FACULTAD' | 'FORM
           </div>
           <h1 class="text-2xl font-serif font-bold text-warm-900">Infraestructura y Estructura Académica</h1>
           <p class="text-sm text-warm-600">
-            Administración de sedes, aulas, laboratorios, facultades y áreas de conocimiento institucionales (HU147 - HU167).
+            Administración de sedes, aulas, laboratorios, facultades y áreas de conocimiento institucionales.
           </p>
         </div>
 
@@ -127,7 +133,7 @@ type SubVista = 'LISTA' | 'FORM_SEDE' | 'FORM_ESPACIO' | 'FORM_FACULTAD' | 'FORM
           <svg class="w-4 h-4 text-warm-400 absolute left-3.5 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
         </div>
 
-        <!-- ================= TAB 1: SEDES (HU147 - HU150) ================= -->
+        <!-- ================= TAB 1: SEDES ================= -->
         @if (tabActiva() === 'SEDES') {
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             @for (sede of sedesFiltradas(); track sede.id) {
@@ -183,8 +189,51 @@ type SubVista = 'LISTA' | 'FORM_SEDE' | 'FORM_ESPACIO' | 'FORM_FACULTAD' | 'FORM
           </div>
         }
 
-        <!-- ================= TAB 2: ESPACIOS FÍSICOS (HU151 - HU155) ================= -->
+        <!-- ================= TAB 2: ESPACIOS FÍSICOS ================= -->
         @if (tabActiva() === 'ESPACIOS') {
+          <!-- BARRA DE FILTROS AVANZADOS (HU020, HU144) -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-warm-50/80 rounded-2xl border border-warm-200 shadow-warm-xs">
+            <div>
+              <label class="block text-[11px] font-bold text-warm-600 uppercase mb-1">Filtrar por Sede</label>
+              <select
+                [(ngModel)]="filtroSedeId"
+                class="w-full px-3 py-2 bg-white border border-warm-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-700/20"
+              >
+                <option value="TODAS">Todas las Sedes Universitarias</option>
+                @for (sede of sedes(); track sede.id) {
+                  <option [value]="sede.id">{{ sede.nombre }}</option>
+                }
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-bold text-warm-600 uppercase mb-1">Tipo de Espacio</label>
+              <select
+                [(ngModel)]="filtroTipoEspacio"
+                class="w-full px-3 py-2 bg-white border border-warm-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-700/20"
+              >
+                <option value="TODOS">Todos los Tipos</option>
+                <option value="Aula de Clase">Aula de Clase</option>
+                <option value="Laboratorio de Cómputo">Laboratorio de Cómputo</option>
+                <option value="Auditorio">Auditorio</option>
+                <option value="Sala de Estudio">Sala de Estudio</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-bold text-warm-600 uppercase mb-1">Estado Operativo</label>
+              <select
+                [(ngModel)]="filtroEstadoEspacio"
+                class="w-full px-3 py-2 bg-white border border-warm-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary-700/20"
+              >
+                <option value="TODOS">Todos los Estados</option>
+                <option value="DISPONIBLE">Disponible</option>
+                <option value="MANTENIMIENTO">En Mantenimiento</option>
+                <option value="INACTIVO">Inactivo</option>
+              </select>
+            </div>
+          </div>
+
           <div class="bg-white border border-warm-200 rounded-2xl overflow-hidden shadow-warm-sm">
             <div class="overflow-x-auto">
               <table class="w-full text-left text-sm">
@@ -255,7 +304,7 @@ type SubVista = 'LISTA' | 'FORM_SEDE' | 'FORM_ESPACIO' | 'FORM_FACULTAD' | 'FORM
           </div>
         }
 
-        <!-- ================= TAB 3: FACULTADES (HU161 - HU164) ================= -->
+        <!-- ================= TAB 3: FACULTADES ================= -->
         @if (tabActiva() === 'FACULTADES') {
           <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
             @for (fac of facultadesFiltradas(); track fac.id) {
@@ -271,18 +320,26 @@ type SubVista = 'LISTA' | 'FORM_SEDE' | 'FORM_ESPACIO' | 'FORM_FACULTAD' | 'FORM
                     <span class="font-semibold text-warm-800">{{ fac.decanoNombre || 'Sin decano asignado' }}</span>
                   </div>
                 </div>
-                <button
-                  (click)="editarFacultad(fac)"
-                  class="w-full py-2 bg-warm-100 hover:bg-warm-200 text-warm-800 text-xs font-semibold rounded-xl transition-colors"
-                >
-                  Editar Facultad
-                </button>
+                <div class="space-y-2">
+                  <button
+                    (click)="verProgramasFacultad(fac)"
+                    class="w-full py-2 bg-primary-50 hover:bg-primary-100 text-primary-900 text-xs font-bold rounded-xl border border-primary-200 transition-colors inline-flex items-center justify-center gap-1.5"
+                  >
+                    Ver Programas y Planes ({{ getProgramasFacultad(fac).length }}) →
+                  </button>
+                  <button
+                    (click)="editarFacultad(fac)"
+                    class="w-full py-2 bg-warm-100 hover:bg-warm-200 text-warm-800 text-xs font-semibold rounded-xl transition-colors"
+                  >
+                    Editar Facultad
+                  </button>
+                </div>
               </div>
             }
           </div>
         }
 
-        <!-- ================= TAB 4: ÁREAS DE CONOCIMIENTO (HU165 - HU167) ================= -->
+        <!-- ================= TAB 4: ÁREAS DE CONOCIMIENTO ================= -->
         @if (tabActiva() === 'AREAS') {
           <div class="bg-white border border-warm-200 rounded-2xl overflow-hidden shadow-warm-sm">
             <div class="overflow-x-auto">
@@ -332,7 +389,7 @@ type SubVista = 'LISTA' | 'FORM_SEDE' | 'FORM_ESPACIO' | 'FORM_FACULTAD' | 'FORM
               <h2 class="text-lg font-serif font-bold text-warm-900">
                 {{ sedeEnEdicion?.id ? 'Editar Sede Institucional' : 'Registrar Nueva Sede' }}
               </h2>
-              <p class="text-xs text-warm-600">HU147 - HU150: Configuración de campus universitario y sedes regionales.</p>
+              <p class="text-xs text-warm-600">Configuración de campus universitario y sedes regionales.</p>
             </div>
             <button
               (click)="vistaActual.set('LISTA')"
@@ -421,7 +478,7 @@ type SubVista = 'LISTA' | 'FORM_SEDE' | 'FORM_ESPACIO' | 'FORM_FACULTAD' | 'FORM
               <h2 class="text-lg font-serif font-bold text-warm-900">
                 {{ espacioEnEdicion?.id ? 'Editar Espacio Físico' : 'Registrar Nuevo Espacio / Aula' }}
               </h2>
-              <p class="text-xs text-warm-600">HU151 - HU155: Parámetros de infraestructura, aforo y facilidades tecnológicas.</p>
+              <p class="text-xs text-warm-600">Parámetros de infraestructura, aforo y facilidades tecnológicas.</p>
             </div>
             <button
               (click)="vistaActual.set('LISTA')"
@@ -548,7 +605,7 @@ type SubVista = 'LISTA' | 'FORM_SEDE' | 'FORM_ESPACIO' | 'FORM_FACULTAD' | 'FORM
               <h2 class="text-lg font-serif font-bold text-warm-900">
                 {{ facultadEnEdicion?.id ? 'Editar Facultad' : 'Crear Nueva Facultad' }}
               </h2>
-              <p class="text-xs text-warm-600">HU161 - HU164: Estructura organizacional y decanaturas.</p>
+              <p class="text-xs text-warm-600">Estructura organizacional y decanaturas.</p>
             </div>
             <button
               (click)="vistaActual.set('LISTA')"
@@ -613,7 +670,7 @@ type SubVista = 'LISTA' | 'FORM_SEDE' | 'FORM_ESPACIO' | 'FORM_FACULTAD' | 'FORM
               <h2 class="text-lg font-serif font-bold text-warm-900">
                 {{ areaEnEdicion?.id ? 'Editar Área de Conocimiento' : 'Nueva Área de Conocimiento' }}
               </h2>
-              <p class="text-xs text-warm-600">HU165 - HU167: Agrupación temática curricular institucional.</p>
+              <p class="text-xs text-warm-600">Agrupación temática curricular institucional.</p>
             </div>
             <button
               (click)="vistaActual.set('LISTA')"
@@ -682,6 +739,155 @@ type SubVista = 'LISTA' | 'FORM_SEDE' | 'FORM_ESPACIO' | 'FORM_FACULTAD' | 'FORM
           </div>
         </div>
       }
+
+      <!-- MODAL: PROGRAMAS ACADÉMICOS Y PLANES DE ESTUDIO DE LA FACULTAD (HU107, HU108, HU112, HU119) -->
+      @if (facultadSeleccionada()) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-warm-950/40 backdrop-blur-xs animate-fade-in">
+          <div class="bg-white border border-warm-200 rounded-3xl max-w-3xl w-full shadow-warm-xl overflow-hidden animate-slide-down">
+            <!-- Header Modal -->
+            <div class="p-6 bg-warm-50 border-b border-warm-200/80 flex items-start justify-between">
+              <div>
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-primary-100 text-primary-900 border border-primary-200">
+                    {{ facultadSeleccionada()?.codigo }}
+                  </span>
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                    {{ facultadSeleccionada()?.estado }}
+                  </span>
+                </div>
+                <h3 class="font-serif font-bold text-2xl text-warm-900">
+                  {{ facultadSeleccionada()?.nombre }}
+                </h3>
+                <p class="text-xs text-warm-600 mt-1">
+                  Decano a cargo: <strong>{{ facultadSeleccionada()?.decanoNombre || 'Sin asignar' }}</strong>
+                </p>
+              </div>
+
+              <button
+                type="button"
+                (click)="cerrarModalFacultad()"
+                class="text-warm-400 hover:text-warm-700 p-1.5 rounded-xl hover:bg-warm-100 transition-colors"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Body Modal -->
+            <div class="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+              <div class="flex items-center justify-between">
+                <h4 class="font-serif font-bold text-base text-warm-900">
+                  Programas Académicos Adscritos
+                </h4>
+                <span class="text-xs font-semibold text-warm-500">
+                  {{ getProgramasFacultad(facultadSeleccionada()!).length }} programas registrados
+                </span>
+              </div>
+
+              <!-- Lista de Programas -->
+              <div class="space-y-3">
+                @for (prog of getProgramasFacultad(facultadSeleccionada()!); track prog.codigo) {
+                  <div class="p-4 rounded-2xl border border-warm-200 bg-white hover:border-primary-300 transition-all shadow-warm-xs">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                      <div class="flex items-center gap-2">
+                        <span class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-warm-100 text-warm-800">
+                          {{ prog.codigo }}
+                        </span>
+                        <h5 class="font-bold text-sm text-warm-900">{{ prog.nombre }}</h5>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs px-2.5 py-0.5 rounded-md bg-warm-100 text-warm-700 font-medium">
+                          {{ prog.nivel }}
+                        </span>
+                        <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full"
+                              [class]="prog.estado === 'ACTIVO' ? 'bg-emerald-100 text-emerald-800' : 'bg-warm-200 text-warm-700'">
+                          {{ prog.estado }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 py-2 border-y border-warm-100 text-xs text-warm-600 bg-warm-50/50 rounded-xl px-3 my-2">
+                      <div>
+                        <span class="text-[10px] text-warm-400 font-bold uppercase block">Créditos</span>
+                        <span class="font-bold text-warm-900">{{ prog.totalCreditos }} créditos</span>
+                      </div>
+                      <div>
+                        <span class="text-[10px] text-warm-400 font-bold uppercase block">Duración</span>
+                        <span class="font-bold text-warm-900">{{ prog.totalSemestres }} semestres</span>
+                      </div>
+                      <div class="col-span-2 sm:col-span-1">
+                        <span class="text-[10px] text-warm-400 font-bold uppercase block">Plan de Estudios</span>
+                        <span class="font-semibold text-primary-800">{{ prog.planEstudioNombre }}</span>
+                      </div>
+                    </div>
+
+                    <div class="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        (click)="verPlanEstudio(prog)"
+                        class="text-xs font-semibold text-primary-700 hover:text-primary-900 hover:bg-primary-50 px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1"
+                      >
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                        Ver Malla Curricular / Asignaturas →
+                      </button>
+                    </div>
+                  </div>
+                }
+              </div>
+
+              <!-- Vista Detallada de Asignaturas del Plan si fue seleccionado -->
+              @if (planVisualizado()) {
+                <div class="p-5 bg-warm-50 rounded-2xl border border-warm-200 space-y-3 animate-fade-in">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h5 class="font-serif font-bold text-sm text-warm-900">
+                        Asignaturas del {{ planVisualizado()?.nombre }}
+                      </h5>
+                      <p class="text-xs text-warm-500">Malla curricular de formación básica y profesional.</p>
+                    </div>
+                    <button
+                      type="button"
+                      (click)="planVisualizado.set(null)"
+                      class="text-xs text-warm-600 hover:text-warm-900 underline"
+                    >
+                      Ocultar Asignaturas
+                    </button>
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    @for (asig of asignaturasPlan(); track asig.id) {
+                      <div class="p-3 bg-white rounded-xl border border-warm-200 text-xs flex justify-between items-center">
+                        <div>
+                          <span class="font-mono font-bold text-primary-800 mr-1.5">{{ asig.codigo }}</span>
+                          <span class="font-semibold text-warm-900">{{ asig.nombre }}</span>
+                          <div class="text-[10px] text-warm-500">Semestre {{ asig.semestre }} • {{ asig.area }}</div>
+                        </div>
+                        <span class="px-2 py-0.5 rounded bg-warm-100 text-warm-800 font-bold text-[11px]">
+                          {{ asig.creditos }} cr.
+                        </span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+
+            <!-- Footer Modal -->
+            <div class="p-4 bg-warm-50 border-t border-warm-200 flex justify-end">
+              <button
+                type="button"
+                (click)="cerrarModalFacultad()"
+                class="px-4 py-2 bg-warm-200 hover:bg-warm-300 text-warm-800 font-semibold text-xs rounded-xl transition-colors"
+              >
+                Cerrar Detalle
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
 })
@@ -692,6 +898,14 @@ export class AdminCatalogsComponent {
   tabActiva = signal<TabCatalogo>('SEDES');
   vistaActual = signal<SubVista>('LISTA');
   filtroTexto = '';
+
+  filtroSedeId = 'TODAS';
+  filtroTipoEspacio = 'TODOS';
+  filtroEstadoEspacio = 'TODOS';
+
+  facultadSeleccionada = signal<FacultadItem | null>(null);
+  planVisualizado = signal<PlanEstudioItem | null>(null);
+  asignaturasPlan = signal<AsignaturaPlanItem[]>([]);
 
   sedes = this.adminService.sedes;
   espacios = this.adminService.espacios;
@@ -710,17 +924,27 @@ export class AdminCatalogsComponent {
     );
   });
 
-  // Espacios filtrados
+  // Espacios filtrados (HU020, HU144)
   espaciosFiltrados = computed(() => {
     const q = this.filtroTexto.toLowerCase().trim();
-    if (!q) return this.espacios();
-    return this.espacios().filter(
-      (e) =>
+    const sede = this.filtroSedeId;
+    const tipo = this.filtroTipoEspacio;
+    const estado = this.filtroEstadoEspacio;
+
+    return this.espacios().filter((e) => {
+      const matchQ =
+        !q ||
         e.codigo.toLowerCase().includes(q) ||
         e.bloque.toLowerCase().includes(q) ||
         e.tipo.toLowerCase().includes(q) ||
-        (e.sedeNombre && e.sedeNombre.toLowerCase().includes(q))
-    );
+        (e.sedeNombre && e.sedeNombre.toLowerCase().includes(q));
+
+      const matchSede = sede === 'TODAS' || e.sedeId === sede || (e.sedeNombre && e.sedeNombre.includes(sede));
+      const matchTipo = tipo === 'TODOS' || e.tipo.toLowerCase().includes(tipo.toLowerCase());
+      const matchEstado = estado === 'TODOS' || e.estado === estado;
+
+      return matchQ && matchSede && matchTipo && matchEstado;
+    });
   });
 
   // Facultades filtradas
@@ -961,5 +1185,67 @@ export class AdminCatalogsComponent {
       this.toast.success('Área de conocimiento creada con éxito');
     }
     this.vistaActual.set('LISTA');
+  }
+
+  // Métodos Programas y Planes de Estudio (HU107, HU108, HU112, HU119)
+  getProgramasFacultad(facultad: FacultadItem) {
+    return [
+      {
+        codigo: 'PRG-SIS',
+        nombre: 'Ingeniería de Sistemas',
+        nivel: 'Pregrado Profesional',
+        totalCreditos: 160,
+        totalSemestres: 10,
+        estado: 'ACTIVO',
+        planEstudioId: 'PLAN-SIS-2024',
+        planEstudioNombre: 'Plan Curricular 2024 (Por Competencias)',
+      },
+      {
+        codigo: 'PRG-IND',
+        nombre: 'Ingeniería Industrial',
+        nivel: 'Pregrado Profesional',
+        totalCreditos: 165,
+        totalSemestres: 10,
+        estado: 'ACTIVO',
+        planEstudioId: 'PLAN-SIS-2020',
+        planEstudioNombre: 'Plan Curricular 2020 (Integral)',
+      },
+      {
+        codigo: 'PRG-ELE',
+        nombre: 'Ingeniería Electrónica',
+        nivel: 'Pregrado Profesional',
+        totalCreditos: 162,
+        totalSemestres: 10,
+        estado: 'ACTIVO',
+        planEstudioId: 'PLAN-SIS-2024',
+        planEstudioNombre: 'Plan Curricular 2024 (Innovación)',
+      },
+      {
+        codigo: 'PRG-AGR',
+        nombre: 'Ingeniería Agroindustrial',
+        nivel: 'Pregrado Profesional',
+        totalCreditos: 158,
+        totalSemestres: 10,
+        estado: 'ACTIVO',
+        planEstudioId: 'PLAN-SIS-2020',
+        planEstudioNombre: 'Plan Curricular 2020 (Sostenibilidad)',
+      },
+    ];
+  }
+
+  verProgramasFacultad(fac: FacultadItem): void {
+    this.facultadSeleccionada.set(fac);
+    this.planVisualizado.set(null);
+  }
+
+  cerrarModalFacultad(): void {
+    this.facultadSeleccionada.set(null);
+    this.planVisualizado.set(null);
+  }
+
+  verPlanEstudio(prog: any): void {
+    const plan = MOCK_PLANES_ESTUDIO.find((p) => p.id === prog.planEstudioId) || MOCK_PLANES_ESTUDIO[0];
+    this.planVisualizado.set(plan);
+    this.asignaturasPlan.set(MOCK_ASIGNATURAS_PLAN[plan.id] || MOCK_ASIGNATURAS_PLAN['PLAN-SIS-2024'] || []);
   }
 }

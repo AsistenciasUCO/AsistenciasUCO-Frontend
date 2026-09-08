@@ -1,4 +1,4 @@
-import {
+﻿import {
   DecanoItem,
   CoordinadorItem,
   DocenteItem,
@@ -965,7 +965,7 @@ export const MOCK_PERIODOS_ACADEMICOS: PeriodoAcademicoItem[] = [
   },
 ];
 
-// ================= MOCK CATÁLOGOS INSTITUCIONALES (HU147 - HU155, HU161 - HU167) =================
+// ================= MOCK CATÁLOGOS INSTITUCIONALES =================
 
 export const MOCK_SEDES: SedeInstitucionalItem[] = [
   {
@@ -1137,7 +1137,7 @@ export const MOCK_AREAS_CONOCIMIENTO: AreaConocimientoItem[] = [
   },
 ];
 
-// ================= MOCK PARÁMETROS, AUDITORÍA Y CIERRE (HU168 - HU174) =================
+// ================= MOCK PARÁMETROS, AUDITORÍA Y CIERRE =================
 
 export const MOCK_PARAMETROS: ParametroInstitucionalItem[] = [
   {

@@ -43,6 +43,28 @@ export class AttendanceClaimService {
   private sesionesPorMateria = signal<Record<string, SesionMateriaDetalle[]>>({
     ...MOCK_SESIONES_MATERIAS,
   });
+
+  subirSoporte(file: File): Observable<ApiResponse<{ nombre: string; nombreGuardado: string; url: string; tamanio: number }>> {
+    if (environment.useMocks) {
+      return of({
+        idTransaccion: 'mock-upload-' + Date.now(),
+        exitoso: true,
+        datos: {
+          nombre: file.name,
+          nombreGuardado: 'mock_' + file.name,
+          url: '/api/v1/archivos/mock_' + file.name,
+          tamanio: file.size,
+        },
+      });
+    }
+
+    const formData = new FormData();
+    formData.append('archivo', file);
+    return this.http.post<ApiResponse<{ nombre: string; nombreGuardado: string; url: string; tamanio: number }>>(
+      `${environment.apiUrl}/archivos/subir`,
+      formData
+    );
+  }
   private horariosDocente = signal<HorarioDocenteItem[]>([...MOCK_HORARIOS_DOCENTE]);
 
   constructor(private http: HttpClient) {}

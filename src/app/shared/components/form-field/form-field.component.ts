@@ -28,12 +28,12 @@ let fieldIdCounter = 0;
         <ng-content></ng-content>
       </div>
 
-      @if (errorMessage()) {
+      @if (errorMessage() || error()) {
         <p [id]="fieldId() + '-error'" class="text-xs font-semibold text-red-600 flex items-center gap-1.5 mt-0.5 animate-fade-in" role="alert">
           <svg class="w-3.5 h-3.5 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span>{{ errorMessage() }}</span>
+          <span>{{ errorMessage() || error() }}</span>
         </p>
       } @else if (helperText()) {
         <p [id]="fieldId() + '-helper'" class="text-xs text-warm-500 mt-0.5">
@@ -46,7 +46,8 @@ let fieldIdCounter = 0;
 export class FormFieldComponent {
   label = input<string>('');
   helperText = input<string>('');
-  errorMessage = input<string>('', { alias: 'error' });
+  errorMessage = input<string>('');
+  error = input<string>('');
   required = input<boolean>(false);
   fieldId = input<string>(`form-field-ctrl-${++fieldIdCounter}`);
 }

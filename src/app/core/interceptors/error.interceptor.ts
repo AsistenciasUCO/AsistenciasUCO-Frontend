@@ -11,8 +11,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   return next(req).pipe(
     catchError((error) => {
       if (error.status === 401) {
-        authService.logout();
-        router.navigate(['/login']);
+        if (authService.isAuthenticated() && !req.url.includes('/openid-connect/token')) {
+          authService.logout();
+        }
       }
       return throwError(() => error);
     })

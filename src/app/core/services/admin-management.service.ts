@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+﻿import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of, delay, catchError } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -110,31 +110,31 @@ export class AdminManagementService {
     return this.http.patch<ApiResponse<DecanoItem>>(`${environment.apiUrl}/admin/decanos/${id}/toggle`, {});
   }
 
-  // Sedes (HU147 - HU150)
+  // Sedes
   private _sedes = signal<SedeInstitucionalItem[]>(MOCK_SEDES);
   sedes = this._sedes.asReadonly();
 
-  // Espacios Físicos (HU151 - HU155)
+  // Espacios Físicos
   private _espacios = signal<EspacioFisicoItem[]>(MOCK_ESPACIOS_FISICOS);
   espacios = this._espacios.asReadonly();
 
-  // Facultades (HU161 - HU164)
+  // Facultades
   private _facultades = signal<FacultadItem[]>(MOCK_FACULTADES);
   facultades = this._facultades.asReadonly();
 
-  // Áreas de Conocimiento (HU165 - HU167)
+  // Áreas de Conocimiento
   private _areas = signal<AreaConocimientoItem[]>(MOCK_AREAS_CONOCIMIENTO);
   areas = this._areas.asReadonly();
 
-  // Parámetros Institucionales (HU168, HU169)
+  // Parámetros Institucionales
   private _parametros = signal<ParametroInstitucionalItem[]>(MOCK_PARAMETROS);
   parametros = this._parametros.asReadonly();
 
-  // Auditoría (HU170 - HU172)
+  // Auditoría
   private _auditoria = signal<RegistroAuditoriaItem[]>(MOCK_REGISTROS_AUDITORIA);
   auditoria = this._auditoria.asReadonly();
 
-  // Reportes Cierre Masivo (HU173, HU174)
+  // Reportes Cierre Masivo
   private _reportesCierre = signal<CierrePeriodoReporte[]>(MOCK_REPORTES_CIERRE);
   reportesCierre = this._reportesCierre.asReadonly();
 
@@ -151,6 +151,9 @@ export class AdminManagementService {
       descripcion: `Se creó la sede ${nueva.nombre} (${nueva.codigo})`,
       nivel: 'INFO',
     });
+    if (!environment.useMocks) {
+      this.http.post(`${environment.apiUrl}/admin/sedes`, item).subscribe({ error: (err) => console.error(err) });
+    }
   }
 
   actualizarSede(id: string, cambios: Partial<SedeInstitucionalItem>): void {
@@ -163,6 +166,9 @@ export class AdminManagementService {
       descripcion: `Se actualizó la sede con ID ${id}`,
       nivel: 'INFO',
     });
+    if (!environment.useMocks) {
+      this.http.put(`${environment.apiUrl}/admin/sedes/${id}`, cambios).subscribe({ error: (err) => console.error(err) });
+    }
   }
 
   cambiarEstadoSede(id: string): void {
@@ -173,6 +179,9 @@ export class AdminManagementService {
           : s
       )
     );
+    if (!environment.useMocks) {
+      this.http.patch(`${environment.apiUrl}/admin/sedes/${id}/estado`, {}).subscribe({ error: (err) => console.error(err) });
+    }
   }
 
   // ================= ESPACIOS FÍSICOS =================
@@ -190,6 +199,9 @@ export class AdminManagementService {
       descripcion: `Se creó el espacio físico ${nuevo.codigo} en ${nuevo.sedeNombre}`,
       nivel: 'INFO',
     });
+    if (!environment.useMocks) {
+      this.http.post(`${environment.apiUrl}/admin/espacios-fisicos`, item).subscribe({ error: (err) => console.error(err) });
+    }
   }
 
   actualizarEspacio(id: string, cambios: Partial<EspacioFisicoItem>): void {
@@ -202,6 +214,22 @@ export class AdminManagementService {
       descripcion: `Se actualizaron las propiedades del espacio con ID ${id}`,
       nivel: 'INFO',
     });
+    if (!environment.useMocks) {
+      this.http.put(`${environment.apiUrl}/admin/espacios-fisicos/${id}`, cambios).subscribe({ error: (err) => console.error(err) });
+    }
+  }
+
+  cambiarEstadoEspacio(id: string): void {
+    this._espacios.update((prev) =>
+      prev.map((e) =>
+        e.id === id
+          ? { ...e, estado: e.estado === 'DISPONIBLE' ? 'INACTIVO' : 'DISPONIBLE' }
+          : e
+      )
+    );
+    if (!environment.useMocks) {
+      this.http.patch(`${environment.apiUrl}/admin/espacios-fisicos/${id}/estado`, {}).subscribe({ error: (err) => console.error(err) });
+    }
   }
 
   // ================= FACULTADES Y ÁREAS =================
@@ -217,12 +245,31 @@ export class AdminManagementService {
       descripcion: `Se registró la facultad ${nueva.nombre} (${nueva.codigo})`,
       nivel: 'INFO',
     });
+    if (!environment.useMocks) {
+      this.http.post(`${environment.apiUrl}/admin/facultades`, item).subscribe({ error: (err) => console.error(err) });
+    }
   }
 
   actualizarFacultad(id: string, cambios: Partial<FacultadItem>): void {
     this._facultades.update((prev) =>
       prev.map((f) => (f.id === id ? { ...f, ...cambios } : f))
     );
+    if (!environment.useMocks) {
+      this.http.put(`${environment.apiUrl}/admin/facultades/${id}`, cambios).subscribe({ error: (err) => console.error(err) });
+    }
+  }
+
+  cambiarEstadoFacultad(id: string): void {
+    this._facultades.update((prev) =>
+      prev.map((f) =>
+        f.id === id
+          ? { ...f, estado: f.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO' }
+          : f
+      )
+    );
+    if (!environment.useMocks) {
+      this.http.patch(`${environment.apiUrl}/admin/facultades/${id}/estado`, {}).subscribe({ error: (err) => console.error(err) });
+    }
   }
 
   crearArea(item: Omit<AreaConocimientoItem, 'id'>): void {
@@ -239,12 +286,31 @@ export class AdminManagementService {
       descripcion: `Se registró el área de conocimiento ${nueva.nombre}`,
       nivel: 'INFO',
     });
+    if (!environment.useMocks) {
+      this.http.post(`${environment.apiUrl}/admin/areas`, item).subscribe({ error: (err) => console.error(err) });
+    }
   }
 
   actualizarArea(id: string, cambios: Partial<AreaConocimientoItem>): void {
     this._areas.update((prev) =>
       prev.map((a) => (a.id === id ? { ...a, ...cambios } : a))
     );
+    if (!environment.useMocks) {
+      this.http.put(`${environment.apiUrl}/admin/areas/${id}`, cambios).subscribe({ error: (err) => console.error(err) });
+    }
+  }
+
+  cambiarEstadoArea(id: string): void {
+    this._areas.update((prev) =>
+      prev.map((a) =>
+        a.id === id
+          ? { ...a, estado: a.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO' }
+          : a
+      )
+    );
+    if (!environment.useMocks) {
+      this.http.patch(`${environment.apiUrl}/admin/areas/${id}/estado`, {}).subscribe({ error: (err) => console.error(err) });
+    }
   }
 
   // ================= PARÁMETROS INSTITUCIONALES =================
@@ -293,7 +359,7 @@ export class AdminManagementService {
     this._auditoria.update((prev) => [item, ...prev]);
   }
 
-  // ================= CIERRE MASIVO (HU173, HU174) =================
+  // ================= CIERRE MASIVO =================
   ejecutarCierreMasivo(periodoCodigo: string): CierrePeriodoReporte {
     const nuevoReporte: CierrePeriodoReporte = {
       id: `REP-CIE-${Date.now()}`,
@@ -314,5 +380,98 @@ export class AdminManagementService {
       nivel: 'CRITICO',
     });
     return nuevoReporte;
+  }
+
+  // ================= INSTITUCIONES =================
+  private institucionesList = [
+    {
+      id: 'B1C2D3E4-0000-0000-0000-000000000001',
+      codigo: 'UCO',
+      nombre: 'Universidad Católica de Oriente',
+      nit: '890.984.746-1',
+      ciudad: 'Rionegro',
+      direccion: 'Sector 3 Cra 46 No 48-111',
+      telefono: '6045698686',
+      correo: 'contacto@uco.edu.co',
+      estado: 1,
+    },
+    {
+      id: 'B1C2D3E4-0000-0000-0000-000000000002',
+      codigo: 'UDEA',
+      nombre: 'Universidad de Antioquia',
+      nit: '890.980.040-8',
+      ciudad: 'Medellín',
+      direccion: 'Calle 67 No 53 - 108',
+      telefono: '6042198332',
+      correo: 'informacion@udea.edu.co',
+      estado: 1,
+    },
+  ];
+
+  getInstituciones(): Observable<ApiResponse<any[]>> {
+    if (environment.useMocks) {
+      return of({
+        idTransaccion: 'mock-tx-inst-list',
+        exitoso: true,
+        total: this.institucionesList.length,
+        datos: [...this.institucionesList],
+      }).pipe(delay(250));
+    }
+
+    return this.http.get<ApiResponse<any[]>>(`${environment.apiUrl}/admin/instituciones`).pipe(
+      catchError(() =>
+        of({
+          idTransaccion: 'error-instituciones',
+          exitoso: false,
+          mensajeUsuario: 'No fue posible cargar las instituciones.',
+          datos: [...this.institucionesList],
+        })
+      )
+    );
+  }
+
+  crearInstitucion(data: any): Observable<ApiResponse<any>> {
+    if (environment.useMocks) {
+      const nueva = { id: `INST-${Date.now()}`, ...data, estado: 1 };
+      this.institucionesList.push(nueva);
+      return of({
+        idTransaccion: `mock-tx-inst-create`,
+        exitoso: true,
+        mensajeUsuario: 'Institución registrada con éxito.',
+        datos: nueva,
+      }).pipe(delay(250));
+    }
+
+    return this.http.post<ApiResponse<any>>(`${environment.apiUrl}/admin/instituciones`, data);
+  }
+
+  actualizarInstitucion(id: string, data: any): Observable<ApiResponse<any>> {
+    if (environment.useMocks) {
+      this.institucionesList = this.institucionesList.map((i) => (i.id === id ? { ...i, ...data } : i));
+      return of({
+        idTransaccion: `mock-tx-inst-update`,
+        exitoso: true,
+        mensajeUsuario: 'Institución actualizada correctamente.',
+        datos: { id, ...data },
+      }).pipe(delay(250));
+    }
+
+    return this.http.put<ApiResponse<any>>(`${environment.apiUrl}/admin/instituciones/${id}`, data);
+  }
+
+  toggleEstadoInstitucion(id: string): Observable<ApiResponse<any>> {
+    if (environment.useMocks) {
+      this.institucionesList = this.institucionesList.map((i) =>
+        i.id === id ? { ...i, estado: i.estado === 1 ? 0 : 1 } : i
+      );
+      return of({
+        idTransaccion: `mock-tx-inst-toggle`,
+        exitoso: true,
+        mensajeUsuario: 'Estado de institución alternado.',
+        datos: { id },
+      }).pipe(delay(200));
+    }
+
+    return this.http.patch<ApiResponse<any>>(`${environment.apiUrl}/admin/instituciones/${id}/toggle-estado`, {});
   }
 }

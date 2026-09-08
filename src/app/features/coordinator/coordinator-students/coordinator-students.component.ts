@@ -15,6 +15,7 @@ import { FormFieldComponent } from '../../../shared/components/form-field/form-f
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
 import { ToastService } from '../../../shared/components/toast/toast.component';
 import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
+import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
 
 type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
 
@@ -72,7 +73,7 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
           </svg>
-          Directorio Institucional (HU156-HU160)
+          Directorio Institucional
         </button>
 
         <button
@@ -87,7 +88,7 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
           </svg>
-          Matrícula por Grupo (HU050-HU052)
+          Matrícula por Grupo
         </button>
 
         <button
@@ -102,11 +103,11 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          Solicitudes de Cupo (HU053, HU054)
+          Solicitudes de Cupo
         </button>
       </div>
 
-      <!-- 1. PESTAÑA: DIRECTORIO INSTITUCIONAL DE ESTUDIANTES (HU156 - HU160) -->
+      <!-- 1. PESTAÑA: DIRECTORIO INSTITUCIONAL DE ESTUDIANTES -->
       @if (pestanaActiva() === 'DIRECTORIO') {
         <!-- Filtros de Directorio -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -135,7 +136,7 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
           </div>
         </div>
 
-        <!-- Grid de Tarjetas de Estudiante (HU156-HU160) -->
+        <!-- Grid de Tarjetas de Estudiante -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
           @for (est of paginatedDirectorio(); track est.id) {
             <app-card [hoverable]="true" padding="md">
@@ -203,7 +204,7 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
         ></app-pagination>
       }
 
-      <!-- 2. PESTAÑA: MATRÍCULA POR GRUPO (HU050 - HU052) -->
+      <!-- 2. PESTAÑA: MATRÍCULA POR GRUPO -->
       @if (pestanaActiva() === 'MATRICULA_GRUPO') {
         <!-- Selector de Grupo Académico -->
         <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm space-y-4">
@@ -239,23 +240,23 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
             }
           </div>
 
-          <!-- Botón Matricular Estudiante en Grupo (HU051) -->
+          <!-- Botón Matricular Estudiante en Grupo -->
           <div class="flex items-center justify-end pt-2 border-t border-warm-100">
             <app-button variant="primary" size="sm" (clicked)="abrirModalMatricular()">
               <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              + Matricular Estudiante en este Grupo (HU051)
+              + Matricular Estudiante en este Grupo
             </app-button>
           </div>
         </div>
 
-        <!-- Tabla de Estudiantes Matriculados (HU050) -->
+        <!-- Tabla de Estudiantes Matriculados -->
         <div class="bg-white rounded-2xl border border-warm-200 shadow-warm-sm overflow-hidden">
           <div class="p-5 border-b border-warm-100 flex items-center justify-between">
             <div>
               <h3 class="font-serif font-bold text-lg text-warm-900">Estudiantes Matriculados en el Grupo</h3>
-              <p class="text-xs text-warm-500">Listado oficial de alumnos habilitados para asistencia en este grupo (HU050).</p>
+              <p class="text-xs text-warm-500">Listado oficial de alumnos habilitados para asistencia en este grupo.</p>
             </div>
             <span class="text-xs font-bold px-2.5 py-1 rounded-full bg-warm-100 text-warm-700">
               {{ enrolledStudents().length }} estudiantes
@@ -282,12 +283,12 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
                     </div>
                   </div>
 
-                  <!-- Acción Retirar de Grupo (HU052) -->
+                  <!-- Acción Retirar de Grupo -->
                   <button
                     type="button"
                     (click)="retirarEstudiante(est)"
                     class="text-xs font-semibold text-red-700 hover:text-red-950 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1 shrink-0"
-                    title="Retirar estudiante de este grupo académico (HU052)"
+                    title="Retirar estudiante de este grupo académico"
                   >
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -300,7 +301,7 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
           }
         </div>
 
-        <!-- Formulario Inline / Sección para Matricular Nuevo Estudiante (HU051) -->
+        <!-- Formulario Inline / Sección para Matricular Nuevo Estudiante -->
         @if (mostrarModalMatricular()) {
           <div class="bg-white p-6 rounded-2xl border border-primary-200 shadow-warm-md space-y-4">
             <div class="flex items-center justify-between">
@@ -350,7 +351,7 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
         }
       }
 
-      <!-- 3. PESTAÑA: SOLICITUDES DE CUPO / INSCRIPCIÓN (HU053, HU054) -->
+      <!-- 3. PESTAÑA: SOLICITUDES DE CUPO / INSCRIPCIÓN -->
       @if (pestanaActiva() === 'SOLICITUDES') {
         <div class="space-y-4">
           <!-- Filtro de Solicitudes -->
@@ -370,7 +371,7 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
             </select>
           </div>
 
-          <!-- Listado de Solicitudes (HU053, HU054) -->
+          <!-- Listado de Solicitudes -->
           <div class="space-y-4">
             @for (sol of paginatedSolicitudes(); track sol.id) {
               <app-card padding="md">
@@ -378,7 +379,7 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
                   <div class="flex flex-wrap items-start justify-between gap-2">
                     <div class="flex items-center gap-2">
                       <span class="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-warm-100 text-warm-700">
-                        {{ sol.id }}
+                        RAD-#{{ sol.id.slice(0, 8).toUpperCase() }}
                       </span>
                       <app-badge [variant]="getSolicitudBadgeVariant(sol.estado)">
                         {{ sol.estado }}
@@ -414,7 +415,7 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
                     <strong class="text-warm-900">Motivo del estudiante:</strong> "{{ sol.motivo }}"
                   </div>
 
-                  <!-- Acciones de Decisión para Pendientes (HU054) -->
+                  <!-- Acciones de Decisión para Pendientes -->
                   @if (sol.estado === 'PENDIENTE') {
                     <div class="pt-3 border-t border-warm-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <input
@@ -471,19 +472,19 @@ export class CoordinatorStudentsComponent implements OnInit {
 
   pestanaActiva = signal<PestanaModulo>('DIRECTORIO');
 
-  // Directorio (HU156-HU160)
+  // Directorio
   directorio = signal<EstudianteDirectorioItem[]>([]);
   searchDirectorio = '';
   filtroEstadoDirectorio = 'TODOS';
 
-  // Matrícula por Grupo (HU050-HU052)
+  // Matrícula por Grupo
   courses = signal<Course[]>([]);
   selectedCourseId = signal<string>('crs-1');
   enrolledStudents = signal<EstudianteDirectorioItem[]>([]);
   mostrarModalMatricular = signal<boolean>(false);
   estudianteAMatricularId = '';
 
-  // Solicitudes de Cupo (HU053, HU054)
+  // Solicitudes de Cupo
   solicitudes = signal<SolicitudMatriculaItem[]>([]);
   filtroEstadoSolicitudes = 'TODOS';
   feedbackSolicitud: Record<string, string> = {};
@@ -602,16 +603,26 @@ export class CoordinatorStudentsComponent implements OnInit {
     const cursoId = this.selectedCourseId();
     if (!cursoId || !this.estudianteAMatricularId) return;
 
+    // Validación preventiva en lista local
+    const yaEnGrupo = this.enrolledStudents().some((e) => e.id === this.estudianteAMatricularId);
+    if (yaEnGrupo) {
+      this.toast.warning('El estudiante ya se encuentra matriculado en este grupo académico.');
+      return;
+    }
+
     this.coordinatorService.matricularEstudianteGrupo(cursoId, this.estudianteAMatricularId).subscribe({
       next: (res) => {
         if (res.exitoso) {
-          this.toast.success(res.mensajeUsuario || 'Estudiante matriculado.');
+          this.toast.success(res.mensajeUsuario || 'Estudiante matriculado exitosamente.');
           this.mostrarModalMatricular.set(false);
           this.cargarEstudiantesGrupo(cursoId);
           this.coordinatorService.getEstudiantesDirectorio().subscribe((r) => this.directorio.set(r.datos || []));
         }
       },
-      error: () => this.toast.error('Error al matricular estudiante.'),
+      error: (err) => {
+        const msg = getApiErrorMessage(err);
+        this.toast.warning(msg);
+      },
     });
   }
 
@@ -628,7 +639,7 @@ export class CoordinatorStudentsComponent implements OnInit {
             this.coordinatorService.getEstudiantesDirectorio().subscribe((r) => this.directorio.set(r.datos || []));
           }
         },
-        error: () => this.toast.error('Error al retirar estudiante.'),
+        error: (err) => this.toast.error(getApiErrorMessage(err)),
       });
     }
   }

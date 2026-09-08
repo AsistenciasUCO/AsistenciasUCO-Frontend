@@ -58,4 +58,61 @@ export class StudentManagementService {
       )
     );
   }
+
+  getPrerrequisitosMateria(materiaId: string): Observable<ApiResponse<any[]>> {
+    if (environment.useMocks) {
+      return of({
+        idTransaccion: 'mock-tx-prerrequisitos',
+        exitoso: true,
+        total: 2,
+        datos: [
+          {
+            id: 'req-01',
+            materiaId,
+            prerrequisitoCodigo: 'IS-302',
+            prerrequisitoNombre: 'Ingeniería de Software I',
+            creditos: 3,
+            tipo: 'OBLIGATORIO',
+            estadoAcademico: 'APROBADA',
+          },
+          {
+            id: 'req-02',
+            materiaId,
+            prerrequisitoCodigo: 'BD-301',
+            prerrequisitoNombre: 'Bases de Datos Avanzadas',
+            creditos: 3,
+            tipo: 'OBLIGATORIO',
+            estadoAcademico: 'PENDIENTE',
+          },
+        ],
+      }).pipe(delay(250));
+    }
+
+    return this.http.get<ApiResponse<any[]>>(`${environment.apiUrl}/estudiante/materias/${materiaId}/prerrequisitos`).pipe(
+      catchError(() =>
+        of({
+          idTransaccion: 'error-prerrequisitos',
+          exitoso: false,
+          mensajeUsuario: 'No fue posible cargar los prerrequisitos de la materia.',
+          datos: [],
+        })
+      )
+    );
+  }
+
+  matricularGrupo(codigoOPin: string): Observable<ApiResponse<any>> {
+    if (environment.useMocks) {
+      return of({
+        idTransaccion: `mock-tx-matricula-${Date.now()}`,
+        exitoso: true,
+        mensajeUsuario: '¡Te has matriculado exitosamente en el grupo!',
+        datos: { grupoId: codigoOPin },
+      }).pipe(delay(300));
+    }
+
+    return this.http.post<ApiResponse<any>>(`${environment.apiUrl}/estudiante/matricular-grupo`, {
+      codigo: codigoOPin,
+    });
+  }
 }
+

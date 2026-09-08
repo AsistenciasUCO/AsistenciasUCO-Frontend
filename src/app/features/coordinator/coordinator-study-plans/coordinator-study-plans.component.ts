@@ -1,7 +1,9 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
+import { RealtimeService } from '../../../core/services/realtime.service';
 import {
   PlanEstudioItem,
   AsignaturaPlanItem,
@@ -12,6 +14,7 @@ import { BadgeComponent, BadgeVariant } from '../../../shared/components/badge/b
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
 import { ToastService } from '../../../shared/components/toast/toast.component';
+import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
 
 type PestanaCurricular = 'PLANES' | 'PERIODOS';
 type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
@@ -68,7 +71,7 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
           </svg>
-          Planes de Estudio & Malla (HU074-HU083)
+          Planes de Estudio & Malla
         </button>
 
         <button
@@ -83,7 +86,7 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
-          Períodos Académicos (HU096-HU098)
+          Períodos Académicos
         </button>
       </div>
 
@@ -98,7 +101,7 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
               <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
               </svg>
-              + Nuevo Plan de Estudio (HU074)
+              + Nuevo Plan de Estudio
             </app-button>
           </div>
 
@@ -153,23 +156,38 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
                   </div>
 
                   <div class="flex items-center justify-between pt-3 border-t border-warm-100">
-                    <button
-                      type="button"
-                      (click)="abrirEditarPlan(plan)"
-                      class="text-xs font-semibold text-warm-600 hover:text-warm-900 px-2.5 py-1.5 rounded-lg hover:bg-warm-100 transition-colors inline-flex items-center gap-1"
-                      title="Editar parámetros del plan (HU075, HU076)"
-                    >
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      Editar Plan
-                    </button>
+                    <div class="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        (click)="abrirEditarPlan(plan)"
+                        class="text-xs font-semibold text-warm-600 hover:text-warm-900 px-2.5 py-1.5 rounded-lg hover:bg-warm-100 transition-colors inline-flex items-center gap-1"
+                        title="Editar parámetros del plan"
+                      >
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        Editar
+                      </button>
+
+                      <button
+                        type="button"
+                        (click)="toggleEstadoPlan(plan)"
+                        [class]="plan.estado === 'VIGENTE' ? 'text-amber-700 hover:bg-amber-50' : 'text-emerald-700 hover:bg-emerald-50'"
+                        class="text-xs font-semibold px-2 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1"
+                        title="Cambiar estado activo/inactivo"
+                      >
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                        {{ plan.estado === 'VIGENTE' ? 'Inactivar' : 'Activar' }}
+                      </button>
+                    </div>
 
                     <app-button variant="primary" size="sm" (clicked)="verMallaCurricular(plan)">
                       <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                       </svg>
-                      Malla & Asignaturas (HU083)
+                      Malla & Asignaturas
                     </app-button>
                   </div>
                 </div>
@@ -178,7 +196,7 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
           </div>
         }
 
-        <!-- 1.2 VISTA: FORMULARIO PLAN DE ESTUDIO (HU074, HU075, HU076) -->
+        <!-- 1.2 VISTA: FORMULARIO PLAN DE ESTUDIO -->
         @if (subVistaPlan() === 'FORM_PLAN') {
           <div class="flex items-center justify-between bg-white p-4 rounded-2xl border border-warm-200 shadow-warm-sm">
             <button
@@ -193,7 +211,7 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
             </button>
 
             <span class="text-xs font-bold text-primary-800 bg-primary-50 border border-primary-200 px-3 py-1 rounded-full">
-              {{ modoFormPlan === 'CREAR' ? 'Nuevo Plan de Estudio (HU074)' : 'Modificar Plan (HU075)' }}
+              {{ modoFormPlan === 'CREAR' ? 'Nuevo Plan de Estudio' : 'Modificar Plan' }}
             </span>
           </div>
 
@@ -273,7 +291,7 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
               </app-form-field>
 
               <div class="sm:col-span-2">
-                <app-form-field label="Estado de Vigencia (HU076)" [required]="true">
+                <app-form-field label="Estado de Vigencia" [required]="true">
                   <select
                     [(ngModel)]="planForm.estado"
                     class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm font-semibold text-warm-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
@@ -315,7 +333,7 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
           </div>
         }
 
-        <!-- 1.3 VISTA: MALLA CURRICULAR Y GESTIÓN DE ASIGNATURAS (HU077-HU083) -->
+        <!-- 1.3 VISTA: MALLA CURRICULAR Y GESTIÓN DE ASIGNATURAS -->
         @if (subVistaPlan() === 'MALLA' && selectedPlan()) {
           <div class="flex items-center justify-between bg-white p-4 rounded-2xl border border-warm-200 shadow-warm-sm">
             <button
@@ -350,31 +368,31 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
               </p>
             </div>
 
-            <!-- Botones de Acción Malla (HU077, HU078, HU079) -->
+            <!-- Botones de Acción Malla -->
             <div class="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 type="button"
                 (click)="agregarSemestre()"
                 class="px-3 py-1.5 text-xs font-semibold text-warm-700 bg-warm-50 hover:bg-warm-100 border border-warm-200 rounded-xl transition-colors inline-flex items-center gap-1"
-                title="Aumentar duración del plan en un semestre (HU077)"
+                title="Aumentar duración del plan en un semestre"
               >
-                + Semestre (HU077)
+                + Semestre
               </button>
 
               <button
                 type="button"
                 (click)="eliminarSemestreVacio()"
                 class="px-3 py-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors inline-flex items-center gap-1"
-                title="Eliminar último semestre si no contiene asignaturas (HU078)"
+                title="Eliminar último semestre si no contiene asignaturas"
               >
-                - Semestre Vacío (HU078)
+                - Semestre Vacío
               </button>
 
               <app-button variant="primary" size="sm" (clicked)="abrirCrearAsignatura()">
                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                 </svg>
-                + Nueva Asignatura (HU079)
+                + Nueva Asignatura
               </app-button>
             </div>
           </div>
@@ -406,7 +424,7 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
             </div>
           </div>
 
-          <!-- Malla Curricular en Tarjetas (HU083) -->
+          <!-- Malla Curricular en Tarjetas -->
           @if (filteredAsignaturas().length === 0) {
             <div class="bg-white rounded-2xl border border-warm-200 p-12 text-center shadow-warm-sm">
               <p class="text-sm text-warm-500">No hay asignaturas registradas para este filtro o semestre.</p>
@@ -448,7 +466,7 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
                         type="button"
                         (click)="abrirEditarAsignatura(asig)"
                         class="p-1 text-warm-500 hover:text-primary-700 rounded hover:bg-warm-100"
-                        title="Modificar asignatura y prerrequisitos (HU080, HU082)"
+                        title="Modificar asignatura y prerrequisitos"
                       >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -458,7 +476,7 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
                         type="button"
                         (click)="eliminarAsignatura(asig)"
                         class="p-1 text-warm-400 hover:text-red-700 rounded hover:bg-red-50"
-                        title="Desvincular del plan (HU081)"
+                        title="Desvincular del plan"
                       >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -476,7 +494,7 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
           }
         }
 
-        <!-- 1.4 VISTA: FORMULARIO ASIGNATURA (HU079, HU080, HU082) -->
+        <!-- 1.4 VISTA: FORMULARIO ASIGNATURA -->
         @if (subVistaPlan() === 'FORM_ASIGNATURA' && selectedPlan()) {
           <div class="flex items-center justify-between bg-white p-4 rounded-2xl border border-warm-200 shadow-warm-sm">
             <button
@@ -491,7 +509,7 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
             </button>
 
             <span class="text-xs font-bold text-primary-800 bg-primary-50 border border-primary-200 px-3 py-1 rounded-full">
-              {{ modoFormAsignatura === 'CREAR' ? 'Nueva Asignatura (HU079)' : 'Modificar Asignatura (HU080)' }}
+              {{ modoFormAsignatura === 'CREAR' ? 'Nueva Asignatura' : 'Modificar Asignatura' }}
             </span>
           </div>
 
@@ -501,7 +519,7 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
                 {{ modoFormAsignatura === 'CREAR' ? 'Registro de Asignatura en el Plan' : 'Edición de Asignatura Curricular' }}
               </h2>
               <p class="text-sm text-warm-600 mt-1">
-                Define el código, nombre, semestre de ubicación, créditos, horas y prerrequisitos académicos (HU079, HU082).
+                Define el código, nombre, semestre de ubicación, créditos, horas y prerrequisitos académicos.
               </p>
             </div>
 
@@ -576,15 +594,66 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
                 </select>
               </app-form-field>
 
-              <div class="sm:col-span-2">
-                <app-form-field label="Prerrequisitos Académicos (HU082)">
-                  <input
-                    type="text"
-                    [(ngModel)]="asigFormPrerreqTexto"
-                    placeholder="Códigos separados por coma (ej. SIS-101, SIS-201)"
-                    class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                  />
+              <div class="sm:col-span-2 space-y-2">
+                <app-form-field label="Prerrequisitos Académicos (Seleccionar del Plan)">
+                  <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <select
+                      [(ngModel)]="prerrequisitoSeleccionadoDropdown"
+                      class="flex-1 px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 text-warm-900"
+                    >
+                      <option value="">-- Selecciona una asignatura como prerrequisito --</option>
+                      @for (mat of asignaturasDisponiblesPrerrequisito(); track mat.id) {
+                        <option [value]="mat.codigo" [disabled]="prerrequisitosSeleccionados().includes(mat.codigo)">
+                          [{{ mat.codigo }}] {{ mat.nombre }} (Semestre {{ mat.semestre }})
+                        </option>
+                      }
+                    </select>
+
+                    <app-button
+                      variant="secondary"
+                      size="md"
+                      [disabled]="!prerrequisitoSeleccionadoDropdown"
+                      (clicked)="agregarPrerrequisito(prerrequisitoSeleccionadoDropdown)"
+                    >
+                      <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                      </svg>
+                      Agregar
+                    </app-button>
+                  </div>
                 </app-form-field>
+
+                <!-- Chips / Badges de materias seleccionadas como prerrequisito -->
+                <div class="p-3 bg-warm-50/70 border border-warm-200/80 rounded-xl">
+                  <span class="text-xs font-semibold text-warm-700 block mb-2">
+                    Prerrequisitos asignados ({{ prerrequisitosSeleccionados().length }}):
+                  </span>
+
+                  @if (prerrequisitosSeleccionados().length === 0) {
+                    <p class="text-xs text-warm-400 italic">
+                      No se han seleccionado prerrequisitos para esta asignatura.
+                    </p>
+                  } @else {
+                    <div class="flex flex-wrap gap-2">
+                      @for (codigoPrerreq of prerrequisitosSeleccionados(); track codigoPrerreq) {
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-white text-primary-900 border border-primary-200 rounded-lg text-xs font-medium shadow-xs">
+                          <span class="font-mono font-bold text-primary-800">{{ codigoPrerreq }}</span>
+                          <span class="text-warm-600">- {{ obtenerNombreMateriaPorCodigo(codigoPrerreq) }}</span>
+                          <button
+                            type="button"
+                            (click)="eliminarPrerrequisito(codigoPrerreq)"
+                            class="ml-1 text-warm-400 hover:text-red-600 focus:outline-none transition-colors"
+                            title="Quitar prerrequisito"
+                          >
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </span>
+                      }
+                    </div>
+                  }
+                </div>
               </div>
             </div>
 
@@ -609,21 +678,21 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
       }
 
       <!-- ========================================== -->
-      <!-- PESTAÑA 2: PERÍODOS ACADÉMICOS (HU096-098) -->
+      <!-- PESTAÑA 2: PERÍODOS ACADÉMICOS -->
       <!-- ========================================== -->
       @if (pestanaActiva() === 'PERIODOS') {
         <div class="space-y-6">
           <div class="flex items-center justify-between bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm">
             <div>
               <h3 class="font-serif font-bold text-lg text-warm-900">Calendario de Períodos Académicos</h3>
-              <p class="text-xs text-warm-500">Configuración de ciclos lectivos, fechas límites y activación de períodos (HU096-HU098).</p>
+              <p class="text-xs text-warm-500">Configuración de ciclos lectivos, fechas límites y activación de períodos.</p>
             </div>
 
             <app-button variant="primary" size="sm" (clicked)="abrirModalCrearPeriodo()">
               <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
               </svg>
-              + Nuevo Período Académico (HU096)
+              + Nuevo Período Académico
             </app-button>
           </div>
 
@@ -644,7 +713,7 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
                       }
                     </div>
 
-                    <app-badge [variant]="periodo.estado === 'ACTIVO' ? 'success' : (periodo.estado === 'PLANEACION' ? 'warning' : 'neutral')">
+                    <app-badge [variant]="periodo.estado === 'ACTIVO' ? 'success' : (periodo.estado === 'PLANEACION' ? 'warning' : 'danger')">
                       {{ periodo.estado }}
                     </app-badge>
                   </div>
@@ -662,10 +731,6 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
                       <span class="text-warm-500">Fecha de Cierre:</span>
                       <strong class="text-warm-900">{{ periodo.fechaFin }}</strong>
                     </div>
-                    <div class="flex items-center justify-between text-amber-800">
-                      <span class="font-medium">Límite Registro Notas:</span>
-                      <strong>{{ periodo.fechaLimiteNotas }}</strong>
-                    </div>
                   </div>
 
                   <div class="flex items-center justify-between pt-2 border-t border-warm-100 text-xs">
@@ -673,15 +738,15 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
                       type="button"
                       (click)="alternarEstadoPeriodo(periodo)"
                       class="font-semibold text-primary-700 hover:text-primary-900"
-                      title="Cambiar estado de vigencia del período (HU098)"
+                      title="Cambiar estado de vigencia del período"
                     >
-                      Cambiar Estado (HU098)
+                      Cambiar Estado
                     </button>
                     <button
                       type="button"
                       (click)="abrirEditarPeriodo(periodo)"
                       class="text-warm-600 hover:text-warm-950 font-medium"
-                      title="Modificar fechas del período (HU097)"
+                      title="Modificar fechas del período"
                     >
                       Editar Fechas
                     </button>
@@ -720,6 +785,7 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
                   >
                     <option value="PLANEACION">PLANEACION</option>
                     <option value="ACTIVO">ACTIVO</option>
+                    <option value="INACTIVO">INACTIVO</option>
                     <option value="CERRADO">CERRADO</option>
                   </select>
                 </app-form-field>
@@ -750,16 +816,6 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
                     class="w-full px-3 py-2 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
                   />
                 </app-form-field>
-
-                <div class="sm:col-span-2">
-                  <app-form-field label="Fecha Límite Cierre de Notas / Asistencias" [required]="true">
-                    <input
-                      type="date"
-                      [(ngModel)]="periodoForm.fechaLimiteNotas"
-                      class="w-full px-3 py-2 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                    />
-                  </app-form-field>
-                </div>
               </div>
 
               <div class="flex items-center justify-end gap-3 pt-2">
@@ -782,9 +838,11 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
     </div>
   `,
 })
-export class CoordinatorStudyPlansComponent implements OnInit {
+export class CoordinatorStudyPlansComponent implements OnInit, OnDestroy {
   private coordService = inject(CoordinatorManagementService);
+  private realtimeService = inject(RealtimeService);
   private toast = inject(ToastService);
+  private realtimeSubs = new Subscription();
 
   pestanaActiva = signal<PestanaCurricular>('PLANES');
 
@@ -804,7 +862,7 @@ export class CoordinatorStudyPlansComponent implements OnInit {
     facultad: 'Facultad de Ingeniería',
     totalSemestres: 10,
     totalCreditos: 160,
-    estado: 'VIGENTE' as 'VIGENTE' | 'EN_TRANSICION' | 'HISTORICO',
+    estado: 'VIGENTE' as PlanEstudioItem['estado'],
     descripcion: '',
   };
 
@@ -827,8 +885,19 @@ export class CoordinatorStudyPlansComponent implements OnInit {
     horasSemanales: 4,
   };
   asigFormPrerreqTexto = '';
+  prerrequisitosSeleccionados = signal<string[]>([]);
+  prerrequisitoSeleccionadoDropdown = '';
 
-  // Períodos Académicos
+  // Asignaturas elegibles como prerrequisito (excluye la materia que se está editando)
+  asignaturasDisponiblesPrerrequisito = computed(() => {
+    const editandoId = this.selectedAsigId;
+    const editandoCodigo = this.asigForm.codigo?.trim().toUpperCase();
+    return this.asignaturas().filter((a) => {
+      if (editandoId && a.id === editandoId) return false;
+      if (editandoCodigo && a.codigo.trim().toUpperCase() === editandoCodigo) return false;
+      return true;
+    });
+  });
   periodos = signal<PeriodoAcademicoItem[]>([]);
   mostrarModalPeriodo = signal<boolean>(false);
   modoFormPeriodo: 'CREAR' | 'EDITAR' = 'CREAR';
@@ -838,8 +907,7 @@ export class CoordinatorStudyPlansComponent implements OnInit {
     nombre: '',
     fechaInicio: '2027-02-01',
     fechaFin: '2027-06-20',
-    fechaLimiteNotas: '2027-06-25',
-    estado: 'PLANEACION' as 'ACTIVO' | 'PLANEACION' | 'CERRADO',
+    estado: 'PLANEACION' as 'ACTIVO' | 'PLANEACION' | 'CERRADO' | 'INACTIVO',
   };
 
   filteredAsignaturas = computed(() => {
@@ -867,13 +935,44 @@ export class CoordinatorStudyPlansComponent implements OnInit {
   ngOnInit(): void {
     this.cargarPlanes();
     this.cargarPeriodos();
+    this.iniciarSuscripcionRealtime();
+  }
+
+  ngOnDestroy(): void {
+    this.realtimeSubs.unsubscribe();
+  }
+
+  private iniciarSuscripcionRealtime(): void {
+    // Sincronización en tiempo real de períodos académicos
+    this.realtimeSubs.add(
+      this.realtimeService.listenTopic('PERIODOS').subscribe({
+        next: (evt) => {
+          this.cargarPeriodos();
+          const cod = evt.data?.codigo || evt.data?.nombre || '';
+          const detalle = cod ? ` (${cod})` : '';
+          this.toast.info(`La lista de períodos se ha actualizado${detalle}.`);
+        },
+      })
+    );
+
+    // Sincronización en tiempo real de planes de estudio
+    this.realtimeSubs.add(
+      this.realtimeService.listenTopic('PLANES').subscribe({
+        next: (evt) => {
+          this.cargarPlanes();
+          const cod = evt.data?.nombre || evt.data?.codigo || '';
+          const detalle = cod ? ` (${cod})` : '';
+          this.toast.info(`La lista de planes de estudio se ha actualizado${detalle}.`);
+        },
+      })
+    );
   }
 
   cambiarPestana(p: PestanaCurricular): void {
     this.pestanaActiva.set(p);
   }
 
-  // --- PLANES DE ESTUDIO (HU074, HU075, HU076) ---
+  // --- PLANES DE ESTUDIO ---
   cargarPlanes(): void {
     this.isLoading.set(true);
     this.coordService.getPlanesEstudio().subscribe({
@@ -923,6 +1022,27 @@ export class CoordinatorStudyPlansComponent implements OnInit {
   }
 
   guardarPlan(): void {
+    if (!this.planForm.codigo.trim()) {
+      this.toast.warning('El campo Código del Plan es obligatorio.');
+      return;
+    }
+    if (!this.planForm.nombre.trim()) {
+      this.toast.warning('El campo Nombre del Plan de Estudio es obligatorio.');
+      return;
+    }
+    if (!this.planForm.programa.trim()) {
+      this.toast.warning('El campo Programa Académico es obligatorio.');
+      return;
+    }
+    if (!this.planForm.totalSemestres || this.planForm.totalSemestres < 1) {
+      this.toast.warning('El campo Total de Semestres debe ser mayor o igual a 1.');
+      return;
+    }
+    if (!this.planForm.totalCreditos || this.planForm.totalCreditos < 1) {
+      this.toast.warning('El campo Total de Créditos debe ser mayor o igual a 1.');
+      return;
+    }
+
     if (this.modoFormPlan === 'CREAR') {
       this.coordService
         .crearPlanEstudio({
@@ -936,7 +1056,7 @@ export class CoordinatorStudyPlansComponent implements OnInit {
               this.volverAListaPlanes();
             }
           },
-          error: () => this.toast.error('Error al crear plan de estudio.'),
+          error: (err) => this.toast.error(getApiErrorMessage(err)),
         });
     } else if (this.selectedPlanId) {
       this.coordService
@@ -951,7 +1071,7 @@ export class CoordinatorStudyPlansComponent implements OnInit {
               this.volverAListaPlanes();
             }
           },
-          error: () => this.toast.error('Error al actualizar plan de estudio.'),
+          error: (err) => this.toast.error(getApiErrorMessage(err)),
         });
     }
   }
@@ -961,7 +1081,7 @@ export class CoordinatorStudyPlansComponent implements OnInit {
     this.selectedPlan.set(null);
   }
 
-  // --- MALLA CURRICULAR Y ASIGNATURAS (HU077-HU083) ---
+  // --- MALLA CURRICULAR Y ASIGNATURAS ---
   verMallaCurricular(plan: PlanEstudioItem): void {
     this.selectedPlan.set(plan);
     this.subVistaPlan.set('MALLA');
@@ -1026,6 +1146,8 @@ export class CoordinatorStudyPlansComponent implements OnInit {
       horasSemanales: 4,
     };
     this.asigFormPrerreqTexto = '';
+    this.prerrequisitosSeleccionados.set([]);
+    this.prerrequisitoSeleccionadoDropdown = '';
     this.subVistaPlan.set('FORM_ASIGNATURA');
   }
 
@@ -1042,17 +1164,56 @@ export class CoordinatorStudyPlansComponent implements OnInit {
       horasSemanales: asig.horasSemanales,
     };
     this.asigFormPrerreqTexto = asig.prerrequisitos.join(', ');
+    this.prerrequisitosSeleccionados.set([...asig.prerrequisitos]);
+    this.prerrequisitoSeleccionadoDropdown = '';
     this.subVistaPlan.set('FORM_ASIGNATURA');
+  }
+
+  agregarPrerrequisito(codigo: string): void {
+    const cod = (codigo || '').trim().toUpperCase();
+    if (!cod) return;
+    const actuales = this.prerrequisitosSeleccionados();
+    if (!actuales.includes(cod)) {
+      this.prerrequisitosSeleccionados.set([...actuales, cod]);
+    }
+    this.prerrequisitoSeleccionadoDropdown = '';
+  }
+
+  eliminarPrerrequisito(codigo: string): void {
+    this.prerrequisitosSeleccionados.update((lista) => lista.filter((c) => c !== codigo));
+  }
+
+  obtenerNombreMateriaPorCodigo(codigo: string): string {
+    const encontrada = this.asignaturas().find((a) => a.codigo.toUpperCase() === codigo.toUpperCase());
+    return encontrada ? encontrada.nombre : codigo;
   }
 
   guardarAsignatura(): void {
     const plan = this.selectedPlan();
     if (!plan) return;
 
-    const prerreqs = this.asigFormPrerreqTexto
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    if (!this.asigForm.codigo.trim()) {
+      this.toast.warning('El campo Código de la Asignatura es obligatorio.');
+      return;
+    }
+    if (!this.asigForm.nombre.trim()) {
+      this.toast.warning('El campo Nombre de la Asignatura es obligatorio.');
+      return;
+    }
+    if (!this.asigForm.semestre || this.asigForm.semestre < 1) {
+      this.toast.warning('El campo Semestre de Ubicación debe ser mayor o igual a 1.');
+      return;
+    }
+    if (!this.asigForm.creditos || this.asigForm.creditos < 1) {
+      this.toast.warning('El campo Créditos Académicos debe ser mayor o igual a 1.');
+      return;
+    }
+    if (!this.asigForm.horasSemanales || this.asigForm.horasSemanales < 1) {
+      this.toast.warning('El campo Horas Semanales Presenciales debe ser mayor o igual a 1.');
+      return;
+    }
+
+    const prerreqs = [...this.prerrequisitosSeleccionados()];
 
     if (this.modoFormAsignatura === 'CREAR') {
       this.coordService
@@ -1069,7 +1230,7 @@ export class CoordinatorStudyPlansComponent implements OnInit {
               this.volverAMalla();
             }
           },
-          error: () => this.toast.error('Error al registrar asignatura.'),
+          error: (err) => this.toast.error(getApiErrorMessage(err)),
         });
     } else if (this.selectedAsigId) {
       this.coordService
@@ -1085,7 +1246,7 @@ export class CoordinatorStudyPlansComponent implements OnInit {
               this.volverAMalla();
             }
           },
-          error: () => this.toast.error('Error al actualizar asignatura.'),
+          error: (err) => this.toast.error(getApiErrorMessage(err)),
         });
     }
   }
@@ -1103,7 +1264,7 @@ export class CoordinatorStudyPlansComponent implements OnInit {
             this.cargarPlanes();
           }
         },
-        error: () => this.toast.error('Error al eliminar asignatura.'),
+        error: (err) => this.toast.error(getApiErrorMessage(err)),
       });
     }
   }
@@ -1112,7 +1273,7 @@ export class CoordinatorStudyPlansComponent implements OnInit {
     this.subVistaPlan.set('MALLA');
   }
 
-  // --- PERÍODOS ACADÉMICOS (HU096-HU098) ---
+  // --- PERÍODOS ACADÉMICOS ---
   cargarPeriodos(): void {
     this.coordService.getPeriodosAcademicos().subscribe({
       next: (res) => this.periodos.set(res.datos || []),
@@ -1127,7 +1288,6 @@ export class CoordinatorStudyPlansComponent implements OnInit {
       nombre: 'Primer Semestre Académico 2027',
       fechaInicio: '2027-02-01',
       fechaFin: '2027-06-20',
-      fechaLimiteNotas: '2027-06-25',
       estado: 'PLANEACION',
     };
     this.mostrarModalPeriodo.set(true);
@@ -1141,7 +1301,6 @@ export class CoordinatorStudyPlansComponent implements OnInit {
       nombre: periodo.nombre,
       fechaInicio: periodo.fechaInicio,
       fechaFin: periodo.fechaFin,
-      fechaLimiteNotas: periodo.fechaLimiteNotas,
       estado: periodo.estado,
     };
     this.mostrarModalPeriodo.set(true);
@@ -1157,7 +1316,7 @@ export class CoordinatorStudyPlansComponent implements OnInit {
             this.cargarPeriodos();
           }
         },
-        error: () => this.toast.error('Error al crear período académico.'),
+        error: (err) => this.toast.error(getApiErrorMessage(err)),
       });
     } else if (this.selectedPeriodoId) {
       this.coordService.actualizarPeriodoAcademico(this.selectedPeriodoId, this.periodoForm).subscribe({
@@ -1168,20 +1327,45 @@ export class CoordinatorStudyPlansComponent implements OnInit {
             this.cargarPeriodos();
           }
         },
-        error: () => this.toast.error('Error al actualizar período académico.'),
+        error: (err) => this.toast.error(getApiErrorMessage(err)),
       });
     }
   }
 
   alternarEstadoPeriodo(periodo: PeriodoAcademicoItem): void {
-    const nuevoEstado = periodo.estado === 'ACTIVO' ? 'CERRADO' : (periodo.estado === 'PLANEACION' ? 'ACTIVO' : 'PLANEACION');
-    this.coordService.actualizarPeriodoAcademico(periodo.id, { estado: nuevoEstado }).subscribe({
+    this.coordService.toggleEstadoPeriodoAcademico(periodo.id).subscribe({
       next: (res) => {
         if (res.exitoso) {
-          this.toast.success(`Período ${periodo.codigo} actualizado a ${nuevoEstado}.`);
+          const nuevo = res.datos?.estado || (periodo.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO');
+          this.toast.success(res.mensajeUsuario || `Período ${periodo.codigo} actualizado a ${nuevo}.`);
           this.cargarPeriodos();
         }
       },
+      error: () => {
+        // Fallback en caso de usar PUT
+        const nuevoEstado = periodo.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
+        this.coordService.actualizarPeriodoAcademico(periodo.id, { estado: nuevoEstado as any }).subscribe({
+          next: (res) => {
+            if (res.exitoso) {
+              this.toast.success(`Período ${periodo.codigo} actualizado a ${nuevoEstado}.`);
+              this.cargarPeriodos();
+            }
+          },
+          error: (err) => this.toast.error(getApiErrorMessage(err)),
+        });
+      },
+    });
+  }
+
+  toggleEstadoPlan(plan: PlanEstudioItem): void {
+    this.coordService.toggleEstadoPlanEstudio(plan.id).subscribe({
+      next: (res) => {
+        if (res.exitoso) {
+          this.toast.success(res.mensajeUsuario || 'Estado del plan de estudio actualizado.');
+          this.cargarPlanes();
+        }
+      },
+      error: (err) => this.toast.error(getApiErrorMessage(err)),
     });
   }
 
@@ -1193,6 +1377,8 @@ export class CoordinatorStudyPlansComponent implements OnInit {
         return 'warning';
       case 'HISTORICO':
         return 'neutral';
+      case 'INACTIVO':
+        return 'danger';
       default:
         return 'neutral';
     }

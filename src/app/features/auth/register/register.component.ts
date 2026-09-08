@@ -7,8 +7,27 @@ import { FormFieldComponent } from '../../../shared/components/form-field/form-f
 import { FormSelectComponent, SelectOption } from '../../../shared/components/form-select/form-select.component';
 import { CardComponent } from '../../../shared/components/card/card.component';
 import { ToastComponent } from '../../../shared/components/toast/toast.component';
+import {
+  getApiErrorMessage,
+  getApiFieldError,
+} from '../../../core/api/errors/api-error.util';
 import { CatalogService } from '../../../core/services/catalog.service';
-import { UserService, CreateUserDTO } from '../../../core/services/user.service';
+import { CrearUsuarioRequest } from '../../../core/api/models/crear-usuario-request.model';
+import { UserService } from '../../../core/services/user.service';
+import {
+  getPasswordValidationError,
+  parseIdentificationNumber,
+} from '../../../core/validation/request-form-validation.util';
+
+type RegisterField =
+  | 'tipoIdIdentificacion'
+  | 'primerNombre'
+  | 'segundoNombre'
+  | 'primerApellido'
+  | 'segundoApellido'
+  | 'correo'
+  | 'numeroIdentificacion'
+  | 'password';
 
 @Component({
   selector: 'app-register',
@@ -27,13 +46,17 @@ import { UserService, CreateUserDTO } from '../../../core/services/user.service'
     <app-card [glass]="true" padding="lg">
       <div class="mb-6 text-center">
         <h2 class="font-serif font-bold text-2xl text-warm-900 tracking-tight">Registro Institucional</h2>
-        <p class="text-xs text-warm-500 mt-1">Solicitud de alta de usuario docente o administrativo</p>
+        <p class="text-xs text-warm-500 mt-1">Creación de usuario institucional</p>
       </div>
 
       <form (submit)="onRegister($event)" class="space-y-3.5">
         <!-- Tipo y Número de Identificación -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <app-form-field label="Tipo de Documento" [required]="true">
+          <app-form-field
+            label="Tipo de Documento"
+            [required]="true"
+            [errorMessage]="fieldErrors().tipoIdIdentificacion ?? ''"
+          >
             <app-form-select
               [options]="documentTypeOptions()"
               [value]="tipoIdentificacionId"
@@ -42,9 +65,15 @@ import { UserService, CreateUserDTO } from '../../../core/services/user.service'
             ></app-form-select>
           </app-form-field>
 
-          <app-form-field label="Número de Documento" [required]="true">
+          <app-form-field
+            label="Número de Documento"
+            [required]="true"
+            [errorMessage]="fieldErrors().numeroIdentificacion ?? ''"
+          >
             <input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              maxlength="10"
               [(ngModel)]="numeroIdentificacion"
               name="numeroIdentificacion"
               placeholder="Ej. 1017123456"
@@ -56,9 +85,14 @@ import { UserService, CreateUserDTO } from '../../../core/services/user.service'
 
         <!-- Primer y Segundo Nombre -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <app-form-field label="Primer Nombre" [required]="true">
+          <app-form-field
+            label="Primer Nombre"
+            [required]="true"
+            [errorMessage]="fieldErrors().primerNombre ?? ''"
+          >
             <input
               type="text"
+              maxlength="50"
               [(ngModel)]="primerNombre"
               name="primerNombre"
               placeholder="Ej. Roberto"
@@ -67,9 +101,13 @@ import { UserService, CreateUserDTO } from '../../../core/services/user.service'
             />
           </app-form-field>
 
-          <app-form-field label="Segundo Nombre (Opcional)">
+          <app-form-field
+            label="Segundo Nombre (Opcional)"
+            [errorMessage]="fieldErrors().segundoNombre ?? ''"
+          >
             <input
               type="text"
+              maxlength="50"
               [(ngModel)]="segundoNombre"
               name="segundoNombre"
               placeholder="Ej. Carlos"
@@ -80,9 +118,14 @@ import { UserService, CreateUserDTO } from '../../../core/services/user.service'
 
         <!-- Primer y Segundo Apellido -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <app-form-field label="Primer Apellido" [required]="true">
+          <app-form-field
+            label="Primer Apellido"
+            [required]="true"
+            [errorMessage]="fieldErrors().primerApellido ?? ''"
+          >
             <input
               type="text"
+              maxlength="50"
               [(ngModel)]="primerApellido"
               name="primerApellido"
               placeholder="Ej. Sánchez"
@@ -91,21 +134,30 @@ import { UserService, CreateUserDTO } from '../../../core/services/user.service'
             />
           </app-form-field>
 
-          <app-form-field label="Segundo Apellido" [required]="true">
+          <app-form-field
+            label="Segundo Apellido (Opcional)"
+            [required]="false"
+            [errorMessage]="fieldErrors().segundoApellido ?? ''"
+          >
             <input
               type="text"
+              maxlength="50"
               [(ngModel)]="segundoApellido"
               name="segundoApellido"
               placeholder="Ej. Gómez"
-              required
               class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 shadow-warm-sm"
             />
           </app-form-field>
         </div>
 
-        <app-form-field label="Correo Institucional" [required]="true">
+        <app-form-field
+          label="Correo Institucional"
+          [required]="true"
+          [errorMessage]="fieldErrors().correo ?? ''"
+        >
           <input
             type="email"
+            maxlength="100"
             [(ngModel)]="email"
             name="email"
             placeholder="roberto.sanchez@uco.edu.co"
@@ -114,18 +166,15 @@ import { UserService, CreateUserDTO } from '../../../core/services/user.service'
           />
         </app-form-field>
 
-        <app-form-field label="Rol Institucional" [required]="true">
-          <app-form-select
-            [options]="roleOptions"
-            [value]="role"
-            (valueChange)="role = $event"
-            placeholder="Seleccione su rol..."
-          ></app-form-select>
-        </app-form-field>
-
-        <app-form-field label="Contraseña / Clave" [required]="true">
+        <app-form-field
+          label="Contraseña / Clave"
+          [required]="true"
+          [errorMessage]="fieldErrors().password ?? ''"
+        >
           <input
             type="password"
+            minlength="8"
+            maxlength="255"
             [(ngModel)]="password"
             name="password"
             placeholder="Mínimo 8 caracteres"
@@ -170,71 +219,97 @@ export class RegisterComponent implements OnInit {
   primerApellido = '';
   segundoApellido = '';
   email = '';
-  role = 'DOCENTE';
-  password = '';
+  password = 'Test1234!';
 
   isLoading = signal<boolean>(false);
   showToast = signal<boolean>(false);
   toastMessage = signal<string>('');
   toastType = signal<'success' | 'error'>('success');
+  fieldErrors = signal<Partial<Record<RegisterField, string>>>({});
 
   documentTypeOptions = signal<SelectOption[]>([]);
 
-  roleOptions: SelectOption[] = [
-    { value: 'DOCENTE', label: 'Docente / Catedrático' },
-    { value: 'PREFECTO', label: 'Prefecto de Asistencia' },
-    { value: 'ADMIN', label: 'Administrador de Sede' },
-  ];
-
   ngOnInit(): void {
     this.catalogService.getIdentityDocumentTypes().subscribe({
-      next: (res) => {
-        if (res.exitoso && res.datos) {
-          const options: SelectOption[] = res.datos.map((doc) => ({
-            value: doc.id,
-            label: `${doc.tipoIdentificacion} - ${doc.nombre}`,
-          }));
-          this.documentTypeOptions.set(options);
-          if (options.length > 0) {
-            this.tipoIdentificacionId = options[0].value;
-          }
+      next: (documentTypes) => {
+        const options: SelectOption[] = documentTypes.map((doc) => ({
+          value: doc.id,
+          label: `${doc.tipoIdentificacion} - ${doc.nombre}`,
+        }));
+        this.documentTypeOptions.set(options);
+        if (options.length > 0) {
+          this.tipoIdentificacionId = options[0].value;
         }
       },
     });
   }
 
-  onRegister(event: Event) {
+  onRegister(event: Event): void {
     event.preventDefault();
+
+    this.fieldErrors.set({});
+
+    const identificationResult = parseIdentificationNumber(
+      this.numeroIdentificacion
+    );
+    const effectivePassword = this.password.trim() || 'Test1234!';
+    const passwordError = getPasswordValidationError(
+      effectivePassword,
+      this.numeroIdentificacion
+    );
+    const fieldErrors: Partial<Record<RegisterField, string>> = {};
+
+    if (!identificationResult.valid) {
+      fieldErrors.numeroIdentificacion = identificationResult.error;
+    }
+    if (!this.primerNombre.trim()) {
+      fieldErrors.primerNombre = 'El campo Primer Nombre es obligatorio.';
+    }
+    if (!this.primerApellido.trim()) {
+      fieldErrors.primerApellido = 'El campo Primer Apellido es obligatorio.';
+    }
+    if (!this.email.trim()) {
+      fieldErrors.correo = 'El campo Correo Institucional es obligatorio.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.email.trim())) {
+      fieldErrors.correo = 'El campo Correo Institucional debe tener un formato válido (ej. usuario@uco.edu.co).';
+    }
+    if (passwordError) {
+      fieldErrors.password = passwordError;
+    }
 
     if (
       !this.tipoIdentificacionId ||
-      !this.numeroIdentificacion ||
-      !this.primerNombre ||
-      !this.primerApellido ||
-      !this.segundoApellido ||
-      !this.email ||
-      !this.password
+      Object.keys(fieldErrors).length > 0
     ) {
+      if (!this.tipoIdentificacionId) {
+        fieldErrors.tipoIdIdentificacion = 'El campo Tipo de Documento es obligatorio.';
+      }
+      this.fieldErrors.set(fieldErrors);
       this.toastType.set('error');
-      this.toastMessage.set('Por favor completa todos los campos obligatorios.');
+      const errVals = Object.values(fieldErrors);
+      this.toastMessage.set(errVals.length === 1 ? errVals[0]! : `Campos con error en el formulario: ${Object.keys(fieldErrors).join(', ')}.`);
       this.showToast.set(true);
+      return;
+    }
+
+    if (!identificationResult.valid) {
       return;
     }
 
     this.isLoading.set(true);
 
-    const dto: CreateUserDTO = {
+    const request: CrearUsuarioRequest = {
       tipoIdIdentificacion: this.tipoIdentificacionId,
-      numeroIdentificacion: this.numeroIdentificacion,
-      primerNombre: this.primerNombre,
-      segundoNombre: this.segundoNombre,
-      primerApellido: this.primerApellido,
-      segundoApellido: this.segundoApellido,
-      correo: this.email,
-      password: this.password,
+      numeroIdentificacion: identificationResult.value,
+      primerNombre: this.primerNombre.trim(),
+      segundoNombre: this.segundoNombre.trim(),
+      primerApellido: this.primerApellido.trim(),
+      segundoApellido: this.segundoApellido.trim(),
+      correo: this.email.trim(),
+      password: effectivePassword,
     };
 
-    this.userService.createUser(dto).subscribe({
+    this.userService.createUser(request).subscribe({
       next: (res) => {
         this.isLoading.set(false);
         if (res.exitoso) {
@@ -251,13 +326,37 @@ export class RegisterComponent implements OnInit {
           this.showToast.set(true);
         }
       },
-      error: (err) => {
+      error: (error: unknown) => {
         this.isLoading.set(false);
         this.toastType.set('error');
-        this.toastMessage.set(err?.error?.mensajeUsuario || 'No se pudo conectar con el servidor.');
+        this.setApiFieldErrors(error);
+        this.toastMessage.set(getApiErrorMessage(error));
         this.showToast.set(true);
       },
     });
+  }
+
+  private setApiFieldErrors(error: unknown): void {
+    const fields: RegisterField[] = [
+      'tipoIdIdentificacion',
+      'primerNombre',
+      'segundoNombre',
+      'primerApellido',
+      'segundoApellido',
+      'correo',
+      'numeroIdentificacion',
+      'password',
+    ];
+    const fieldErrors: Partial<Record<RegisterField, string>> = {};
+
+    for (const field of fields) {
+      const message = getApiFieldError(error, field);
+      if (message) {
+        fieldErrors[field] = message;
+      }
+    }
+
+    this.fieldErrors.set(fieldErrors);
   }
 }
 

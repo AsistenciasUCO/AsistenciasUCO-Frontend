@@ -134,7 +134,9 @@ export class StudentScheduleComponent implements OnInit {
   }
 
   clasesPorDia(dia: DiaSemana): HorarioItem[] {
-    return this.horarios().filter((h) => h.dia === dia);
+    const norm = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    const target = norm(dia);
+    return this.horarios().filter((h) => norm(h.dia) === target);
   }
 
   getClaseClasses(color: 'emerald' | 'amber' | 'blue' | 'purple'): string {

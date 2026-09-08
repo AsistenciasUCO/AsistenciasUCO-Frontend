@@ -1,20 +1,12 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of, delay, catchError } from 'rxjs';
+import { Observable, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { ApiResponse } from '../models/api-response.model';
-import { StudentAttendance } from '../models/attendance.model';
-import { AttendanceMapper, StudentAttendanceDTO } from '../mappers/attendance.mapper';
-import { StorageSerializer } from '../utils/storage-serializer.util';
-
-export interface SaveAttendanceDTO {
-  asistencia?: string;
-  estudiante: string;
-  grupo: string;
-  sesion: string;
-  presente: boolean;
-  observacion?: string;
-}
+import { ApiListResponse } from '../api/models/api-list-response.model';
+import { ApiMessageResponse } from '../api/models/api-message-response.model';
+import { AsistenciaConsultadaApiDto } from '../api/models/asistencia-consultada-api-dto.model';
+import { RegistrarAsistenciaRequest } from '../api/models/registrar-asistencia-request.model';
+import { SolicitarRevisionAsistenciaRequest } from '../api/models/solicitar-revision-asistencia-request.model';
 
 @Injectable({
   providedIn: 'root',
@@ -22,95 +14,88 @@ export interface SaveAttendanceDTO {
 export class AttendanceService {
   constructor(private http: HttpClient) {}
 
-  getStudentsByGroupAndSession(grupoId: string, sesionId: string): Observable<ApiResponse<StudentAttendance[]>> {
-    if (environment.useMocks) {
-      // Deserialización de registros previamente guardados en almacenamiento local
-      const cached = StorageSerializer.deserializeWithMapper<StudentAttendanceDTO, StudentAttendance>(
-        `gestio_attendance_sesion_${sesionId}`,
-        AttendanceMapper.studentFromDTO,
-        []
+  getAttendancesByGroup(
+    grupoId: string,
+    sesionId?: string
+  ): Observable<ApiListResponse<AsistenciaConsultadaApiDto>> {
+    if (!environment.features.attendanceEnabled) {
+      return throwError(
+        () =>
+          new Error(
+            'Funcionalidad de asistencia temporalmente no disponible.'
+          )
       );
+    }
 
-      if (cached.length > 0) {
-        return of({
-          idTransaccion: `mock-tx-get-cached-${sesionId}`,
-          exitoso: true,
-          total: cached.length,
-          datos: cached,
-        }).pipe(delay(150));
+    return this.http.get<ApiListResponse<AsistenciaConsultadaApiDto>>(
+      `${environment.apiUrl}/grupos/${grupoId}/asistencias`,
+      {
+        params: sesionId ? { sesionId } : {},
       }
-    }
-
-    return this.http.post<ApiResponse<StudentAttendance[]>>(`${environment.apiUrl}/asistencias/consultas/grupo`, {
-      grupo: grupoId,
-      sesion: sesionId,
-    });
+    );
   }
 
-  saveAttendance(data: SaveAttendanceDTO): Observable<ApiResponse<void>> {
-    if (environment.useMocks) {
-      return of({
-        idTransaccion: 'mock-tx-save-001',
-        exitoso: true,
-        mensajeUsuario: 'Asistencia registrada correctamente.',
-        datos: undefined,
-      }).pipe(delay(250));
-    }
-
-    return this.http.post<ApiResponse<void>>(`${environment.apiUrl}/asistencias`, data);
-  }
-
-  saveAttendanceBatch(sesionId: string, records: StudentAttendance[]): Observable<ApiResponse<void>> {
-    // 1. Serialización a DTOs de transporte
-    const dtos: StudentAttendanceDTO[] = records.map(AttendanceMapper.studentToDTO);
-    const jsonList = JSON.stringify(dtos);
-
-    // 2. Persistencia en almacenamiento local para modo Mock / Offline
-    StorageSerializer.serialize(`gestio_attendance_sesion_${sesionId}`, dtos);
-
-    if (environment.useMocks) {
-      return of({
-        idTransaccion: `tx-save-batch-${Date.now()}`,
-        exitoso: true,
-        mensajeUsuario: '¡Éxito! Registro de asistencias serializado y guardado correctamente.',
-        datos: undefined,
-      }).pipe(delay(200));
-    }
-
-    return this.http
-      .post<ApiResponse<void>>(`${environment.apiUrl}/asistencias`, {
-        sesion: sesionId,
-        asistenciaJSON: jsonList,
-      })
-      .pipe(
-        delay(200),
-        catchError(() =>
-          of({
-            idTransaccion: 'tx-save-batch-fallback',
-            exitoso: true,
-            mensajeUsuario: '¡Éxito! Registro de asistencias consolidado correctamente.',
-            datos: undefined,
-          })
-        )
+  registerAttendance(
+    request: RegistrarAsistenciaRequest
+  ): Observable<ApiMessageResponse> {
+    if (!environment.features.attendanceEnabled) {
+      return throwError(
+        () =>
+          new Error(
+            'Funcionalidad de asistencia temporalmente no disponible.'
+          )
       );
+    }
+
+    return this.http.post<ApiMessageResponse>(
+      `${environment.apiUrl}/asistencias`,
+      request
+    );
   }
 
-  requestAttendanceRevision(asistenciaId: string, observacion: string): Observable<ApiResponse<void>> {
-    return this.http
-      .post<any>(`${environment.apiUrl}/asistencias/revisiones`, {
-        asistencia: asistenciaId,
-        observacion,
-      })
-      .pipe(
-        delay(200),
-        catchError(() =>
-          of({
-            idTransaccion: 'tx-rev-fallback',
-            exitoso: true,
-            mensajeUsuario: 'Solicitud de revisión registrada correctamente.',
-            datos: undefined,
-          })
-        )
+  requestAttendanceRevision(
+    request: SolicitarRevisionAsistenciaRequest
+  ): Observable<ApiMessageResponse> {
+    if (!environment.features.attendanceEnabled) {
+      return throwError(
+        () =>
+          new Error(
+            'Funcionalidad de asistencia temporalmente no disponible.'
+          )
       );
+    }
+
+    const motivo = request.motivo.trim();
+
+    if (motivo.length < 10 || motivo.length > 300) {
+      return throwError(
+        () => new Error('El motivo debe contener entre 10 y 300 caracteres.')
+      );
+    }
+
+    return this.http.post<ApiMessageResponse>(
+      `${environment.apiUrl}/asistencias/revisiones`,
+      {
+        asistencia: request.asistencia,
+        motivo,
+      }
+    );
+  }
+
+  saveBatchAttendance(payload: {
+    sesionId: string;
+    grupoId?: string;
+    registros: Array<{
+      studentId: string;
+      status: string;
+      notes?: string;
+      observaciones?: string;
+    }>;
+  }): Observable<ApiMessageResponse> {
+    return this.http.post<ApiMessageResponse>(
+      `${environment.apiUrl}/asistencias/lote`,
+      payload
+    );
   }
 }
+

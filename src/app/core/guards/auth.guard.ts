@@ -10,10 +10,5 @@ export const authGuard: CanActivateFn = () => {
     return true;
   }
 
-  if (authService.isMockMode()) {
-    return router.createUrlTree(['/login']);
-  }
-
-  authService.loginWithKeycloak();
-  return false;
+  return router.createUrlTree(['/login']);
 };

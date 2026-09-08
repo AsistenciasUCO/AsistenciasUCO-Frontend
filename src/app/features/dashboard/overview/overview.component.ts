@@ -1,4 +1,4 @@
-import { Component, signal, computed, inject, OnInit } from '@angular/core';
+import { Component, signal, computed, inject, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { CardComponent } from '../../../shared/components/card/card.component';
@@ -19,8 +19,25 @@ import {
   DocenteItem,
   PlanEstudioItem,
   MateriaEstudianteItem,
+  HorarioDocenteItem,
+  HorarioItem,
 } from '../../../core/models/role-management.model';
 import { MOCK_USERS_BY_ROLE } from '../../../core/mocks/user.mock';
+
+export interface ProximaClaseInfo {
+  materia: string;
+  codigo: string;
+  aula: string;
+  subtitulo: string;
+  dia: string;
+  horaInicio: string;
+  horaFin: string;
+  fechaProxima: Date;
+  enCurso: boolean;
+  tiempoRestanteTexto: string;
+  tiempoDetalleBadge: string;
+  minutosRestantes: number;
+}
 
 @Component({
   selector: 'app-overview',
@@ -193,8 +210,8 @@ import { MOCK_USERS_BY_ROLE } from '../../../core/mocks/user.mock';
           @case ('ADMINISTRADOR') {
             <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
               <span class="text-xs text-warm-500 font-medium">Facultades Activas</span>
-              <p class="text-2xl font-serif font-bold text-warm-900 mt-1">4</p>
-              <span class="text-[11px] text-emerald-700 font-medium">100% con decanatura</span>
+              <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ totalFacultadesAdmin() }}</p>
+              <span class="text-[11px] text-emerald-700 font-medium">Sincronizadas con base de datos</span>
             </div>
             <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
               <span class="text-xs text-warm-500 font-medium">Decanos Registrados</span>
@@ -203,20 +220,20 @@ import { MOCK_USERS_BY_ROLE } from '../../../core/mocks/user.mock';
             </div>
             <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
               <span class="text-xs text-warm-500 font-medium">Programas Académicos</span>
-              <p class="text-2xl font-serif font-bold text-warm-900 mt-1">18</p>
+              <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ decanos().length > 0 ? 1 : 0 }}</p>
               <span class="text-[11px] text-primary-700 font-medium">Pregrado y posgrado</span>
             </div>
             <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
               <span class="text-xs text-warm-500 font-medium">Asistencia Promedio Campus</span>
-              <p class="text-2xl font-serif font-bold text-accent-700 mt-1">94.2%</p>
-              <span class="text-[11px] text-emerald-700 font-medium">↑ +1.5% vs 2026-I</span>
+              <p class="text-2xl font-serif font-bold text-accent-700 mt-1">100%</p>
+              <span class="text-[11px] text-emerald-700 font-medium">Monitoreo activo</span>
             </div>
           }
           @case ('ADMIN') {
             <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
               <span class="text-xs text-warm-500 font-medium">Facultades Activas</span>
-              <p class="text-2xl font-serif font-bold text-warm-900 mt-1">4</p>
-              <span class="text-[11px] text-emerald-700 font-medium">100% con decanatura</span>
+              <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ totalFacultadesAdmin() }}</p>
+              <span class="text-[11px] text-emerald-700 font-medium">Sincronizadas con base de datos</span>
             </div>
             <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
               <span class="text-xs text-warm-500 font-medium">Decanos Registrados</span>
@@ -225,13 +242,13 @@ import { MOCK_USERS_BY_ROLE } from '../../../core/mocks/user.mock';
             </div>
             <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
               <span class="text-xs text-warm-500 font-medium">Programas Académicos</span>
-              <p class="text-2xl font-serif font-bold text-warm-900 mt-1">18</p>
+              <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ decanos().length > 0 ? 1 : 0 }}</p>
               <span class="text-[11px] text-primary-700 font-medium">Pregrado y posgrado</span>
             </div>
             <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
               <span class="text-xs text-warm-500 font-medium">Asistencia Promedio Campus</span>
-              <p class="text-2xl font-serif font-bold text-accent-700 mt-1">94.2%</p>
-              <span class="text-[11px] text-emerald-700 font-medium">↑ +1.5% vs 2026-I</span>
+              <p class="text-2xl font-serif font-bold text-accent-700 mt-1">100%</p>
+              <span class="text-[11px] text-emerald-700 font-medium">Monitoreo activo</span>
             </div>
           }
           @case ('DECANO') {
@@ -243,17 +260,17 @@ import { MOCK_USERS_BY_ROLE } from '../../../core/mocks/user.mock';
             <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
               <span class="text-xs text-warm-500 font-medium">Coordinadores Asignados</span>
               <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ coordinadores().length }}</p>
-              <span class="text-[11px] text-emerald-700 font-medium">Todos activos</span>
+              <span class="text-[11px] text-emerald-700 font-medium">Vinculados</span>
             </div>
             <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
               <span class="text-xs text-warm-500 font-medium">Docentes en Facultad</span>
-              <p class="text-2xl font-serif font-bold text-warm-900 mt-1">48</p>
-              <span class="text-[11px] text-warm-500 font-medium">Carga completa</span>
+              <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ totalDocentesFacultad() }}</p>
+              <span class="text-[11px] text-warm-500 font-medium">Planta docente activa</span>
             </div>
             <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
-              <span class="text-xs text-warm-500 font-medium">Cumplimiento Asistencia</span>
-              <p class="text-2xl font-serif font-bold text-emerald-700 mt-1">93.4%</p>
-              <span class="text-[11px] text-emerald-700 font-medium">Meta cumplida</span>
+              <span class="text-xs text-warm-500 font-medium">Grupos Académicos</span>
+              <p class="text-2xl font-serif font-bold text-emerald-700 mt-1">{{ totalGruposFacultad() }}</p>
+              <span class="text-[11px] text-emerald-700 font-medium">En oferta académica</span>
             </div>
           }
           @case ('COORDINADOR') {
@@ -269,12 +286,12 @@ import { MOCK_USERS_BY_ROLE } from '../../../core/mocks/user.mock';
             </div>
             <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
               <span class="text-xs text-warm-500 font-medium">Grupos Académicos</span>
-              <p class="text-2xl font-serif font-bold text-warm-900 mt-1">28</p>
+              <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ totalGruposPrograma() }}</p>
               <span class="text-[11px] text-emerald-700 font-medium">En oferta activa</span>
             </div>
             <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
               <span class="text-xs text-warm-500 font-medium">Estudiantes Matriculados</span>
-              <p class="text-2xl font-serif font-bold text-accent-700 mt-1">420</p>
+              <p class="text-2xl font-serif font-bold text-accent-700 mt-1">{{ totalEstudiantesPrograma() }}</p>
               <span class="text-[11px] text-warm-500 font-medium">En el programa</span>
             </div>
           }
@@ -294,10 +311,36 @@ import { MOCK_USERS_BY_ROLE } from '../../../core/mocks/user.mock';
               <p class="text-2xl font-serif font-bold text-amber-700 mt-1">{{ pendingClaimsCount() }}</p>
               <span class="text-[11px] text-amber-600 font-medium">Por responder</span>
             </div>
-            <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
-              <span class="text-xs text-warm-500 font-medium">Próxima Clase</span>
-              <p class="text-base font-serif font-bold text-warm-900 mt-2">Hoy 08:00 AM</p>
-              <span class="text-[11px] text-emerald-700 font-medium">Aula Lab 301</span>
+            <!-- Tarjeta 4 Docente: Próxima Clase con Cuenta Regresiva Reactiva -->
+            <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]"
+                 [ngClass]="{'border-emerald-300 bg-emerald-50/30 ring-1 ring-emerald-400/20': proximaClase()?.enCurso, 'border-primary-200/60': proximaClase() && !proximaClase()?.enCurso}">
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-warm-500 font-medium">Próxima Clase</span>
+                @if (proximaClase()?.enCurso) {
+                  <span class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full animate-pulse">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                    En curso
+                  </span>
+                } @else if (proximaClase()) {
+                  <span class="text-[10px] font-semibold text-primary-700 bg-primary-50 px-2 py-0.5 rounded-full">
+                    Programada
+                  </span>
+                }
+              </div>
+              @if (proximaClase(); as pc) {
+                <div>
+                  <p class="text-lg font-serif font-bold text-warm-900 mt-1" [title]="pc.materia">
+                    {{ pc.tiempoRestanteTexto }}
+                  </p>
+                  <p class="text-xs font-semibold text-primary-800 truncate mt-0.5" [title]="pc.materia">{{ pc.materia }}</p>
+                  <span class="text-[11px] text-warm-500 font-medium block truncate mt-0.5">{{ pc.aula }} • {{ pc.tiempoDetalleBadge }}</span>
+                </div>
+              } @else {
+                <div>
+                  <p class="text-sm font-semibold text-warm-500 mt-2">Sin clases próximas</p>
+                  <span class="text-[11px] text-warm-400 font-medium">Horario despejado</span>
+                </div>
+              }
             </div>
           }
           @case ('ESTUDIANTE') {
@@ -316,10 +359,36 @@ import { MOCK_USERS_BY_ROLE } from '../../../core/mocks/user.mock';
               <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ totalStudentAbsences() }}</p>
               <span class="text-[11px] text-warm-500 font-medium">En todo el periodo</span>
             </div>
-            <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
-              <span class="text-xs text-warm-500 font-medium">Reclamos en Trámite</span>
-              <p class="text-2xl font-serif font-bold text-accent-700 mt-1">1</p>
-              <span class="text-[11px] text-warm-500 font-medium">En revisión docente</span>
+            <!-- Tarjeta 4 Estudiante: Próxima Clase con Cuenta Regresiva Reactiva -->
+            <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]"
+                 [ngClass]="{'border-emerald-300 bg-emerald-50/30 ring-1 ring-emerald-400/20': proximaClase()?.enCurso, 'border-primary-200/60': proximaClase() && !proximaClase()?.enCurso}">
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-warm-500 font-medium">Próxima Clase</span>
+                @if (proximaClase()?.enCurso) {
+                  <span class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full animate-pulse">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                    En curso
+                  </span>
+                } @else if (proximaClase()) {
+                  <span class="text-[10px] font-semibold text-primary-700 bg-primary-50 px-2 py-0.5 rounded-full">
+                    Programada
+                  </span>
+                }
+              </div>
+              @if (proximaClase(); as pc) {
+                <div>
+                  <p class="text-lg font-serif font-bold text-warm-900 mt-1" [title]="pc.materia">
+                    {{ pc.tiempoRestanteTexto }}
+                  </p>
+                  <p class="text-xs font-semibold text-primary-800 truncate mt-0.5" [title]="pc.materia">{{ pc.materia }}</p>
+                  <span class="text-[11px] text-warm-500 font-medium block truncate mt-0.5">{{ pc.aula }} • {{ pc.tiempoDetalleBadge }}</span>
+                </div>
+              } @else {
+                <div>
+                  <p class="text-sm font-semibold text-warm-500 mt-2">Sin clases próximas</p>
+                  <span class="text-[11px] text-warm-400 font-medium">Horario despejado</span>
+                </div>
+              }
             </div>
           }
         }
@@ -589,6 +658,61 @@ import { MOCK_USERS_BY_ROLE } from '../../../core/mocks/user.mock';
               </div>
             }
 
+            <!-- Widget Destacado de Próxima Clase con Cuenta Regresiva (Docente) -->
+            @if (proximaClase(); as pc) {
+              <div class="rounded-2xl p-5 border transition-all duration-300 shadow-warm-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                   [ngClass]="pc.enCurso 
+                     ? 'bg-gradient-to-r from-emerald-50 via-teal-50 to-warm-50 border-emerald-300 ring-1 ring-emerald-400/30' 
+                     : 'bg-gradient-to-r from-warm-50 via-white to-primary-50/40 border-primary-200/80'">
+                <div class="flex items-center gap-4">
+                  <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+                       [ngClass]="pc.enCurso ? 'bg-emerald-600 text-white shadow-emerald-sm' : 'bg-primary-900 text-white shadow-warm-sm'">
+                    @if (pc.enCurso) {
+                      <svg class="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    } @else {
+                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    }
+                  </div>
+                  <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded-md"
+                            [ngClass]="pc.enCurso ? 'bg-emerald-100 text-emerald-800' : 'bg-primary-100 text-primary-900'">
+                        {{ pc.codigo }}
+                      </span>
+                      <span class="text-xs font-bold px-2.5 py-0.5 rounded-full"
+                            [ngClass]="pc.enCurso ? 'bg-emerald-600 text-white animate-pulse' : 'bg-warm-200 text-warm-800'">
+                        {{ pc.tiempoRestanteTexto }}
+                      </span>
+                      <span class="text-xs text-warm-500 font-medium">| {{ pc.dia }} {{ pc.horaInicio }} - {{ pc.horaFin }}</span>
+                    </div>
+                    <h3 class="font-serif font-bold text-warm-900 text-base sm:text-lg mt-1">
+                      {{ pc.materia }}
+                    </h3>
+                    <p class="text-xs text-warm-600 flex flex-wrap items-center gap-2 mt-0.5">
+                      <span class="font-semibold text-warm-800">Aula: {{ pc.aula }}</span>
+                      <span>•</span>
+                      <span>{{ pc.subtitulo }}</span>
+                      <span>•</span>
+                      <span class="text-primary-700 font-medium">{{ pc.tiempoDetalleBadge }}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div class="shrink-0 w-full sm:w-auto flex items-center justify-end gap-2">
+                  <a routerLink="/app/asistencia" class="w-full sm:w-auto">
+                    <app-button variant="accent" size="sm" [fullWidth]="true">
+                      Tomar Asistencia →
+                    </app-button>
+                  </a>
+                </div>
+              </div>
+            }
+
             <!-- Sección de Asignaturas Habilitadas -->
             <section class="space-y-4">
               <div class="flex items-center justify-between">
@@ -660,6 +784,61 @@ import { MOCK_USERS_BY_ROLE } from '../../../core/mocks/user.mock';
         <!-- ==================== ROL ESTUDIANTE ==================== -->
         @case ('ESTUDIANTE') {
           <div class="space-y-8">
+            <!-- Widget Destacado de Próxima Clase con Cuenta Regresiva (Estudiante) -->
+            @if (proximaClase(); as pc) {
+              <div class="rounded-2xl p-5 border transition-all duration-300 shadow-warm-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                   [ngClass]="pc.enCurso 
+                     ? 'bg-gradient-to-r from-emerald-50 via-teal-50 to-warm-50 border-emerald-300 ring-1 ring-emerald-400/30' 
+                     : 'bg-gradient-to-r from-warm-50 via-white to-primary-50/40 border-primary-200/80'">
+                <div class="flex items-center gap-4">
+                  <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+                       [ngClass]="pc.enCurso ? 'bg-emerald-600 text-white shadow-emerald-sm' : 'bg-primary-900 text-white shadow-warm-sm'">
+                    @if (pc.enCurso) {
+                      <svg class="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    } @else {
+                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    }
+                  </div>
+                  <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded-md"
+                            [ngClass]="pc.enCurso ? 'bg-emerald-100 text-emerald-800' : 'bg-primary-100 text-primary-900'">
+                        {{ pc.codigo }}
+                      </span>
+                      <span class="text-xs font-bold px-2.5 py-0.5 rounded-full"
+                            [ngClass]="pc.enCurso ? 'bg-emerald-600 text-white animate-pulse' : 'bg-warm-200 text-warm-800'">
+                        {{ pc.tiempoRestanteTexto }}
+                      </span>
+                      <span class="text-xs text-warm-500 font-medium">| {{ pc.dia }} {{ pc.horaInicio }} - {{ pc.horaFin }}</span>
+                    </div>
+                    <h3 class="font-serif font-bold text-warm-900 text-base sm:text-lg mt-1">
+                      {{ pc.materia }}
+                    </h3>
+                    <p class="text-xs text-warm-600 flex flex-wrap items-center gap-2 mt-0.5">
+                      <span class="font-semibold text-warm-800">Aula: {{ pc.aula }}</span>
+                      <span>•</span>
+                      <span>{{ pc.subtitulo }}</span>
+                      <span>•</span>
+                      <span class="text-primary-700 font-medium">{{ pc.tiempoDetalleBadge }}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div class="shrink-0 w-full sm:w-auto flex items-center justify-end gap-2">
+                  <a routerLink="/app/estudiante/horarios" class="w-full sm:w-auto">
+                    <app-button variant="accent" size="sm" [fullWidth]="true">
+                      Ver Horario Completo →
+                    </app-button>
+                  </a>
+                </div>
+              </div>
+            }
+
             <!-- Sección de Materias Matriculadas con % de Asistencia -->
             <section class="space-y-4">
               <div class="flex items-center justify-between">
@@ -754,7 +933,7 @@ import { MOCK_USERS_BY_ROLE } from '../../../core/mocks/user.mock';
     </div>
   `,
 })
-export class OverviewComponent implements OnInit {
+export class OverviewComponent implements OnInit, OnDestroy {
   private authService = inject(AuthService);
   private courseService = inject(CourseService);
   private adminService = inject(AdminManagementService);
@@ -766,6 +945,12 @@ export class OverviewComponent implements OnInit {
   user = computed(() => this.authService.currentUser() || MOCK_USERS_BY_ROLE.DOCENTE);
   userRole = computed<UserRole>(() => this.user()?.role || 'DOCENTE');
 
+  // Próxima Clase Reactiva (Docente y Estudiante)
+  horariosDocente = signal<HorarioDocenteItem[]>([]);
+  horariosEstudiante = signal<HorarioItem[]>([]);
+  proximaClase = signal<ProximaClaseInfo | null>(null);
+  private timerProximaClase: any = null;
+
   // Datos para Docente
   courses: Course[] = [];
   pendingClaimsCount = signal<number>(0);
@@ -773,23 +958,46 @@ export class OverviewComponent implements OnInit {
 
   // Datos para Administrador
   decanos = signal<DecanoItem[]>([]);
+  totalFacultadesAdmin = computed<number>(() => {
+    const list = this.decanos();
+    if (!list || list.length === 0) return 0;
+    const unique = new Set(list.map((d) => d.facultad).filter(Boolean));
+    return unique.size || list.length;
+  });
 
   // Datos para Decano
   coordinadores = signal<CoordinadorItem[]>([]);
+  totalDocentesFacultad = computed<number>(() => {
+    return this.coordinadores().reduce((acc, c) => acc + (c.totalDocentes || 0), 0);
+  });
+  totalGruposFacultad = computed<number>(() => {
+    return this.coordinadores().reduce((acc, c) => acc + (c.totalGrupos || 0), 0);
+  });
 
   // Datos para Coordinador
   docentes = signal<DocenteItem[]>([]);
   planesEstudio = signal<PlanEstudioItem[]>([]);
+  totalGruposPrograma = computed<number>(() => {
+    return this.docentes().reduce((acc, d) => acc + (d.totalGruposAsignados || 0), 0);
+  });
+  totalEstudiantesPrograma = signal<number>(0);
 
   // Datos para Estudiante
   materias = signal<MateriaEstudianteItem[]>([]);
-  averageStudentAttendance = signal<number>(91.5);
-  totalStudentAbsences = signal<number>(3);
+  averageStudentAttendance = signal<number>(0);
+  totalStudentAbsences = signal<number>(0);
 
   isLoading = signal<boolean>(true);
 
   ngOnInit(): void {
     this.loadDataForRole(this.userRole());
+  }
+
+  ngOnDestroy(): void {
+    if (this.timerProximaClase) {
+      clearInterval(this.timerProximaClase);
+      this.timerProximaClase = null;
+    }
   }
 
   loadDataForRole(role: UserRole): void {
@@ -838,15 +1046,31 @@ export class OverviewComponent implements OnInit {
           },
           error: () => this.isLoading.set(false),
         });
+        this.coordinatorService.getEstudiantesDirectorio().subscribe({
+          next: (res) => {
+            if (res.exitoso && res.datos) {
+              this.totalEstudiantesPrograma.set(res.datos.length);
+            }
+          },
+        });
         break;
 
       case 'DOCENTE':
+        this.claimService.getHorarioDocente().subscribe({
+          next: (res) => {
+            if (res.exitoso && res.datos) {
+              this.horariosDocente.set(res.datos);
+              this.recalcularProximaClase();
+            }
+          },
+        });
         this.courseService.getTeacherCourses(this.user()?.id || '').subscribe({
           next: (res) => {
             if (res.exitoso && res.datos) {
               this.courses = res.datos;
               const total = res.datos.reduce((acc, c) => acc + (c.enrolledStudentsCount || 0), 0);
               this.totalStudentsCount.set(total);
+              this.recalcularProximaClase();
             }
             this.isLoading.set(false);
           },
@@ -860,9 +1084,18 @@ export class OverviewComponent implements OnInit {
             }
           },
         });
+        this.iniciarTimerProximaClase();
         break;
 
       case 'ESTUDIANTE':
+        this.studentService.getHorarios().subscribe({
+          next: (res) => {
+            if (res.exitoso && res.datos) {
+              this.horariosEstudiante.set(res.datos);
+              this.recalcularProximaClase();
+            }
+          },
+        });
         this.studentService.getMaterias().subscribe({
           next: (res) => {
             if (res.exitoso && res.datos) {
@@ -873,17 +1106,321 @@ export class OverviewComponent implements OnInit {
                 this.averageStudentAttendance.set(avg);
                 this.totalStudentAbsences.set(absences);
               }
+              this.recalcularProximaClase();
             }
             this.isLoading.set(false);
           },
           error: () => this.isLoading.set(false),
         });
+        this.iniciarTimerProximaClase();
         break;
 
       default:
         this.isLoading.set(false);
         break;
     }
+  }
+
+  private iniciarTimerProximaClase(): void {
+    if (this.timerProximaClase) {
+      clearInterval(this.timerProximaClase);
+    }
+    this.timerProximaClase = setInterval(() => {
+      this.recalcularProximaClase();
+    }, 30000);
+  }
+
+  recalcularProximaClase(): void {
+    const role = this.userRole();
+    const items: Array<{
+      codigoMateria: string;
+      nombreMateria: string;
+      dia: string;
+      horaInicio: string;
+      horaFin: string;
+      aula: string;
+      subtitulo: string;
+    }> = [];
+
+    if (role === 'DOCENTE') {
+      const hd = this.horariosDocente();
+      if (hd && hd.length > 0) {
+        for (const h of hd) {
+          items.push({
+            codigoMateria: h.codigoMateria,
+            nombreMateria: h.nombreMateria,
+            dia: h.dia,
+            horaInicio: h.horaInicio,
+            horaFin: h.horaFin,
+            aula: h.aula || 'Aula Principal',
+            subtitulo: h.seccion || 'Grupo Docente',
+          });
+        }
+      } else if (this.courses && this.courses.length > 0) {
+        for (const c of this.courses) {
+          const parsed = this.parseScheduleString(c.schedule);
+          for (const p of parsed) {
+            items.push({
+              codigoMateria: c.code,
+              nombreMateria: c.name,
+              dia: p.dia,
+              horaInicio: p.horaInicio,
+              horaFin: p.horaFin,
+              aula: c.room || 'Aula Principal',
+              subtitulo: c.section || 'Sección',
+            });
+          }
+        }
+      }
+    } else if (role === 'ESTUDIANTE') {
+      const he = this.horariosEstudiante();
+      if (he && he.length > 0) {
+        for (const h of he) {
+          items.push({
+            codigoMateria: h.codigoMateria,
+            nombreMateria: h.nombreMateria,
+            dia: h.dia,
+            horaInicio: h.horaInicio,
+            horaFin: h.horaFin,
+            aula: h.aula || 'Aula Asignada',
+            subtitulo: `Grupo ${h.grupo || '01'}${h.docente ? ' • ' + h.docente : ''}`,
+          });
+        }
+      } else if (this.materias() && this.materias().length > 0) {
+        for (const m of this.materias()) {
+          const parsed = this.parseScheduleString(m.horario);
+          for (const p of parsed) {
+            items.push({
+              codigoMateria: m.codigo,
+              nombreMateria: m.nombre,
+              dia: p.dia,
+              horaInicio: p.horaInicio,
+              horaFin: p.horaFin,
+              aula: m.aula || 'Aula Asignada',
+              subtitulo: `Grupo ${m.grupo || '01'}${m.docente ? ' • ' + m.docente : ''}`,
+            });
+          }
+        }
+      }
+    }
+
+    this.proximaClase.set(this.calcularProximaClaseDesdeItems(items));
+  }
+
+  private calcularProximaClaseDesdeItems(
+    items: Array<{
+      codigoMateria: string;
+      nombreMateria: string;
+      dia: string;
+      horaInicio: string;
+      horaFin: string;
+      aula: string;
+      subtitulo: string;
+    }>
+  ): ProximaClaseInfo | null {
+    if (!items || items.length === 0) return null;
+
+    const now = new Date();
+    const currentDay = now.getDay(); // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+
+    interface Candidato {
+      item: (typeof items)[0];
+      startDate: Date;
+      endDate: Date;
+      enCurso: boolean;
+      diffMs: number;
+    }
+
+    const candidatos: Candidato[] = [];
+
+    for (const item of items) {
+      const targetDay = this.parseDayToNumber(item.dia);
+      if (targetDay === -1) continue;
+
+      const tInicio = this.parseTime(item.horaInicio);
+      const tFin = this.parseTime(item.horaFin);
+      if (!tInicio) continue;
+
+      const dayDiff = (targetDay - currentDay + 7) % 7;
+
+      let startDate = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + dayDiff,
+        tInicio.hours,
+        tInicio.minutes,
+        0,
+        0
+      );
+
+      let endDate: Date;
+      if (tFin) {
+        endDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() + dayDiff,
+          tFin.hours,
+          tFin.minutes,
+          0,
+          0
+        );
+      } else {
+        endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
+      }
+
+      if (dayDiff === 0) {
+        if (now >= startDate && now <= endDate) {
+          candidatos.push({
+            item,
+            startDate,
+            endDate,
+            enCurso: true,
+            diffMs: 0,
+          });
+          continue;
+        } else if (now > endDate) {
+          startDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+          endDate = new Date(endDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+        }
+      }
+
+      const diffMs = startDate.getTime() - now.getTime();
+      if (diffMs > 0) {
+        candidatos.push({
+          item,
+          startDate,
+          endDate,
+          enCurso: false,
+          diffMs,
+        });
+      }
+    }
+
+    if (candidatos.length === 0) return null;
+
+    candidatos.sort((a, b) => {
+      if (a.enCurso && !b.enCurso) return -1;
+      if (!a.enCurso && b.enCurso) return 1;
+      return a.diffMs - b.diffMs;
+    });
+
+    const elegido = candidatos[0];
+    const diffMinutos = Math.max(0, Math.round(elegido.diffMs / 60000));
+
+    let tiempoRestanteTexto = '';
+    let tiempoDetalleBadge = '';
+
+    const cleanDia = this.sanitizeDayName(elegido.item.dia);
+
+    if (elegido.enCurso) {
+      const minsParaTerminar = Math.max(1, Math.round((elegido.endDate.getTime() - now.getTime()) / 60000));
+      tiempoRestanteTexto = `¡En curso ahora!`;
+      tiempoDetalleBadge = `Finaliza en ${minsParaTerminar} min`;
+    } else if (diffMinutos < 60) {
+      tiempoRestanteTexto = diffMinutos <= 1 ? 'En 1 minuto' : `Faltan ${diffMinutos} min`;
+      tiempoDetalleBadge = `En ${diffMinutos} min`;
+    } else if (diffMinutos < 1440) {
+      const horas = Math.floor(diffMinutos / 60);
+      const mins = diffMinutos % 60;
+      const minsStr = mins > 0 ? ` ${mins}m` : '';
+      if (elegido.startDate.getDate() === now.getDate()) {
+        tiempoRestanteTexto = `Hoy en ${horas}h${minsStr}`;
+        tiempoDetalleBadge = `Hoy a las ${elegido.item.horaInicio}`;
+      } else {
+        tiempoRestanteTexto = `Mañana en ${horas}h${minsStr}`;
+        tiempoDetalleBadge = `Mañana ${elegido.item.horaInicio}`;
+      }
+    } else {
+      const dias = Math.floor(diffMinutos / 1440);
+      tiempoRestanteTexto = `En ${dias} día${dias > 1 ? 's' : ''}`;
+      tiempoDetalleBadge = `${cleanDia} ${elegido.item.horaInicio}`;
+    }
+
+    return {
+      materia: elegido.item.nombreMateria,
+      codigo: elegido.item.codigoMateria,
+      aula: elegido.item.aula,
+      subtitulo: elegido.item.subtitulo,
+      dia: cleanDia,
+      horaInicio: elegido.item.horaInicio,
+      horaFin: elegido.item.horaFin,
+      fechaProxima: elegido.startDate,
+      enCurso: elegido.enCurso,
+      tiempoRestanteTexto,
+      tiempoDetalleBadge,
+      minutosRestantes: diffMinutos,
+    };
+  }
+
+  private parseDayToNumber(dayStr: string): number {
+    if (!dayStr) return -1;
+    const d = dayStr
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+    if (d.startsWith('dom')) return 0;
+    if (d.startsWith('lun')) return 1;
+    if (d.startsWith('mar')) return 2;
+    if (d.startsWith('mi') || d.includes('ier')) return 3;
+    if (d.startsWith('jue')) return 4;
+    if (d.startsWith('vie')) return 5;
+    if (d.startsWith('sab')) return 6;
+    return -1;
+  }
+
+  private sanitizeDayName(dayStr: string): string {
+    const num = this.parseDayToNumber(dayStr);
+    switch (num) {
+      case 0: return 'Domingo';
+      case 1: return 'Lunes';
+      case 2: return 'Martes';
+      case 3: return 'Miércoles';
+      case 4: return 'Jueves';
+      case 5: return 'Viernes';
+      case 6: return 'Sábado';
+      default: return dayStr || '';
+    }
+  }
+
+  private parseTime(timeStr: string): { hours: number; minutes: number } | null {
+    if (!timeStr) return null;
+    const parts = timeStr.trim().split(':');
+    if (parts.length < 2) return null;
+    const hours = parseInt(parts[0], 10);
+    const minutes = parseInt(parts[1], 10);
+    if (isNaN(hours) || isNaN(minutes)) return null;
+    return { hours, minutes };
+  }
+
+  private parseScheduleString(schedule: string): Array<{ dia: string; horaInicio: string; horaFin: string }> {
+    if (!schedule) return [];
+    const res: Array<{ dia: string; horaInicio: string; horaFin: string }> = [];
+
+    const timeMatch = schedule.match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+    if (!timeMatch) return [];
+
+    const horaInicio = timeMatch[1];
+    const horaFin = timeMatch[2];
+
+    const diasDetectados: string[] = [];
+    const lower = schedule
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+    if (lower.includes('lun')) diasDetectados.push('Lunes');
+    if (lower.includes('mar')) diasDetectados.push('Martes');
+    if (lower.includes('mie')) diasDetectados.push('Miércoles');
+    if (lower.includes('jue')) diasDetectados.push('Jueves');
+    if (lower.includes('vie')) diasDetectados.push('Viernes');
+    if (lower.includes('sab')) diasDetectados.push('Sábado');
+    if (lower.includes('dom')) diasDetectados.push('Domingo');
+
+    for (const d of diasDetectados) {
+      res.push({ dia: d, horaInicio, horaFin });
+    }
+    return res;
   }
 }
 

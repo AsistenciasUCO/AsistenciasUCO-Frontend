@@ -1,6 +1,12 @@
 export interface DecanoItem {
   id: string;
+  tipoIdentificacion?: string;
+  tipoIdentificacionId?: string;
   numeroIdentificacion: string;
+  primerNombre?: string;
+  segundoNombre?: string;
+  primerApellido?: string;
+  segundoApellido?: string;
   nombres: string;
   apellidos: string;
   correo: string;
@@ -12,7 +18,13 @@ export interface DecanoItem {
 
 export interface CoordinadorItem {
   id: string;
+  tipoIdentificacion?: string;
+  tipoIdentificacionId?: string;
   numeroIdentificacion: string;
+  primerNombre?: string;
+  segundoNombre?: string;
+  primerApellido?: string;
+  segundoApellido?: string;
   nombres: string;
   apellidos: string;
   correo: string;
@@ -25,7 +37,13 @@ export interface CoordinadorItem {
 
 export interface DocenteItem {
   id: string;
+  tipoIdentificacion?: string;
+  tipoIdentificacionId?: string;
   numeroIdentificacion: string;
+  primerNombre?: string;
+  segundoNombre?: string;
+  primerApellido?: string;
+  segundoApellido?: string;
   nombres: string;
   apellidos: string;
   correo: string;
@@ -147,7 +165,7 @@ export interface PlanEstudioItem {
   totalCreditos: number;
   totalSemestres: number;
   totalAsignaturas: number;
-  estado: 'VIGENTE' | 'EN_TRANSICION' | 'HISTORICO';
+  estado: 'VIGENTE' | 'EN_TRANSICION' | 'HISTORICO' | 'INACTIVO';
   descripcion: string;
 }
 
@@ -200,12 +218,12 @@ export interface PeriodoAcademicoItem {
   nombre: string;
   fechaInicio: string;
   fechaFin: string;
-  fechaLimiteNotas: string;
-  estado: 'ACTIVO' | 'PLANEACION' | 'CERRADO';
+  fechaLimiteNotas?: string;
+  estado: 'ACTIVO' | 'PLANEACION' | 'CERRADO' | 'INACTIVO';
   esActual?: boolean;
 }
 
-// ================= FASE 5: CATÁLOGOS INSTITUCIONALES (HU147 - HU155, HU161 - HU167) =================
+// ================= FASE 5: CATÁLOGOS INSTITUCIONALES =================
 
 export interface SedeInstitucionalItem {
   id: string;
@@ -252,7 +270,7 @@ export interface AreaConocimientoItem {
   estado: 'ACTIVO' | 'INACTIVO';
 }
 
-// ================= FASE 6: PARÁMETROS, AUDITORÍA Y CIERRE MASIVO (HU168 - HU174) =================
+// ================= FASE 6: PARÁMETROS, AUDITORÍA Y CIERRE MASIVO =================
 
 export interface ParametroInstitucionalItem {
   id: string;

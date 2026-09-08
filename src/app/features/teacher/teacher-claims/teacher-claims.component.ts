@@ -13,6 +13,7 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
 import { ToastService } from '../../../shared/components/toast/toast.component';
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
+import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
 
 type VistaDocenteReclamos = 'BANDEJA' | 'RESOLUCION';
 
@@ -113,7 +114,7 @@ type VistaDocenteReclamos = 'BANDEJA' | 'RESOLUCION';
                     <div class="flex flex-wrap items-start justify-between gap-2 mb-2">
                       <div class="flex flex-wrap items-center gap-2">
                         <span class="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-warm-100 text-warm-700">
-                          {{ reclamo.id }}
+                          REC-#{{ reclamo.id.slice(0, 8).toUpperCase() }}
                         </span>
                         @if (reclamo.categoria) {
                           <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200">
@@ -206,7 +207,7 @@ type VistaDocenteReclamos = 'BANDEJA' | 'RESOLUCION';
           </button>
 
           <span class="text-xs font-mono font-bold px-2.5 py-1 rounded-md bg-warm-100 text-warm-800">
-            Expediente: {{ selectedReclamo()?.id }}
+            Expediente: REC-#{{ selectedReclamo()?.id?.slice(0, 8)?.toUpperCase() }}
           </span>
         </div>
 
@@ -431,12 +432,18 @@ export class TeacherClaimsComponent implements OnInit {
           this.volverABandeja();
         }
       },
-      error: () => this.toast.error('Error al procesar el reclamo.'),
+      error: (err) => this.toast.error(getApiErrorMessage(err)),
     });
   }
 
   descargarSoporte(adjunto: SoporteAdjuntoItem): void {
-    this.toast.success(`Descargando comprobante "${adjunto.nombre}" (${adjunto.tamanioKb} KB)...`);
+    if (adjunto.urlSimulada) {
+      const url = adjunto.urlSimulada.startsWith('http')
+        ? adjunto.urlSimulada
+        : `http://localhost:8080${adjunto.urlSimulada}`;
+      window.open(url, '_blank');
+    }
+    this.toast.success(`Abriendo comprobante "${adjunto.nombre}" (${adjunto.tamanioKb} KB)...`);
   }
 
   getReclamoBadgeVariant(estado: EstadoSolicitudRevision): BadgeVariant {

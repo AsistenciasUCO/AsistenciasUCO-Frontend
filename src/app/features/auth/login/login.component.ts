@@ -1,130 +1,181 @@
 import { Component, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { ActivatedRoute } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
-import { UserRole } from '../../../core/models/user.model';
-import { MOCK_USERS_LIST } from '../../../core/mocks/user.mock';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { CardComponent } from '../../../shared/components/card/card.component';
-import { BadgeComponent } from '../../../shared/components/badge/badge.component';
-import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
 
 @Component({
   selector: 'app-login',
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     ButtonComponent,
     CardComponent,
-    BadgeComponent,
-    AvatarComponent,
   ],
   template: `
-    <div class="w-full max-w-lg mx-auto animate-fade-in space-y-4">
+    <div class="w-full max-w-md mx-auto animate-fade-in space-y-4">
       <app-card [glass]="true" padding="lg">
-        <div class="mb-5 text-center space-y-2">
-          <div class="inline-flex p-3 rounded-2xl bg-warm-100/90 border border-warm-200/80 mb-1 shadow-warm-sm">
-            <img src="logo.svg" alt="Gestió Asistencia Logo" class="w-10 h-10 object-contain shrink-0" />
+        <!-- Encabezado Institucional -->
+        <div class="mb-6 text-center space-y-2">
+          <div class="inline-flex p-3.5 rounded-2xl bg-warm-100/90 border border-warm-200/80 mb-1 shadow-warm-sm">
+            <img src="logo.svg" alt="Gestió Asistencia Logo" class="w-11 h-11 object-contain shrink-0" />
           </div>
           <h2 class="font-serif font-bold text-2xl sm:text-3xl text-warm-900 tracking-tight">
             Gestió Asistencia UCO
           </h2>
-          <p class="text-xs text-warm-500 max-w-sm mx-auto">
-            Selecciona uno de los 5 usuarios de prueba para ingresar directamente y evaluar las vistas por rol.
+          <p class="text-xs text-warm-600 max-w-sm mx-auto leading-relaxed">
+            Ingresa con tus credenciales institucionales para acceder a la gestión de asistencia académica.
           </p>
         </div>
 
-        @if (isMockMode()) {
-          <!-- Selector de Usuarios de Prueba -->
-          <div class="space-y-2.5">
-            <div class="flex items-center justify-between px-1">
-              <span class="text-xs font-bold uppercase tracking-wider text-warm-500">
-                Usuarios de Prueba (Mocks Activos)
-              </span>
-              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-50 text-primary-800 border border-primary-200">
-                Desacoplado
-              </span>
-            </div>
-
-            <div class="space-y-2 max-h-[360px] overflow-y-auto pr-1">
-              @for (user of testUsers; track user.id) {
-                <button
-                  type="button"
-                  (click)="loginWithMockUser(user.role)"
-                  class="w-full flex items-center justify-between p-3 rounded-xl border border-warm-200/90 bg-white hover:bg-warm-50/80 hover:border-primary-400/80 hover:shadow-warm-sm transition-all duration-200 text-left group"
-                >
-                  <div class="flex items-center gap-3 min-w-0">
-                    <app-avatar [name]="user.name" size="md"></app-avatar>
-                    <div class="min-w-0">
-                      <div class="flex items-center gap-2">
-                        <p class="text-xs font-bold text-warm-900 truncate group-hover:text-primary-800">
-                          {{ user.name }}
-                        </p>
-                      </div>
-                      <p class="text-[11px] text-warm-500 truncate">{{ user.email }}</p>
-                      <p class="text-[10px] text-warm-400 truncate">{{ user.department }}</p>
-                    </div>
-                  </div>
-
-                  <div class="shrink-0 flex items-center gap-2">
-                    <app-badge [variant]="getRoleBadgeVariant(user.role)">
-                      {{ user.role }}
-                    </app-badge>
-                    <svg class="w-4 h-4 text-warm-300 group-hover:text-primary-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
-                </button>
-              }
-            </div>
-          </div>
-        } @else {
-          <div class="space-y-4 pt-2">
-            <app-button
-              variant="primary"
-              type="button"
-              [fullWidth]="true"
-              [loading]="isLoading()"
-              size="lg"
-              (clicked)="onLogin()"
-            >
-              Iniciar Sesión con Keycloak
-            </app-button>
+        <!-- Mensaje de Error si las credenciales fallan -->
+        @if (errorMessage()) {
+          <div class="mb-4 p-3 rounded-xl bg-red-50/90 border border-red-200 text-red-700 text-xs flex items-center gap-2.5 animate-fade-in shadow-sm">
+            <svg class="w-4 h-4 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span class="font-medium">{{ errorMessage() }}</span>
           </div>
         }
+
+        <!-- Formulario de Inicio de Sesión Institucional -->
+        <form (ngSubmit)="onSubmit()" class="space-y-4">
+            <!-- Campo Correo Institucional -->
+            <div class="space-y-1.5 text-left">
+              <label for="usernameInput" class="block text-xs font-bold uppercase tracking-wider text-warm-700">
+                Correo Institucional
+              </label>
+              <div class="relative flex items-center">
+                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-warm-400">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
+                  </svg>
+                </div>
+                <input
+                  id="usernameInput"
+                  name="username"
+                  type="email"
+                  [(ngModel)]="username"
+                  placeholder="ej. usuario@uco.edu.co"
+                  required
+                  autocomplete="email"
+                  class="w-full pl-10 pr-4 py-2.5 bg-white/80 border border-warm-300 rounded-xl text-xs sm:text-sm text-warm-900 placeholder:text-warm-400 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 transition-all"
+                />
+              </div>
+            </div>
+
+            <!-- Campo Contraseña -->
+            <div class="space-y-1.5 text-left">
+              <label for="passwordInput" class="block text-xs font-bold uppercase tracking-wider text-warm-700">
+                Contraseña
+              </label>
+              <div class="relative flex items-center">
+                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-warm-400">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <input
+                  id="passwordInput"
+                  name="password"
+                  [type]="showPassword() ? 'text' : 'password'"
+                  [(ngModel)]="password"
+                  placeholder="••••••••"
+                  required
+                  autocomplete="current-password"
+                  class="w-full pl-10 pr-11 py-2.5 bg-white/80 border border-warm-300 rounded-xl text-xs sm:text-sm text-warm-900 placeholder:text-warm-400 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 transition-all"
+                />
+                <button
+                  type="button"
+                  (click)="toggleShowPassword()"
+                  tabindex="-1"
+                  class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-warm-400 hover:text-warm-700 transition-colors"
+                  [title]="showPassword() ? 'Ocultar contraseña' : 'Ver contraseña'"
+                >
+                  @if (showPassword()) {
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                    </svg>
+                  } @else {
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  }
+                </button>
+              </div>
+            </div>
+
+            <!-- Botón de Envío -->
+            <div class="pt-2">
+              <app-button
+                variant="primary"
+                type="submit"
+                [fullWidth]="true"
+                [loading]="isLoading()"
+                size="lg"
+              >
+                Ingresar al Sistema
+              </app-button>
+            </div>
+          </form>
       </app-card>
     </div>
   `,
 })
 export class LoginComponent {
   private authService = inject(AuthService);
+  private route = inject(ActivatedRoute);
+
+  username = '';
+  password = '';
+  showPassword = signal<boolean>(false);
   isLoading = signal<boolean>(false);
-  isMockMode = this.authService.isMockMode;
-  testUsers = MOCK_USERS_LIST;
+  errorMessage = signal<string>('');
 
-  loginWithMockUser(role: UserRole): void {
-    this.authService.loginAsMockUser(role, true);
+  toggleShowPassword(): void {
+    this.showPassword.update((v) => !v);
   }
 
-  onLogin(): void {
+  async onSubmit(): Promise<void> {
+    this.errorMessage.set('');
+
+    const trimmedUsername = this.username.trim();
+    const trimmedPassword = this.password.trim();
+
+    if (!trimmedUsername && !trimmedPassword) {
+      this.errorMessage.set('Los campos Correo Institucional y Contraseña son obligatorios.');
+      return;
+    }
+    if (!trimmedUsername) {
+      this.errorMessage.set('El campo Correo Institucional es obligatorio.');
+      return;
+    }
+    if (!trimmedPassword) {
+      this.errorMessage.set('El campo Contraseña es obligatorio.');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedUsername)) {
+      this.errorMessage.set('El campo Correo Institucional debe tener un formato de correo válido (ej. usuario@uco.edu.co).');
+      return;
+    }
+
     this.isLoading.set(true);
-    this.authService.loginWithKeycloak();
-  }
-
-  getRoleBadgeVariant(role: UserRole): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
-    switch (role) {
-      case 'ADMINISTRADOR':
-      case 'ADMIN':
-        return 'danger';
-      case 'DECANO':
-        return 'warning';
-      case 'COORDINADOR':
-        return 'info';
-      case 'DOCENTE':
-        return 'success';
-      case 'ESTUDIANTE':
-        return 'neutral';
-      default:
-        return 'neutral';
+    try {
+      await this.authService.loginWithCredentials(trimmedUsername, trimmedPassword);
+    } catch (error: any) {
+      console.error('Error al iniciar sesión:', error);
+      this.errorMessage.set(
+        error?.message || 'Error al autenticar. Verifica tu usuario y contraseña.'
+      );
+    } finally {
+      this.isLoading.set(false);
     }
   }
 }
+

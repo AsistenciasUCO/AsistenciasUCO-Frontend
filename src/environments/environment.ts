@@ -1,15 +1,40 @@
+function getHost(): string {
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    return window.location.hostname;
+  }
+  return 'localhost';
+}
+
 export const environment = {
   production: false,
-  apiUrl: (window as any)['env']?.['API_URL'] || 'http://localhost:8080/api/v1',
-  useMocks:
-    typeof localStorage !== 'undefined' && localStorage.getItem('USE_MOCKS') !== null
-      ? localStorage.getItem('USE_MOCKS') === 'true'
-      : (window as any)['env']?.['USE_MOCKS'] === 'false'
-        ? false
-        : true,
+  get apiUrl(): string {
+    const explicit = (window as any)['env']?.['API_URL'];
+    if (explicit) return explicit;
+    const host = getHost();
+    return `http://${host}:8080/api/v1`;
+  },
+  get useFrontendMocks(): boolean {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('USE_MOCKS') !== null) {
+      return localStorage.getItem('USE_MOCKS') === 'true';
+    }
+    return (window as any)['env']?.['USE_MOCKS'] === 'true' || false;
+  },
+  get useMocks(): boolean {
+    return this.useFrontendMocks;
+  },
+  features: {
+    sessionsEnabled: true,
+    attendanceEnabled: true,
+  },
   keycloak: {
-    url: (window as any)['env']?.['KEYCLOAK_URL'] || 'http://127.0.0.1:8081',
+    get url(): string {
+      const explicit = (window as any)['env']?.['KEYCLOAK_URL'];
+      if (explicit) return explicit;
+      const host = getHost();
+      return `http://${host}:8081`;
+    },
     realm: (window as any)['env']?.['KEYCLOAK_REALM'] || 'asistencias-uco',
-    clientId: (window as any)['env']?.['KEYCLOAK_CLIENT_ID'] || 'asistencias-uco-frontend',
+    clientId: (window as any)['env']?.['KEYCLOAK_CLIENT_ID'] || 'asistencias-frontend',
   },
 };
+

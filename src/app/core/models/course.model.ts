@@ -13,4 +13,8 @@ export interface Course {
   docenteId?: string;
   colorCategory: 'emerald' | 'amber' | 'blue' | 'purple';
   sessions?: ClassSession[];
+  asignaturaId?: string;
+  dias?: string[];
+  horaInicio?: string;
+  horaFin?: string;
 }

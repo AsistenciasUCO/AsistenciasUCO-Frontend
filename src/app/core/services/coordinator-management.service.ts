@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+﻿import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of, delay, catchError } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -178,6 +178,39 @@ export class CoordinatorManagementService {
     return this.http.put<ApiResponse<PlanEstudioItem>>(`${environment.apiUrl}/coordinador/planes-estudio/${id}`, cambios);
   }
 
+  toggleEstadoPlanEstudio(id: string): Observable<ApiResponse<any>> {
+    if (environment.useMocks) {
+      let estadoNuevo: 'VIGENTE' | 'INACTIVO' = 'INACTIVO';
+      this.planesSignal.update((prev) =>
+        prev.map((p) => {
+          if (p.id === id) {
+            estadoNuevo = p.estado === 'VIGENTE' ? 'INACTIVO' : 'VIGENTE';
+            return { ...p, estado: estadoNuevo };
+          }
+          return p;
+        })
+      );
+
+      return of({
+        idTransaccion: `mock-tx-plan-toggle-${id}`,
+        exitoso: true,
+        mensajeUsuario: `Estado del plan actualizado a ${estadoNuevo}.`,
+        datos: { id, estado: estadoNuevo },
+      }).pipe(delay(200));
+    }
+
+    return this.http.patch<ApiResponse<any>>(`${environment.apiUrl}/coordinador/planes-estudio/${id}/toggle-estado`, {}).pipe(
+      catchError(() =>
+        of({
+          idTransaccion: 'error-plan-toggle',
+          exitoso: false,
+          mensajeUsuario: 'No fue posible actualizar el estado del plan de estudios.',
+          datos: null,
+        })
+      )
+    );
+  }
+
   getAsignaturasPorPlan(planId: string): Observable<ApiResponse<AsignaturaPlanItem[]>> {
     if (environment.useMocks) {
       const asignaturas = this.asignaturasSignal()[planId] || [];
@@ -286,7 +319,7 @@ export class CoordinatorManagementService {
     return this.http.delete<ApiResponse<boolean>>(`${environment.apiUrl}/coordinador/planes-estudio/${planId}/asignaturas/${asigId}`);
   }
 
-  // --- PERÍODOS ACADÉMICOS (HU096 - HU098) ---
+  // --- PERÍODOS ACADÉMICOS ---
   getPeriodosAcademicos(): Observable<ApiResponse<PeriodoAcademicoItem[]>> {
     if (environment.useMocks) {
       return of({
@@ -350,7 +383,28 @@ export class CoordinatorManagementService {
     return this.http.put<ApiResponse<PeriodoAcademicoItem>>(`${environment.apiUrl}/coordinador/periodos-academicos/${id}`, cambios);
   }
 
-  // --- DIRECTORIO INSTITUCIONAL DE ESTUDIANTES (HU156 - HU160) ---
+  toggleEstadoPeriodoAcademico(id: string): Observable<ApiResponse<any>> {
+    if (environment.useMocks) {
+      return of({ idTransaccion: 'mock-tx-toggle-per', exitoso: true, datos: { id, estado: 'ACTIVO' } });
+    }
+    return this.http.patch<ApiResponse<any>>(`${environment.apiUrl}/coordinador/periodos-academicos/${id}/estado`, {});
+  }
+
+  agregarSemestrePlan(planId: string): Observable<ApiResponse<any>> {
+    if (environment.useMocks) {
+      return of({ idTransaccion: 'mock-tx-add-sem', exitoso: true, datos: { planEstudioId: planId } });
+    }
+    return this.http.post<ApiResponse<any>>(`${environment.apiUrl}/coordinador/planes-estudio/${planId}/semestres`, {});
+  }
+
+  eliminarSemestrePlan(planId: string, semestreNumero: number): Observable<ApiResponse<any>> {
+    if (environment.useMocks) {
+      return of({ idTransaccion: 'mock-tx-del-sem', exitoso: true, datos: { planEstudioId: planId, semestreEliminado: semestreNumero } });
+    }
+    return this.http.delete<ApiResponse<any>>(`${environment.apiUrl}/coordinador/planes-estudio/${planId}/semestres/${semestreNumero}`);
+  }
+
+  // --- DIRECTORIO INSTITUCIONAL DE ESTUDIANTES ---
   private estudiantesSignal = signal<EstudianteDirectorioItem[]>([...MOCK_ESTUDIANTES_DIRECTORIO]);
   private solicitudesMatriculaSignal = signal<SolicitudMatriculaItem[]>([...MOCK_SOLICITUDES_MATRICULA]);
 
@@ -441,7 +495,7 @@ export class CoordinatorManagementService {
     return this.http.delete<ApiResponse<boolean>>(`${environment.apiUrl}/grupos/${grupoId}/estudiantes/${estudianteId}`);
   }
 
-  // --- SOLICITUDES DE INSCRIPCIÓN Y CUPO (HU026, HU053, HU054) ---
+  // --- SOLICITUDES DE INSCRIPCIÓN Y CUPO ---
   getSolicitudesMatricula(): Observable<ApiResponse<SolicitudMatriculaItem[]>> {
     if (environment.useMocks) {
       return of({

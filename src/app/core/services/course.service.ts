@@ -45,24 +45,27 @@ export class CourseService {
       }).pipe(delay(250));
     }
 
-    return this.http.get<any[]>(`${environment.apiUrl}/grupos`).pipe(
-      map((grupos: any[]) => ({
-        idTransaccion: 'tx-courses-001',
-        exitoso: true,
-        total: grupos ? grupos.length : 0,
-        datos: grupos ? grupos.map((g, idx) => ({
-          id: g.id,
-          code: g.codigo || g.codigoGrupo || `GRP-00${idx + 1}`,
-          name: g.nombreAsignatura || g.nombreMateria || g.nombre || 'Asignatura',
-          section: g.nombre || g.seccion || 'Sección A',
-          schedule: g.horario || 'Lun, Mié 08:00 - 10:00 AM',
-          room: g.aula || 'Aula Principal',
-          enrolledStudentsCount: g.estudiantesActivos || g.totalEstudiantes || 0,
-          cupoMaximo: g.cupoMaximo || 35,
-          docenteName: g.nombreDocente || 'Docente UCO',
-          colorCategory: (['emerald', 'amber', 'blue', 'purple'][idx % 4]) as any,
-        })) : []
-      })),
+    return this.http.get<any>(`${environment.apiUrl}/grupos`).pipe(
+      map((res: any) => {
+        const grupos: any[] = Array.isArray(res) ? res : (res && res.datos ? res.datos : []);
+        return {
+          idTransaccion: 'tx-courses-001',
+          exitoso: true,
+          total: grupos ? grupos.length : 0,
+          datos: grupos ? grupos.map((g, idx) => ({
+            id: g.id,
+            code: g.codigo || g.codigoGrupo || `GRP-00${idx + 1}`,
+            name: g.nombreAsignatura || g.nombreMateria || g.nombre || 'Asignatura',
+            section: g.nombre || g.seccion || 'Sección A',
+            schedule: g.horario || 'Lun, Mié 08:00 - 10:00 AM',
+            room: g.aula || 'Aula Principal',
+            enrolledStudentsCount: g.estudiantesActivos || g.totalEstudiantes || 0,
+            cupoMaximo: g.cupoMaximo || 35,
+            docenteName: g.nombreDocente || 'Docente UCO',
+            colorCategory: (['emerald', 'amber', 'blue', 'purple'][idx % 4]) as any,
+          })) : []
+        };
+      }),
       catchError(() =>
         of({
           idTransaccion: 'tx-courses-error',
@@ -103,7 +106,46 @@ export class CourseService {
       }).pipe(delay(250));
     }
 
-    return this.http.post<ApiResponse<Course>>(`${environment.apiUrl}/grupos`, cursoCreado);
+    return this.http.post<ApiResponse<Course>>(`${environment.apiUrl}/grupos`, {
+      ...cursoCreado,
+      asignaturaId: (nuevo as any).asignaturaId,
+      dias: (nuevo as any).dias,
+      horaInicio: (nuevo as any).horaInicio,
+      horaFin: (nuevo as any).horaFin,
+      schedule: nuevo.schedule,
+      generarSesionesAutomaticas: (nuevo as any).generarSesionesAutomaticas,
+    });
+  }
+
+  getAsignaturasDocente(): Observable<ApiResponse<any[]>> {
+    if (environment.useMocks) {
+      return of({
+        idTransaccion: 'mock-tx-asig-docente',
+        exitoso: true,
+        total: 2,
+        datos: [
+          { id: 'E2F3A4B5-0000-0000-0000-000000000001', codigo: 'ARQ-402', nombre: 'Arquitectura de Software', creditos: 3, nombrePrograma: 'Ingeniería de Sistemas' },
+          { id: '12E18E5A-6AE2-43BD-8A99-5CC694D801C3', codigo: 'IS-302', nombre: 'Ingeniería de Software I', creditos: 4, nombrePrograma: 'Ingeniería de Sistemas' },
+        ],
+      }).pipe(delay(150));
+    }
+
+    return this.http.get<any>(`${environment.apiUrl}/docente/asignaturas`).pipe(
+      map((res: any) => ({
+        idTransaccion: res.idTransaccion || 'tx-docente-asig',
+        exitoso: true,
+        total: res.total || (res.datos ? res.datos.length : 0),
+        datos: res.datos || [],
+      })),
+      catchError(() =>
+        of({
+          idTransaccion: 'tx-docente-asig-error',
+          exitoso: true,
+          total: 0,
+          datos: [],
+        })
+      )
+    );
   }
 
   actualizarGrupo(id: string, cambios: Partial<Course>): Observable<ApiResponse<Course>> {

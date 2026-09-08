@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed } from '@angular/core';
+﻿import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminManagementService } from '../../../core/services/admin-management.service';
@@ -28,7 +28,7 @@ type TabAdminSystem = 'PARAMETROS' | 'AUDITORIA' | 'CIERRE_MASIVO';
           </div>
           <h1 class="text-2xl font-serif font-bold text-warm-900">Sistema, Auditoría y Consolidación</h1>
           <p class="text-sm text-warm-600">
-            Ajuste de reglas de inasistencia, logs de auditoría y cierre masivo de asistencia por período (HU168 - HU174).
+            Ajuste de reglas de inasistencia, logs de auditoría y cierre masivo de asistencia por período.
           </p>
         </div>
 
@@ -69,11 +69,11 @@ type TabAdminSystem = 'PARAMETROS' | 'AUDITORIA' | 'CIERRE_MASIVO';
           class="px-4 py-3 text-sm flex items-center gap-2 transition-colors"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          <span>Cierre Masivo de Asistencia (HU173 - HU174)</span>
+          <span>Cierre Masivo de Asistencia</span>
         </button>
       </div>
 
-      <!-- ================= TAB 1: PARÁMETROS DEL SISTEMA (HU168, HU169) ================= -->
+      <!-- ================= TAB 1: PARÁMETROS DEL SISTEMA ================= -->
       @if (tabActiva() === 'PARAMETROS') {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
           @for (p of parametros(); track p.id) {
@@ -139,7 +139,7 @@ type TabAdminSystem = 'PARAMETROS' | 'AUDITORIA' | 'CIERRE_MASIVO';
         </div>
       }
 
-      <!-- ================= TAB 2: AUDITORÍA Y TRAZABILIDAD (HU170 - HU172) ================= -->
+      <!-- ================= TAB 2: AUDITORÍA Y TRAZABILIDAD ================= -->
       @if (tabActiva() === 'AUDITORIA') {
         <div class="space-y-4">
           <!-- Filtros de Auditoría -->
@@ -223,7 +223,7 @@ type TabAdminSystem = 'PARAMETROS' | 'AUDITORIA' | 'CIERRE_MASIVO';
         </div>
       }
 
-      <!-- ================= TAB 3: CIERRE MASIVO DE ASISTENCIA (HU173, HU174) ================= -->
+      <!-- ================= TAB 3: CIERRE MASIVO DE ASISTENCIA ================= -->
       @if (tabActiva() === 'CIERRE_MASIVO') {
         <div class="space-y-6">
           <div class="bg-gradient-to-r from-primary-900 to-primary-950 text-white rounded-2xl p-6 shadow-md flex flex-col md:flex-row items-center justify-between gap-6">
@@ -233,7 +233,7 @@ type TabAdminSystem = 'PARAMETROS' | 'AUDITORIA' | 'CIERRE_MASIVO';
               </span>
               <h2 class="text-xl font-serif font-bold text-white">Simulador de Cierre Masivo de Asistencia</h2>
               <p class="text-xs text-warm-200 max-w-xl">
-                Al ejecutar el cierre, el sistema congela todas las sesiones del período seleccionado, computa el porcentaje final de inasistencias de cada estudiante matriculado y emite las actas oficiales de aprobación y reprobación por fallas (HU173, HU174).
+                Al ejecutar el cierre, el sistema congela todas las sesiones del período seleccionado, computa el porcentaje final de inasistencias de cada estudiante matriculado y emite las actas oficiales de aprobación y reprobación por fallas.
               </p>
             </div>
 

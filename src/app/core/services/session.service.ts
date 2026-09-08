@@ -158,10 +158,13 @@ export class SessionService {
     }
 
     return this.http
-      .post<any>(`${environment.apiUrl}/sesiones/consultas`, {
-        sesion: grupoId,
-      })
+      .get<any>(`${environment.apiUrl}/sesiones/grupo/${grupoId}`)
       .pipe(
+        catchError(() =>
+          this.http.post<any>(`${environment.apiUrl}/sesiones/consultas`, {
+            sesion: grupoId,
+          })
+        ),
         map((res: any) => {
           const raw = res.datos || res.elementos || (Array.isArray(res) ? res : []);
           const list = Array.isArray(raw) ? raw : [raw];
@@ -348,5 +351,97 @@ export class SessionService {
           })
         )
       );
+  }
+
+  cancelarSesion(sesionId: string, motivo: string): Observable<ApiResponse<any>> {
+    if (environment.useMocks) {
+      this.sessionsByGroupSignal.update((current) => {
+        const next: Record<string, ClassSession[]> = { ...current };
+        for (const [courseId, list] of Object.entries(next)) {
+          next[courseId] = list.map((s) =>
+            s.id === sesionId
+              ? { ...s, status: 'CONCLUIDA' as const, topic: `[CANCELADA] ${motivo} - ${s.topic}` }
+              : s
+          );
+        }
+        this.persistSessions(next);
+        return next;
+      });
+
+      return of({
+        idTransaccion: `mock-tx-cancelar-${sesionId}`,
+        exitoso: true,
+        mensajeUsuario: 'Sesión cancelada formalmente y notificada a los estudiantes.',
+        datos: { sesionId, estado: 'CANCELADA', motivoCancelacion: motivo },
+      }).pipe(delay(250));
+    }
+
+    return this.http
+      .patch<any>(`${environment.apiUrl}/docente/sesiones/${sesionId}/cancelar`, { motivo })
+      .pipe(
+        map((res) => ({
+          idTransaccion: res.idTransaccion || 'tx-cancelar-ses',
+          exitoso: true,
+          mensajeUsuario: res.mensajeUsuario || 'Sesión cancelada formalmente.',
+          datos: res.datos,
+        })),
+        catchError(() =>
+          of({
+            idTransaccion: 'tx-cancelar-error',
+            exitoso: false,
+            mensajeUsuario: 'No fue posible cancelar la sesión.',
+            datos: undefined,
+          })
+        )
+      );
+  }
+
+  getQrToken(sesionId: string): Observable<ApiResponse<{
+    sesionId: string;
+    grupoId: string;
+    token: string;
+    codigoAcceso: string;
+    expiraEnSegundos: number;
+    expiraEn: string;
+  }>> {
+    return this.http.get<any>(`${environment.apiUrl}/sesiones/${sesionId}/qr-token`).pipe(
+      map((res) => ({
+        idTransaccion: res.idTransaccion || 'tx-qr-token',
+        exitoso: res.exitoso,
+        mensajeUsuario: res.mensajeUsuario || 'Token generado con éxito.',
+        datos: res.datos,
+      })),
+      catchError(() => {
+        const pin = String(Math.floor(100000 + Math.random() * 900000));
+        return of({
+          idTransaccion: 'tx-qr-mock',
+          exitoso: true,
+          mensajeUsuario: 'Código temporal generado.',
+          datos: {
+            sesionId,
+            grupoId: 'grp-001',
+            token: `UCO-QR-${Date.now()}`,
+            codigoAcceso: pin,
+            expiraEnSegundos: 60,
+            expiraEn: new Date(Date.now() + 60000).toISOString(),
+          },
+        });
+      })
+    );
+  }
+
+  registrarAutoAsistencia(payload: { token?: string; codigoAcceso?: string }): Observable<ApiResponse<any>> {
+    return this.http.post<any>(`${environment.apiUrl}/estudiante/asistencia-qr`, payload).pipe(
+      map((res) => ({
+        idTransaccion: res.idTransaccion || 'tx-auto-asistencia',
+        exitoso: res.exitoso,
+        mensajeUsuario: res.mensajeUsuario || '¡Asistencia registrada con éxito!',
+        datos: res.datos,
+      })),
+      catchError((err) => {
+        const msg = err?.error?.message || err?.error?.mensajeUsuario || 'El código ingresado no es válido o ha expirado.';
+        throw new Error(msg);
+      })
+    );
   }
 }

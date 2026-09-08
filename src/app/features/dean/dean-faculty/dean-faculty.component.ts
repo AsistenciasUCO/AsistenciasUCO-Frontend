@@ -7,6 +7,14 @@ import { AdminManagementService } from '../../../core/services/admin-management.
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
 import { Course } from '../../../core/models/course.model';
 import { ClassSession } from '../../../core/models/attendance.model';
+import {
+  PlanEstudioItem,
+  AsignaturaPlanItem,
+} from '../../../core/models/role-management.model';
+import {
+  MOCK_PLANES_ESTUDIO,
+  MOCK_ASIGNATURAS_PLAN,
+} from '../../../core/mocks/role-management.mock';
 import { CardComponent } from '../../../shared/components/card/card.component';
 import { BadgeComponent } from '../../../shared/components/badge/badge.component';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
@@ -247,6 +255,65 @@ type SubVistaDecano = 'LISTA' | 'DETALLE_GRUPO';
               </div>
             </div>
 
+            <!-- Programas Académicos y Planes de Estudio de la Facultad (HU107, HU108, HU112, HU119) -->
+            <div>
+              <div class="flex items-center justify-between mb-3">
+                <div>
+                  <h3 class="font-serif font-bold text-lg text-warm-900">Programas Académicos de la Facultad</h3>
+                  <p class="text-xs text-warm-500">Mallas curriculares, modalidades formativas y planes de estudio vigentes.</p>
+                </div>
+                <span class="text-xs font-bold px-3 py-1 rounded-full bg-primary-50 text-primary-800 border border-primary-200">
+                  {{ programasFacultad().length }} Programas Activos
+                </span>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                @for (prog of programasFacultad(); track prog.codigo) {
+                  <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm hover:border-primary-300 transition-all flex flex-col justify-between h-full space-y-3">
+                    <div>
+                      <div class="flex items-center justify-between gap-2 mb-1.5">
+                        <span class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-warm-100 text-warm-800">{{ prog.codigo }}</span>
+                        <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                              [class]="prog.estado === 'ACTIVO' ? 'bg-emerald-100 text-emerald-800' : 'bg-warm-200 text-warm-700'">
+                          {{ prog.estado }}
+                        </span>
+                      </div>
+                      <h4 class="font-serif font-bold text-base text-warm-900">{{ prog.nombre }}</h4>
+                      <p class="text-xs text-warm-500 mt-0.5">{{ prog.nivel }} • {{ prog.modalidad }}</p>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 py-2.5 border-y border-warm-100 text-xs text-warm-700 bg-warm-50/60 rounded-xl px-3 text-center">
+                      <div>
+                        <span class="text-[10px] text-warm-400 font-bold uppercase block">Créditos</span>
+                        <span class="font-bold text-warm-900">{{ prog.totalCreditos }}</span>
+                      </div>
+                      <div>
+                        <span class="text-[10px] text-warm-400 font-bold uppercase block">Semestres</span>
+                        <span class="font-bold text-warm-900">{{ prog.totalSemestres }}</span>
+                      </div>
+                      <div>
+                        <span class="text-[10px] text-warm-400 font-bold uppercase block">Asignaturas</span>
+                        <span class="font-bold text-warm-900">{{ prog.totalAsignaturas || 54 }}</span>
+                      </div>
+                    </div>
+
+                    <div class="pt-1">
+                      <button
+                        type="button"
+                        (click)="verPlanEstudio(prog)"
+                        class="w-full py-2 px-3 bg-primary-50 hover:bg-primary-100 text-primary-900 rounded-xl text-xs font-bold border border-primary-200 transition-colors inline-flex items-center justify-center gap-1.5"
+                      >
+                        <svg class="w-3.5 h-3.5 text-primary-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Ver Plan de Estudios & Asignaturas →
+                      </button>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+
             <!-- Áreas de Conocimiento de la Facultad -->
             <div>
               <h3 class="font-serif font-bold text-lg text-warm-900 mb-3">Áreas Temáticas y de Conocimiento</h3>
@@ -303,7 +370,6 @@ type SubVistaDecano = 'LISTA' | 'DETALLE_GRUPO';
                     <div class="space-y-1 text-xs text-warm-600 pt-2 border-t border-warm-100 mt-2">
                       <p>Inicio: <strong>{{ p.fechaInicio }}</strong></p>
                       <p>Finalización: <strong>{{ p.fechaFin }}</strong></p>
-                      <p class="text-primary-800">Límite Notas: <strong>{{ p.fechaLimiteNotas }}</strong></p>
                     </div>
                   </div>
 
@@ -413,6 +479,89 @@ type SubVistaDecano = 'LISTA' | 'DETALLE_GRUPO';
           </div>
         </div>
       }
+
+      <!-- MODAL: PLAN DE ESTUDIOS Y ASIGNATURAS POR SEMESTRE (HU108, HU084) -->
+      @if (planVisualizado()) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-warm-950/40 backdrop-blur-xs animate-fade-in">
+          <div class="bg-white border border-warm-200 rounded-3xl max-w-3xl w-full shadow-warm-xl overflow-hidden animate-slide-down">
+            <!-- Header Modal -->
+            <div class="p-6 bg-warm-50 border-b border-warm-200/80 flex items-start justify-between">
+              <div>
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-primary-100 text-primary-900 border border-primary-200">
+                    {{ planVisualizado()?.codigo }}
+                  </span>
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                    {{ planVisualizado()?.estado }}
+                  </span>
+                </div>
+                <h3 class="font-serif font-bold text-2xl text-warm-900">
+                  {{ planVisualizado()?.nombre }}
+                </h3>
+                <p class="text-xs text-warm-600 mt-1">
+                  Programa: <strong>{{ planVisualizado()?.programa }}</strong> • {{ planVisualizado()?.totalCreditos }} créditos en {{ planVisualizado()?.totalSemestres }} semestres
+                </p>
+              </div>
+
+              <button
+                type="button"
+                (click)="cerrarPlanEstudio()"
+                class="text-warm-400 hover:text-warm-700 p-1.5 rounded-xl hover:bg-warm-100 transition-colors"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Body Modal -->
+            <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              <p class="text-xs text-warm-600 leading-relaxed bg-warm-50 p-3.5 rounded-xl border border-warm-100">
+                {{ planVisualizado()?.descripcion }}
+              </p>
+
+              <div class="flex items-center justify-between">
+                <h4 class="font-serif font-bold text-base text-warm-900">
+                  Malla Curricular de Asignaturas
+                </h4>
+                <span class="text-xs font-bold px-2.5 py-1 rounded-lg bg-warm-100 text-warm-800">
+                  {{ asignaturasPlan().length }} Asignaturas
+                </span>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                @for (asig of asignaturasPlan(); track asig.id) {
+                  <div class="p-3 bg-white rounded-xl border border-warm-200 shadow-warm-xs flex justify-between items-center text-xs">
+                    <div>
+                      <div class="flex items-center gap-1.5">
+                        <span class="font-mono font-bold text-primary-800">{{ asig.codigo }}</span>
+                        <span class="font-bold text-warm-900">{{ asig.nombre }}</span>
+                      </div>
+                      <div class="text-[10px] text-warm-500 mt-0.5">
+                        Semestre {{ asig.semestre }} • Área: {{ asig.area }}
+                      </div>
+                    </div>
+                    <span class="px-2 py-1 rounded-md bg-warm-100 text-warm-800 font-bold text-[11px] shrink-0">
+                      {{ asig.creditos }} cr.
+                    </span>
+                  </div>
+                }
+              </div>
+            </div>
+
+            <!-- Footer Modal -->
+            <div class="p-4 bg-warm-50 border-t border-warm-200 flex justify-end">
+              <button
+                type="button"
+                (click)="cerrarPlanEstudio()"
+                class="px-4 py-2 bg-warm-200 hover:bg-warm-300 text-warm-800 font-semibold text-xs rounded-xl transition-colors"
+              >
+                Cerrar Plan
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
 })
@@ -435,6 +584,56 @@ export class DeanFacultyComponent implements OnInit {
 
   selectedCourse = signal<Course | null>(null);
   sessions = signal<ClassSession[]>([]);
+
+  planVisualizado = signal<PlanEstudioItem | null>(null);
+  asignaturasPlan = signal<AsignaturaPlanItem[]>([]);
+
+  programasFacultad = signal<any[]>([
+    {
+      codigo: 'PRG-SIS',
+      nombre: 'Ingeniería de Sistemas',
+      nivel: 'Pregrado Profesional',
+      modalidad: 'Presencial Diurna',
+      totalCreditos: 160,
+      totalSemestres: 10,
+      totalAsignaturas: 54,
+      estado: 'ACTIVO',
+      planEstudioId: 'PLAN-SIS-2024',
+    },
+    {
+      codigo: 'PRG-IND',
+      nombre: 'Ingeniería Industrial',
+      nivel: 'Pregrado Profesional',
+      modalidad: 'Presencial Diurna/Nocturna',
+      totalCreditos: 165,
+      totalSemestres: 10,
+      totalAsignaturas: 56,
+      estado: 'ACTIVO',
+      planEstudioId: 'PLAN-SIS-2020',
+    },
+    {
+      codigo: 'PRG-ELE',
+      nombre: 'Ingeniería Electrónica',
+      nivel: 'Pregrado Profesional',
+      modalidad: 'Presencial Diurna',
+      totalCreditos: 162,
+      totalSemestres: 10,
+      totalAsignaturas: 52,
+      estado: 'ACTIVO',
+      planEstudioId: 'PLAN-SIS-2024',
+    },
+    {
+      codigo: 'PRG-AGR',
+      nombre: 'Ingeniería Agroindustrial',
+      nivel: 'Pregrado Profesional',
+      modalidad: 'Presencial Diurna',
+      totalCreditos: 158,
+      totalSemestres: 10,
+      totalAsignaturas: 50,
+      estado: 'ACTIVO',
+      planEstudioId: 'PLAN-SIS-2020',
+    },
+  ]);
 
   // Paginación Grupos
   currentPageCourses = 1;
@@ -483,5 +682,15 @@ export class DeanFacultyComponent implements OnInit {
       next: (res) => this.sessions.set(res.datos || []),
     });
     this.subVista.set('DETALLE_GRUPO');
+  }
+
+  verPlanEstudio(prog: any): void {
+    const plan = MOCK_PLANES_ESTUDIO.find((p) => p.id === prog.planEstudioId) || MOCK_PLANES_ESTUDIO[0];
+    this.planVisualizado.set(plan);
+    this.asignaturasPlan.set(MOCK_ASIGNATURAS_PLAN[plan.id] || MOCK_ASIGNATURAS_PLAN['PLAN-SIS-2024'] || []);
+  }
+
+  cerrarPlanEstudio(): void {
+    this.planVisualizado.set(null);
   }
 }
