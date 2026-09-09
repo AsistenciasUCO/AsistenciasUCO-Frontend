@@ -422,7 +422,7 @@ export class DeanCoordinadoresComponent implements OnInit {
           this.toast.success(res.mensajeUsuario || 'Estado actualizado.');
         }
       },
-      error: () => this.toast.error('Error al actualizar estado.'),
+      error: (err) => this.toast.error(getApiErrorMessage(err)),
     });
   }
 

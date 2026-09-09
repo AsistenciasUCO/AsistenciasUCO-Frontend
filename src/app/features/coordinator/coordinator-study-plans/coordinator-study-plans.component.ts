@@ -1091,7 +1091,7 @@ export class CoordinatorStudyPlansComponent implements OnInit, OnDestroy {
   cargarAsignaturas(planId: string): void {
     this.coordService.getAsignaturasPorPlan(planId).subscribe({
       next: (res) => this.asignaturas.set(res.datos || []),
-      error: () => this.toast.error('Error al cargar asignaturas del plan.'),
+      error: (err) => this.toast.error(getApiErrorMessage(err)),
     });
   }
 

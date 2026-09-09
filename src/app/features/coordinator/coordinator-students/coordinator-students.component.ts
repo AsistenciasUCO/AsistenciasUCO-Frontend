@@ -656,7 +656,7 @@ export class CoordinatorStudentsComponent implements OnInit {
           }
         }
       },
-      error: () => this.toast.error('Error al procesar solicitud.'),
+      error: (err) => this.toast.error(getApiErrorMessage(err)),
     });
   }
 

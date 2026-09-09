@@ -1679,7 +1679,7 @@ export class TeacherGruposComponent implements OnInit {
                   this.obtenerQrParaSesion(created.datos.id);
                 }
               },
-              error: () => this.toast.error('No fue posible iniciar la sesión para proyectar el QR.'),
+              error: (err) => this.toast.error(getApiErrorMessage(err)),
             });
           return;
         }
@@ -1688,7 +1688,7 @@ export class TeacherGruposComponent implements OnInit {
         this.modalProyeccionVisible.set(true);
         this.obtenerQrParaSesion(activa.id);
       },
-      error: () => this.toast.error('Error al consultar sesiones del grupo.'),
+      error: (err) => this.toast.error(getApiErrorMessage(err)),
     });
   }
 
@@ -1947,7 +1947,7 @@ export class TeacherGruposComponent implements OnInit {
           this.toast.error(res.mensajeUsuario || 'No fue posible cancelar la sesión.');
         }
       },
-      error: () => this.toast.error('Error al procesar la cancelación de la sesión.'),
+      error: (err) => this.toast.error(getApiErrorMessage(err)),
     });
   }
 }

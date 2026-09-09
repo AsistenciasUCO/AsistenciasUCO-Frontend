@@ -1121,7 +1121,7 @@ export class StudentCoursesComponent implements OnInit {
           this.cargarSesiones(materia.id);
         }
       },
-      error: () => this.toast.error('Error al retirar la solicitud de revisión.'),
+      error: (err) => this.toast.error(getApiErrorMessage(err)),
     });
   }
 
