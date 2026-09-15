@@ -1,4 +1,5 @@
 import { Component, signal, computed, HostListener, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -6,6 +7,7 @@ import { StudentService } from '../../../core/services/student.service';
 import { SessionService } from '../../../core/services/session.service';
 import { AttendanceService } from '../../../core/services/attendance.service';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
+import { AttendanceRealtimeSyncService } from './attendance-realtime-sync.service';
 import { CardComponent } from '../../../shared/components/card/card.component';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { BadgeComponent } from '../../../shared/components/badge/badge.component';
@@ -665,6 +667,7 @@ export class AttendanceControlComponent {
   private sessionService = inject(SessionService);
   private coordinatorService = inject(CoordinatorManagementService);
   private attendanceService = inject(AttendanceService);
+  private attendanceRealtimeSync = inject(AttendanceRealtimeSyncService);
   private http = inject(HttpClient);
 
   readonly sessionsEnabled = environment.features.sessionsEnabled;
@@ -755,6 +758,23 @@ export class AttendanceControlComponent {
         }
       },
     });
+
+    // Refresca la asistencia visible cuando llega ASISTENCIA_REGISTRADA para
+    // el grupo/sesión actualmente seleccionados (registro individual; el
+    // guardado por lote no publica este evento todavía, ver docs/frontend-realtime.md).
+    this.attendanceRealtimeSync
+      .watch(
+        () => this.selectedCourseId(),
+        () => this.selectedSessionId()
+      )
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => {
+        const courseId = this.selectedCourseId();
+        const sessionId = this.selectedSessionId();
+        if (courseId && sessionId) {
+          this.cargarEstudiantesYSesion(courseId, sessionId);
+        }
+      });
   }
 
   sessionOptions = computed<SelectOption[]>(() => {

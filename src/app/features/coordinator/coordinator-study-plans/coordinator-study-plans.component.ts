@@ -1,9 +1,7 @@
-import { Component, OnInit, OnDestroy, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subscription } from 'rxjs';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
-import { RealtimeService } from '../../../core/services/realtime.service';
 import {
   PlanEstudioItem,
   AsignaturaPlanItem,
@@ -838,11 +836,9 @@ type SubVistaPlan = 'LISTA' | 'FORM_PLAN' | 'MALLA' | 'FORM_ASIGNATURA';
     </div>
   `,
 })
-export class CoordinatorStudyPlansComponent implements OnInit, OnDestroy {
+export class CoordinatorStudyPlansComponent implements OnInit {
   private coordService = inject(CoordinatorManagementService);
-  private realtimeService = inject(RealtimeService);
   private toast = inject(ToastService);
-  private realtimeSubs = new Subscription();
 
   pestanaActiva = signal<PestanaCurricular>('PLANES');
 
@@ -935,37 +931,6 @@ export class CoordinatorStudyPlansComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.cargarPlanes();
     this.cargarPeriodos();
-    this.iniciarSuscripcionRealtime();
-  }
-
-  ngOnDestroy(): void {
-    this.realtimeSubs.unsubscribe();
-  }
-
-  private iniciarSuscripcionRealtime(): void {
-    // Sincronización en tiempo real de períodos académicos
-    this.realtimeSubs.add(
-      this.realtimeService.listenTopic('PERIODOS').subscribe({
-        next: (evt) => {
-          this.cargarPeriodos();
-          const cod = evt.data?.codigo || evt.data?.nombre || '';
-          const detalle = cod ? ` (${cod})` : '';
-          this.toast.info(`La lista de períodos se ha actualizado${detalle}.`);
-        },
-      })
-    );
-
-    // Sincronización en tiempo real de planes de estudio
-    this.realtimeSubs.add(
-      this.realtimeService.listenTopic('PLANES').subscribe({
-        next: (evt) => {
-          this.cargarPlanes();
-          const cod = evt.data?.nombre || evt.data?.codigo || '';
-          const detalle = cod ? ` (${cod})` : '';
-          this.toast.info(`La lista de planes de estudio se ha actualizado${detalle}.`);
-        },
-      })
-    );
   }
 
   cambiarPestana(p: PestanaCurricular): void {

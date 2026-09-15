@@ -6,6 +6,8 @@ import { correlationInterceptor } from './core/interceptors/correlation.intercep
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
 import { AuthService } from './core/services/auth.service';
+import { REALTIME_TRANSPORT } from './core/realtime/contract/realtime-transport';
+import { FetchSseRealtimeTransport } from './core/realtime/adapter/sse/fetch-sse-realtime-transport';
 
 export function initializeKeycloak(authService: AuthService) {
   return () => authService.initKeycloak();
@@ -16,6 +18,7 @@ export const appConfig: ApplicationConfig = {
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
     provideHttpClient(withInterceptors([correlationInterceptor, authInterceptor, errorInterceptor])),
+    { provide: REALTIME_TRANSPORT, useClass: FetchSseRealtimeTransport },
     {
       provide: APP_INITIALIZER,
       useFactory: initializeKeycloak,
