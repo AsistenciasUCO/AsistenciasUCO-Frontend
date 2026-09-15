@@ -985,7 +985,7 @@ export class AttendanceControlComponent {
               }
             }
 
-            const records: any[] = estudiantes.map((e) => ({
+            const records: any[] = estudiantes.map((e: any) => ({
               studentId: e.id,
               studentName: e.nombreCompleto,
               studentCode: e.codigo,
@@ -998,7 +998,7 @@ export class AttendanceControlComponent {
             );
           },
           error: () => {
-            const records: any[] = estudiantes.map((e) => ({
+            const records: any[] = estudiantes.map((e: any) => ({
               studentId: e.id,
               studentName: e.nombreCompleto,
               studentCode: e.codigo,

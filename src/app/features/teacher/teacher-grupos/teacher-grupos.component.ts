@@ -1632,7 +1632,7 @@ export class TeacherGruposComponent implements OnInit {
         const course = this.selectedCourse();
         const filtrados = course
           ? todos.filter(
-              (r) =>
+              (r: any) =>
                 !r.materiaNombre ||
                 r.materiaNombre.toLowerCase().includes(course.name.toLowerCase()) ||
                 r.materiaCodigo.toLowerCase().includes(course.code.toLowerCase())
@@ -1683,7 +1683,7 @@ export class TeacherGruposComponent implements OnInit {
             });
           return;
         }
-        const activa = list.find((s) => s.status !== 'CONCLUIDA') || list[0];
+        const activa = list.find((s: any) => s.status !== 'CONCLUIDA') || list[0];
         this.sesionActivaId.set(activa.id);
         this.modalProyeccionVisible.set(true);
         this.obtenerQrParaSesion(activa.id);

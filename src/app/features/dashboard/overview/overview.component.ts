@@ -1068,7 +1068,7 @@ export class OverviewComponent implements OnInit, OnDestroy {
           next: (res) => {
             if (res.exitoso && res.datos) {
               this.courses = res.datos;
-              const total = res.datos.reduce((acc, c) => acc + (c.enrolledStudentsCount || 0), 0);
+              const total = res.datos.reduce((acc: number, c: Course) => acc + (c.enrolledStudentsCount || 0), 0);
               this.totalStudentsCount.set(total);
               this.recalcularProximaClase();
             }
@@ -1079,7 +1079,7 @@ export class OverviewComponent implements OnInit, OnDestroy {
         this.claimService.getReclamosDocente().subscribe({
           next: (res) => {
             if (res.exitoso && res.datos) {
-              const pending = res.datos.filter((c) => c.estadoSolicitud === 'PENDIENTE').length;
+              const pending = res.datos.filter((c: any) => c.estadoSolicitud === 'PENDIENTE').length;
               this.pendingClaimsCount.set(pending);
             }
           },
@@ -1101,8 +1101,8 @@ export class OverviewComponent implements OnInit, OnDestroy {
             if (res.exitoso && res.datos) {
               this.materias.set(res.datos);
               if (res.datos.length > 0) {
-                const avg = Math.round(res.datos.reduce((acc, m) => acc + m.porcentajeAsistencia, 0) / res.datos.length);
-                const absences = res.datos.reduce((acc, m) => acc + m.inasistencias, 0);
+                const avg = Math.round(res.datos.reduce((acc: number, m: any) => acc + m.porcentajeAsistencia, 0) / res.datos.length);
+                const absences = res.datos.reduce((acc: number, m: any) => acc + m.inasistencias, 0);
                 this.averageStudentAttendance.set(avg);
                 this.totalStudentAbsences.set(absences);
               }
