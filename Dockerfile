@@ -6,7 +6,7 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 # Copiar manifiestos de dependencias
-COPY package*.json ./
+COPY package*.json .npmrc ./
 
 # Instalar dependencias limpias
 RUN npm ci
