@@ -81,4 +81,21 @@ export class AttendanceService {
       }
     );
   }
+
+  saveBatchAttendance(payload: {
+    sesionId: string;
+    grupoId?: string;
+    registros: Array<{
+      studentId: string;
+      status: string;
+      notes?: string;
+      observaciones?: string;
+    }>;
+  }): Observable<ApiMessageResponse> {
+    return this.http.post<ApiMessageResponse>(
+      `${environment.apiUrl}/asistencias/lote`,
+      payload
+    );
+  }
 }
+

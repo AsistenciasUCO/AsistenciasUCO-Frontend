@@ -7,13 +7,33 @@ import { AuthService } from '../services/auth.service';
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
 
-  if (!isApiRequest(req.url) || !authService.isAuthenticated()) {
+  if (!isApiRequest(req.url)) {
     return next(req);
   }
 
-  return from(authService.refreshToken(30)).pipe(
-    switchMap((refreshed) => {
-      const token = refreshed ? authService.getAccessToken() : undefined;
+  // Limpia tokens mock heredados si ya no estamos en modo mock.
+  const currentToken = authService.token();
+  if (currentToken && !authService.isMockMode() && currentToken.startsWith('mock-')) {
+    authService.clearSession();
+    return next(req);
+  }
+
+  if (authService.isMockMode()) {
+    return currentToken
+      ? next(
+          req.clone({
+            headers: req.headers.set('Authorization', `Bearer ${currentToken}`),
+          })
+        )
+      : next(req);
+  }
+
+  if (!authService.isAuthenticated()) {
+    return next(req);
+  }
+
+  return from(authService.getValidAccessToken(30)).pipe(
+    switchMap((token) => {
       if (!token) {
         return next(req);
       }

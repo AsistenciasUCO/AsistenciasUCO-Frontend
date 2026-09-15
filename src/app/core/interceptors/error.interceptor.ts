@@ -11,11 +11,13 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   return next(req).pipe(
     catchError((error) => {
       if (error.status === 401) {
-        authService.clearSession();
-        if (!router.url.startsWith('/login')) {
-          router.navigate(['/login'], {
-            queryParams: { returnUrl: router.url },
-          });
+        if (authService.isAuthenticated() && !req.url.includes('/openid-connect/token')) {
+          authService.clearSession();
+          if (!router.url.startsWith('/login')) {
+            router.navigate(['/login'], {
+              queryParams: { returnUrl: router.url },
+            });
+          }
         }
       }
 

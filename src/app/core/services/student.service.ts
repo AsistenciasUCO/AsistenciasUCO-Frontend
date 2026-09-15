@@ -21,6 +21,8 @@ export interface EnrollStudentFormValue {
   password: string;
 }
 
+export type EnrollStudentDTO = EnrollStudentFormValue;
+
 @Injectable({
   providedIn: 'root',
 })
@@ -43,7 +45,7 @@ export class StudentService {
       primerNombre: dto.primerNombre.trim(),
       primerApellido: dto.primerApellido.trim(),
       correo: dto.correoElectronico.trim(),
-      password: dto.password,
+      password: dto.password?.trim() ? dto.password.trim() : 'Test1234!',
     };
 
     if (dto.segundoNombre?.trim()) {

@@ -19,6 +19,8 @@ export interface ClassSession {
   date: string; // ISO format (YYYY-MM-DD)
   startTime: string;
   endTime: string;
+  room?: string;
+  tipo?: 'REGULAR' | 'EXTRAORDINARIA' | 'REPOSICION';
   status: 'PROGRAMADA' | 'EN_CURSO' | 'CONCLUIDA';
   records: StudentAttendance[];
 }

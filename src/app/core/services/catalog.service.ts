@@ -1,8 +1,11 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, delay, of } from 'rxjs';
+import { Observable, delay, map, of } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { TipoIdentificacionApiDto } from '../api/models/tipo-identificacion-api-dto.model';
+
+export type IdentityDocumentTypeDTO = TipoIdentificacionApiDto;
+export type TipoIdentificacionItem = TipoIdentificacionApiDto;
 
 export const MOCK_DOCUMENT_TYPES: TipoIdentificacionApiDto[] = [
   { id: 'A1B2C3D4-0000-0000-0000-000000000001', tipoIdentificacion: 'CC', nombre: 'Cedula de Ciudadania' },
@@ -24,6 +27,18 @@ export class CatalogService {
 
     return this.http.get<TipoIdentificacionApiDto[]>(
       `${environment.apiUrl}/tipos-identificacion`
+    );
+  }
+
+  getTiposIdentificacion(): Observable<{ exitoso: boolean; datos: TipoIdentificacionApiDto[] }> {
+    if (environment.useFrontendMocks) {
+      return of({ exitoso: true, datos: MOCK_DOCUMENT_TYPES }).pipe(delay(200));
+    }
+
+    return this.http.get<TipoIdentificacionApiDto[]>(
+      `${environment.apiUrl}/tipos-identificacion`
+    ).pipe(
+      map((items) => ({ exitoso: true, datos: items }))
     );
   }
 }

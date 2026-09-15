@@ -219,7 +219,7 @@ export class RegisterComponent implements OnInit {
   primerApellido = '';
   segundoApellido = '';
   email = '';
-  password = '';
+  password = 'Test1234!';
 
   isLoading = signal<boolean>(false);
   showToast = signal<boolean>(false);
@@ -252,8 +252,9 @@ export class RegisterComponent implements OnInit {
     const identificationResult = parseIdentificationNumber(
       this.numeroIdentificacion
     );
+    const effectivePassword = this.password.trim() || 'Test1234!';
     const passwordError = getPasswordValidationError(
-      this.password,
+      effectivePassword,
       this.numeroIdentificacion
     );
     const fieldErrors: Partial<Record<RegisterField, string>> = {};
@@ -262,13 +263,15 @@ export class RegisterComponent implements OnInit {
       fieldErrors.numeroIdentificacion = identificationResult.error;
     }
     if (!this.primerNombre.trim()) {
-      fieldErrors.primerNombre = 'El primer nombre es obligatorio.';
+      fieldErrors.primerNombre = 'El campo Primer Nombre es obligatorio.';
     }
     if (!this.primerApellido.trim()) {
-      fieldErrors.primerApellido = 'El primer apellido es obligatorio.';
+      fieldErrors.primerApellido = 'El campo Primer Apellido es obligatorio.';
     }
     if (!this.email.trim()) {
-      fieldErrors.correo = 'El correo es obligatorio.';
+      fieldErrors.correo = 'El campo Correo Institucional es obligatorio.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.email.trim())) {
+      fieldErrors.correo = 'El campo Correo Institucional debe tener un formato válido (ej. usuario@uco.edu.co).';
     }
     if (passwordError) {
       fieldErrors.password = passwordError;
@@ -279,11 +282,12 @@ export class RegisterComponent implements OnInit {
       Object.keys(fieldErrors).length > 0
     ) {
       if (!this.tipoIdentificacionId) {
-        fieldErrors.tipoIdIdentificacion = 'El tipo de documento es obligatorio.';
+        fieldErrors.tipoIdIdentificacion = 'El campo Tipo de Documento es obligatorio.';
       }
       this.fieldErrors.set(fieldErrors);
       this.toastType.set('error');
-      this.toastMessage.set('Revise los campos del formulario.');
+      const errVals = Object.values(fieldErrors);
+      this.toastMessage.set(errVals.length === 1 ? errVals[0]! : `Campos con error en el formulario: ${Object.keys(fieldErrors).join(', ')}.`);
       this.showToast.set(true);
       return;
     }
@@ -302,7 +306,7 @@ export class RegisterComponent implements OnInit {
       primerApellido: this.primerApellido.trim(),
       segundoApellido: this.segundoApellido.trim(),
       correo: this.email.trim(),
-      password: this.password,
+      password: effectivePassword,
     };
 
     this.userService.createUser(request).subscribe({

@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host " Iniciando Frontend Angular (AsistenciasUCO) " -ForegroundColor Cyan
@@ -13,4 +13,3 @@ if (-not (Test-Path "node_modules")) {
 
 Write-Host "[INFO] Ejecutando servidor de desarrollo Angular..." -ForegroundColor Green
 npm start
-

@@ -1,7 +1,11 @@
 import { Component, signal, computed, HostListener, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
 import { StudentService } from '../../../core/services/student.service';
+import { SessionService } from '../../../core/services/session.service';
+import { AttendanceService } from '../../../core/services/attendance.service';
+import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
 import { CardComponent } from '../../../shared/components/card/card.component';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { BadgeComponent } from '../../../shared/components/badge/badge.component';
@@ -119,7 +123,7 @@ type StudentEnrollmentField =
 
         </div>
 
-        <!-- Fila Inferior: Selectores de Curso / Sesión alineados -->
+        <!-- Fila Inferior: Selectores de Curso / Sesión alineados + Botón Nueva Sesión -->
         <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center text-xs">
           <div class="md:col-span-5">
             <app-form-select
@@ -129,7 +133,7 @@ type StudentEnrollmentField =
             ></app-form-select>
           </div>
 
-          <div class="md:col-span-7">
+          <div class="md:col-span-5">
             <app-form-select
               [options]="sessionOptions()"
               [value]="selectedSessionId()"
@@ -137,8 +141,42 @@ type StudentEnrollmentField =
               (valueChange)="onSessionSelect($event)"
             ></app-form-select>
           </div>
+
+          <div class="md:col-span-2 flex justify-end">
+            <app-button
+              variant="primary"
+              size="sm"
+              [disabled]="!selectedCourseId()"
+              (clicked)="openNewSessionModal()"
+            >
+              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              + Sesión
+            </app-button>
+          </div>
         </div>
       </header>
+
+      @if (sessions().length === 0 && selectedCourseId() && !isLoadingSession()) {
+        <div class="bg-white p-8 rounded-2xl border border-dashed border-warm-300 text-center space-y-3 shadow-warm-xs">
+          <div class="w-12 h-12 rounded-full bg-primary-50 text-primary-700 flex items-center justify-center mx-auto">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h3 class="font-serif font-bold text-base text-warm-900">No hay sesiones programadas para este grupo</h3>
+          <p class="text-xs text-warm-600 max-w-md mx-auto">
+            Programa la primera sesión de clase ahora mismo para comenzar a registrar la asistencia de tus alumnos.
+          </p>
+          <app-button variant="primary" size="md" (clicked)="openNewSessionModal()">
+            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Programar Primera Sesión
+          </app-button>
+        </div>
+      }
 
       <!-- 2. Barra Unificada Compacta: Buscador + Filtros -->
       <section class="flex flex-col md:flex-row gap-3 items-center justify-between bg-white p-3.5 rounded-2xl border border-warm-200 shadow-warm-sm">
@@ -503,6 +541,116 @@ type StudentEnrollmentField =
       </form>
     </app-modal>
 
+    <!-- MODAL: Programar Nueva Sesión -->
+    <app-modal
+      [isOpen]="isNewSessionModalOpen()"
+      title="Programar Nueva Sesión de Clase"
+      (closed)="isNewSessionModalOpen.set(false)"
+    >
+      <form (submit)="onCreateSessionSubmit($event)" class="space-y-4">
+        <p class="text-xs text-warm-600">
+          Crea una nueva sesión para {{ currentCourse()?.name }} ({{ currentCourse()?.code }}).
+        </p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <app-form-field label="Tipo de Sesión" [required]="true">
+            <select
+              [(ngModel)]="newSessionForm.tipo"
+              name="tipoSesion"
+              class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="REGULAR">Sesión Regular de Cronograma</option>
+              <option value="EXTRAORDINARIA">Sesión Extraordinaria</option>
+              <option value="REPOSICION">Sesión de Reposición</option>
+            </select>
+          </app-form-field>
+
+          <app-form-field label="Fecha de la Sesión" [required]="true">
+            <input
+              type="date"
+              [(ngModel)]="newSessionForm.date"
+              name="fechaSesion"
+              required
+              class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </app-form-field>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <app-form-field label="Hora Inicio" [required]="true">
+            <input
+              type="time"
+              [(ngModel)]="newSessionForm.startTime"
+              name="horaInicio"
+              required
+              class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </app-form-field>
+
+          <app-form-field label="Hora Fin" [required]="true">
+            <input
+              type="time"
+              [(ngModel)]="newSessionForm.endTime"
+              name="horaFin"
+              required
+              class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </app-form-field>
+        </div>
+
+        <app-form-field label="Aula / Espacio Físico">
+          <input
+            type="text"
+            [(ngModel)]="newSessionForm.room"
+            name="aula"
+            placeholder="Ej. Aula 302, Laboratorio 1..."
+            class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </app-form-field>
+
+        <app-form-field label="Título de la Sesión" [required]="true">
+          <input
+            type="text"
+            [(ngModel)]="newSessionForm.title"
+            name="titulo"
+            required
+            placeholder="Ej. Sesión #1 - Presentación y Fundamentos"
+            class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </app-form-field>
+
+        <app-form-field label="Temática / Descripción">
+          <textarea
+            [(ngModel)]="newSessionForm.topic"
+            name="descripcion"
+            rows="2"
+            placeholder="Breve descripción del tema a tratar..."
+            class="w-full bg-white text-warm-900 border border-warm-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+          ></textarea>
+        </app-form-field>
+
+        <div modal-footer class="flex items-center justify-end gap-2 w-full pt-2">
+          <app-button
+            variant="ghost"
+            size="sm"
+            [disabled]="isCreatingSession()"
+            (clicked)="isNewSessionModalOpen.set(false)"
+          >
+            Cancelar
+          </app-button>
+          <app-button
+            variant="primary"
+            size="sm"
+            type="submit"
+            [loading]="isCreatingSession()"
+            [disabled]="isCreatingSession() || !newSessionForm.title.trim() || !newSessionForm.date"
+          >
+            Crear Sesión
+          </app-button>
+        </div>
+      </form>
+    </app-modal>
+
     <!-- Feedback Toast -->
     <app-toast
       [visible]="showToast()"
@@ -514,6 +662,10 @@ type StudentEnrollmentField =
 })
 export class AttendanceControlComponent {
   private courseService = inject(CourseService);
+  private sessionService = inject(SessionService);
+  private coordinatorService = inject(CoordinatorManagementService);
+  private attendanceService = inject(AttendanceService);
+  private http = inject(HttpClient);
 
   readonly sessionsEnabled = environment.features.sessionsEnabled;
   readonly attendanceEnabled = environment.features.attendanceEnabled;
@@ -534,6 +686,19 @@ export class AttendanceControlComponent {
 
   private catalogService = inject(CatalogService);
 
+  isNewSessionModalOpen = signal<boolean>(false);
+  isCreatingSession = signal<boolean>(false);
+
+  newSessionForm = {
+    tipo: 'REGULAR' as 'REGULAR' | 'EXTRAORDINARIA' | 'REPOSICION',
+    title: '',
+    topic: '',
+    date: new Date().toISOString().split('T')[0],
+    startTime: '08:00',
+    endTime: '10:00',
+    room: '',
+  };
+
   isRegisterModalOpen = signal<boolean>(false);
   isEnrolling = signal<boolean>(false);
 
@@ -544,7 +709,7 @@ export class AttendanceControlComponent {
   newStudentLastName = signal<string>('');
   newStudentSecondLastName = signal<string>('');
   newStudentEmail = signal<string>('');
-  newStudentPassword = signal<string>('');
+  newStudentPassword = signal<string>('Test1234!');
   studentFieldErrors = signal<
     Partial<Record<StudentEnrollmentField, string>>
   >({});
@@ -576,7 +741,8 @@ export class AttendanceControlComponent {
     });
 
     this.courseService.getTeacherCourses().subscribe({
-      next: (courses) => {
+      next: (res: any) => {
+        const courses: Course[] = Array.isArray(res) ? res : (res?.datos || []);
         this.courses = courses;
         this.courseOptions.set(
           courses.map((course) => ({
@@ -671,12 +837,120 @@ export class AttendanceControlComponent {
     this.showKeyboardHelper.update((val) => !val);
   }
 
+  openNewSessionModal() {
+    const course = this.currentCourse();
+    const nextNumber = this.sessions().length + 1;
+    this.newSessionForm = {
+      tipo: 'REGULAR',
+      title: `Sesión #${nextNumber} - Clase Magistral`,
+      topic: 'Control de asistencia y desarrollo temático',
+      date: new Date().toISOString().split('T')[0],
+      startTime: '08:00',
+      endTime: '10:00',
+      room: course?.room || 'Aula Principal',
+    };
+    this.isNewSessionModalOpen.set(true);
+  }
+
+  onCreateSessionSubmit(event: Event) {
+    event.preventDefault();
+    const courseId = this.selectedCourseId();
+    if (!courseId) {
+      this.toastType.set('warning');
+      this.toastMessage.set('Selecciona una asignatura antes de programar una sesión.');
+      this.showToast.set(true);
+      return;
+    }
+
+    if (!this.newSessionForm.title.trim()) {
+      this.toastType.set('warning');
+      this.toastMessage.set('El campo Título de la Sesión es obligatorio.');
+      this.showToast.set(true);
+      return;
+    }
+
+    if (!this.newSessionForm.date) {
+      this.toastType.set('warning');
+      this.toastMessage.set('El campo Fecha de la Sesión es obligatorio.');
+      this.showToast.set(true);
+      return;
+    }
+
+    if (!this.newSessionForm.startTime || !this.newSessionForm.endTime) {
+      this.toastType.set('warning');
+      this.toastMessage.set('Los campos Hora Inicio y Hora Fin son obligatorios.');
+      this.showToast.set(true);
+      return;
+    }
+
+    if (this.newSessionForm.startTime >= this.newSessionForm.endTime) {
+      this.toastType.set('warning');
+      this.toastMessage.set('El campo Hora Fin debe ser posterior a la Hora Inicio de la sesión.');
+      this.showToast.set(true);
+      return;
+    }
+
+    this.isCreatingSession.set(true);
+
+    this.sessionService
+      .createSession(courseId, {
+        title: this.newSessionForm.title.trim(),
+        topic: this.newSessionForm.topic.trim(),
+        date: this.newSessionForm.date,
+        startTime: this.newSessionForm.startTime,
+        endTime: this.newSessionForm.endTime,
+        room: this.newSessionForm.room.trim(),
+        tipo: this.newSessionForm.tipo,
+      })
+      .subscribe({
+        next: (res) => {
+          this.isCreatingSession.set(false);
+          this.isNewSessionModalOpen.set(false);
+          this.toastType.set('success');
+          this.toastMessage.set(res?.mensajeUsuario || 'Sesión de clase programada exitosamente.');
+          this.showToast.set(true);
+
+          this.sessionService.getSessionsByGroup(courseId).subscribe({
+            next: (sRes) => {
+              const list = sRes.datos || [];
+              this.sessions.set(list);
+              if (res?.datos?.id) {
+                this.onSessionSelect(res.datos.id);
+              } else if (list.length > 0) {
+                this.onSessionSelect(list[list.length - 1].id);
+              }
+            },
+          });
+        },
+        error: (err) => {
+          this.isCreatingSession.set(false);
+          this.toastType.set('error');
+          this.toastMessage.set(getApiErrorMessage(err) || 'Error al programar la sesión de clase.');
+          this.showToast.set(true);
+        },
+      });
+  }
+
   onCourseSelect(courseId: string) {
     this.selectedCourseId.set(courseId);
     this.isLoadingSession.set(true);
     this.sessions.set([]);
     this.selectedSessionId.set('');
-    this.isLoadingSession.set(false);
+
+    this.sessionService.getSessionsByGroup(courseId).subscribe({
+      next: (res) => {
+        const list = res.datos || [];
+        this.sessions.set(list);
+        this.isLoadingSession.set(false);
+        if (list.length > 0) {
+          this.onSessionSelect(list[0].id);
+        }
+      },
+      error: () => {
+        this.isLoadingSession.set(false);
+        this.sessions.set([]);
+      },
+    });
   }
 
   onSessionSelect(sessionId: string) {
@@ -686,6 +960,59 @@ export class AttendanceControlComponent {
 
     this.triggerSkeleton(() => {
       this.selectedSessionId.set(sessionId);
+      this.cargarEstudiantesYSesion(this.selectedCourseId(), sessionId);
+    });
+  }
+
+  cargarEstudiantesYSesion(courseId: string, sessionId: string) {
+    if (!courseId || !sessionId) return;
+
+    this.coordinatorService.getEstudiantesPorGrupo(courseId).subscribe({
+      next: (res) => {
+        const estudiantes = res.datos || [];
+        this.attendanceService.getAttendancesByGroup(courseId, sessionId).subscribe({
+          next: (attRes) => {
+            const attMap = new Map<string, AttendanceStatus>();
+            const obsMap = new Map<string, string>();
+            if (attRes.datos) {
+              for (const a of attRes.datos) {
+                const estId = a.estudiante || (a as any).estudianteId;
+                if (estId) {
+                  const status: AttendanceStatus = (a as any).estado || (a as any).status || (a.presente === false ? 'SJC' : 'AN');
+                  attMap.set(estId, status);
+                  obsMap.set(estId, a.observacion || (a as any).observaciones || '');
+                }
+              }
+            }
+
+            const records: any[] = estudiantes.map((e) => ({
+              studentId: e.id,
+              studentName: e.nombreCompleto,
+              studentCode: e.codigo,
+              status: attMap.get(e.id) || 'AN',
+              notes: obsMap.get(e.id) || '',
+            }));
+
+            this.sessions.update((list) =>
+              list.map((s) => (s.id === sessionId ? { ...s, records } : s))
+            );
+          },
+          error: () => {
+            const records: any[] = estudiantes.map((e) => ({
+              studentId: e.id,
+              studentName: e.nombreCompleto,
+              studentCode: e.codigo,
+              status: 'AN' as AttendanceStatus,
+              notes: '',
+            }));
+
+            this.sessions.update((list) =>
+              list.map((s) => (s.id === sessionId ? { ...s, records } : s))
+            );
+          },
+        });
+      },
+      error: () => {},
     });
   }
 
@@ -785,10 +1112,49 @@ export class AttendanceControlComponent {
   private studentService = inject(StudentService);
 
   saveAttendance() {
-    this.isSaving.set(false);
-    this.toastType.set('info');
-    this.toastMessage.set('Las sesiones y la toma de asistencia están temporalmente deshabilitadas.');
-    this.showToast.set(true);
+    const sessionId = this.selectedSessionId();
+    const cursoId = this.selectedCourseId();
+    if (!sessionId) {
+      this.toastType.set('warning');
+      this.toastMessage.set('Por favor seleccione una sesión para guardar la asistencia.');
+      this.showToast.set(true);
+      return;
+    }
+
+    const currentRecords = this.students();
+    if (!currentRecords || currentRecords.length === 0) {
+      this.toastType.set('warning');
+      this.toastMessage.set('No hay estudiantes inscritos en este grupo para registrar asistencia.');
+      this.showToast.set(true);
+      return;
+    }
+
+    this.isSaving.set(true);
+    const payload = {
+      sesionId: sessionId,
+      grupoId: cursoId,
+      registros: currentRecords.map((r) => ({
+        studentId: r.studentId,
+        status: r.status,
+        notes: r.notes || '',
+        observaciones: r.notes || '',
+      })),
+    };
+
+    this.attendanceService.saveBatchAttendance(payload).subscribe({
+      next: () => {
+        this.isSaving.set(false);
+        this.toastType.set('success');
+        this.toastMessage.set('¡Asistencia consolidada y guardada exitosamente!');
+        this.showToast.set(true);
+      },
+      error: (err) => {
+        this.isSaving.set(false);
+        this.toastType.set('error');
+        this.toastMessage.set(err?.error?.message || 'Error al guardar la asistencia.');
+        this.showToast.set(true);
+      },
+    });
   }
 
   openStudentRegistration() {
@@ -804,8 +1170,9 @@ export class AttendanceControlComponent {
     const identificationResult = parseIdentificationNumber(
       this.newStudentCode()
     );
+    const effectivePassword = this.newStudentPassword().trim() || 'Test1234!';
     const passwordError = getPasswordValidationError(
-      this.newStudentPassword(),
+      effectivePassword,
       this.newStudentCode()
     );
     const fieldErrors: Partial<Record<StudentEnrollmentField, string>> = {};
@@ -814,13 +1181,15 @@ export class AttendanceControlComponent {
       fieldErrors.numeroIdentificacion = identificationResult.error;
     }
     if (!this.newStudentFirstName().trim()) {
-      fieldErrors.primerNombre = 'El primer nombre es obligatorio.';
+      fieldErrors.primerNombre = 'El campo Primer Nombre es obligatorio.';
     }
     if (!this.newStudentLastName().trim()) {
-      fieldErrors.primerApellido = 'El primer apellido es obligatorio.';
+      fieldErrors.primerApellido = 'El campo Primer Apellido es obligatorio.';
     }
     if (!this.newStudentEmail().trim()) {
-      fieldErrors.correo = 'El correo es obligatorio.';
+      fieldErrors.correo = 'El campo Correo Institucional es obligatorio.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.newStudentEmail().trim())) {
+      fieldErrors.correo = 'El campo Correo Institucional debe tener un formato válido (ej. estudiante@uco.edu.co).';
     }
     if (passwordError) {
       fieldErrors.password = passwordError;
@@ -828,11 +1197,12 @@ export class AttendanceControlComponent {
 
     if (!this.newStudentDocType() || Object.keys(fieldErrors).length > 0) {
       if (!this.newStudentDocType()) {
-        fieldErrors.tipoIdentificacionId = 'El tipo de documento es obligatorio.';
+        fieldErrors.tipoIdentificacionId = 'El campo Tipo de Documento es obligatorio.';
       }
       this.studentFieldErrors.set(fieldErrors);
       this.toastType.set('error');
-      this.toastMessage.set('Revise los campos del formulario.');
+      const errList = Object.values(fieldErrors);
+      this.toastMessage.set(errList.length === 1 ? errList[0]! : `Campos con error en la inscripción: ${Object.keys(fieldErrors).join(', ')}.`);
       this.showToast.set(true);
       return;
     }
@@ -861,7 +1231,7 @@ export class AttendanceControlComponent {
         primerApellido: this.newStudentLastName().trim(),
         segundoApellido: this.newStudentSecondLastName().trim(),
         correoElectronico: this.newStudentEmail().trim(),
-        password: this.newStudentPassword(),
+        password: effectivePassword,
       })
       .subscribe({
         next: (res) => {
@@ -873,7 +1243,7 @@ export class AttendanceControlComponent {
           this.newStudentLastName.set('');
           this.newStudentSecondLastName.set('');
           this.newStudentEmail.set('');
-          this.newStudentPassword.set('');
+          this.newStudentPassword.set('Test1234!');
           this.studentFieldErrors.set({});
 
           this.toastType.set('success');
