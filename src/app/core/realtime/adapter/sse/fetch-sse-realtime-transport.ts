@@ -1,15 +1,12 @@
-import { Injectable, NgZone } from '@angular/core';
+import { Inject, Injectable, NgZone } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
-import {
-  EventSourceMessage,
-  EventStreamContentType,
-  fetchEventSource,
-} from '@microsoft/fetch-event-source';
+import { EventSourceMessage, EventStreamContentType } from '@microsoft/fetch-event-source';
 import { environment } from '../../../../../environments/environment';
 import { AuthService } from '../../../services/auth.service';
 import { RealtimeTransport } from '../../contract/realtime-transport';
 import { RealtimeEvent, isValidRealtimeEvent } from '../../model/realtime-event.model';
 import { RealtimeConnectionState } from '../../model/realtime-connection-state.model';
+import { FetchEventSourceFn, SSE_FETCH_EVENT_SOURCE } from './sse-fetch-event-source.token';
 
 /** Backoff acotado para errores de red: 1s, 2s, 5s, 10s, luego 30s como techo. */
 const RECONNECT_BACKOFF_MS = [1000, 2000, 5000, 10000, 30000];
@@ -57,7 +54,11 @@ export class FetchSseRealtimeTransport implements RealtimeTransport {
   private running = false;
   private reconnectAttempt = 0;
 
-  constructor(private authService: AuthService, private ngZone: NgZone) {}
+  constructor(
+    private authService: AuthService,
+    private ngZone: NgZone,
+    @Inject(SSE_FETCH_EVENT_SOURCE) private fetchEventSourceFn: FetchEventSourceFn
+  ) {}
 
   start(): void {
     if (this.running) {
@@ -103,7 +104,7 @@ export class FetchSseRealtimeTransport implements RealtimeTransport {
       this.abortController = new AbortController();
 
       try {
-        await fetchEventSource(`${environment.apiUrl}/realtime/stream`, {
+        await this.fetchEventSourceFn(`${environment.apiUrl}/realtime/stream`, {
           method: 'GET',
           headers: {
             Accept: 'text/event-stream',

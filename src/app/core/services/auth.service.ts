@@ -21,8 +21,10 @@ const VALID_INSTITUTIONAL_ROLES: readonly UserRole[] = [
   'ESTUDIANTE',
 ];
 
-const UUID_V4_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Forma general de UUID (RFC 4122, cualquier versión/variante): valida que
+// idUsuario sea un identificador institucional real, no una versión concreta.
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface JwtTokenPayload {
   sub?: string;
@@ -48,7 +50,9 @@ function parseJwt(token: string): JwtTokenPayload | null {
   try {
     const base64Url = token.split('.')[1];
     if (!base64Url) return null;
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const unpadded = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    // base64url (JWT) no lleva padding; atob() sí lo requiere.
+    const base64 = unpadded.padEnd(unpadded.length + ((4 - (unpadded.length % 4)) % 4), '=');
     const jsonPayload = decodeURIComponent(
       atob(base64)
         .split('')
@@ -63,7 +67,7 @@ function parseJwt(token: string): JwtTokenPayload | null {
 }
 
 function isValidUuid(value: unknown): value is string {
-  return typeof value === 'string' && UUID_V4_PATTERN.test(value);
+  return typeof value === 'string' && UUID_PATTERN.test(value);
 }
 
 @Injectable({
