@@ -37,9 +37,9 @@ describe('RealtimeService', () => {
     };
   }
 
-  it('start() delega en el transporte', () => {
-    service.start();
-    expect(transportSpy.start).toHaveBeenCalledTimes(1);
+  it('startForGroup() delega el scope al transporte', () => {
+    service.startForGroup('g1');
+    expect(transportSpy.start).toHaveBeenCalledOnceWith({ grupoId: 'g1' });
   });
 
   it('stop() delega en el transporte', () => {
@@ -49,23 +49,23 @@ describe('RealtimeService', () => {
 
   it('listenType entrega solo eventos del tipo solicitado', () => {
     const received: RealtimeEvent[] = [];
-    service.listenType('ASISTENCIA_REGISTRADA').subscribe((evt) => received.push(evt));
+    service.listenType('ASISTENCIAS_SESION_ACTUALIZADAS').subscribe((evt) => received.push(evt));
 
     events$.next(makeEvent('OTRO_TIPO'));
-    events$.next(makeEvent('ASISTENCIA_REGISTRADA'));
+    events$.next(makeEvent('ASISTENCIAS_SESION_ACTUALIZADAS'));
     events$.next(makeEvent('OTRO_TIPO'));
 
     expect(received.length).toBe(1);
-    expect(received[0].type).toBe('ASISTENCIA_REGISTRADA');
+    expect(received[0].type).toBe('ASISTENCIAS_SESION_ACTUALIZADAS');
   });
 
   it('soporta múltiples subscribers independientes', () => {
     const a: RealtimeEvent[] = [];
     const b: RealtimeEvent[] = [];
-    service.listenType('ASISTENCIA_REGISTRADA').subscribe((evt) => a.push(evt));
+    service.listenType('ASISTENCIAS_SESION_ACTUALIZADAS').subscribe((evt) => a.push(evt));
     service.events().subscribe((evt) => b.push(evt));
 
-    events$.next(makeEvent('ASISTENCIA_REGISTRADA'));
+    events$.next(makeEvent('ASISTENCIAS_SESION_ACTUALIZADAS'));
     events$.next(makeEvent('OTRO_TIPO'));
 
     expect(a.length).toBe(1);

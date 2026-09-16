@@ -1,21 +1,71 @@
 # Contrato frontend-backend
 
-El backend congelado es la fuente de verdad del contrato HTTP. El frontend usa contratos tipados según la operación: `ApiDataResponse<T>`, `ApiListResponse<T>`, `ApiMessageResponse` u `OperationResultResponse`.
+El backend congelado es la fuente de verdad. Las consultas usan DTO tipados y propagan los errores HTTP; en modo real no se transforman fallos en datos vacíos ni en asistencia `AN` ficticia.
 
-Los errores HTTP usan `ApiErrorResponse`, con `code`, `message`, `correlationId` y errores de campo opcionales en `details`.
+## Flujo de asistencia docente
 
-- Las consultas usan `GET` y los comandos usan `POST`.
-- No se usan endpoints `POST` legacy para consultas.
-- `numeroIdentificacion` se captura como texto, pero temporalmente se envía como `number` compatible con `Integer` del backend.
-- Las solicitudes al API incluyen `X-Correlation-Id`.
-- La autenticación usa Bearer/OIDC mediante Keycloak (actualmente `grant_type=password`, ver deuda en `docs/frontend-features-pending.md`).
-- El JWT debe tener `idUsuario` (UUID institucional; el frontend rechaza la sesión si falta o no es un UUID válido — nunca usa `sub` ni un valor por defecto como sustituto) y un rol en `resource_access["asistencias-api"].roles` (`ADMINISTRADOR`, `DECANO`, `COORDINADOR`, `DOCENTE` o `ESTUDIANTE`). `realm_access.roles` y los roles del client `asistencias-uco-frontend` se ignoran para RBAC: solo el client de API es fuente de rol.
-- `features.sessionsEnabled` está en `true`.
-- `features.attendanceEnabled` está en `true`.
-- La matrícula de estudiantes sigue disponible aunque sesiones y asistencia estén deshabilitadas.
+### Grupos del docente
 
-El proyecto utiliza un único archivo de environment para las configuraciones de desarrollo y producción actuales.
+```http
+GET /api/v1/docente/horarios
+```
 
-En Docker, el frontend se publica en `http://localhost:4200`. `API_URL`, `KEYCLOAK_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID` y `USE_MOCKS` se pasan al contenedor y generan `assets/env.js` en runtime. Nginx sirve el fallback SPA con `try_files $uri $uri/ /index.html`, y `assets/env.js` se entrega sin cache para evitar configuración obsoleta entre despliegues. El `clientId` público del navegador es `asistencias-uco-frontend` (distinto del client de API `asistencias-api`, usado solo para roles/audience).
+Las filas se deduplican por `idGrupo` y sus bloques únicos forman `Course.schedule`. La pantalla docente no usa `GET /grupos`.
 
-Para el contrato realtime (SSE) ver `docs/frontend-realtime.md`.
+### Sesiones
+
+```http
+GET /api/v1/sesiones/grupo/{grupoId}
+```
+
+Se usa `SesionConsultadaApiDto`. No existe fallback a `POST /sesiones/consultas`. `POST /api/v1/sesiones` responde `ApiMessageResponse`; después de crear, el frontend vuelve a consultar el listado y selecciona la sesión más reciente.
+
+### Estudiantes del grupo
+
+```http
+GET /api/v1/grupos/{grupoId}/estudiantes
+```
+
+La identidad tiene esta semántica obligatoria:
+
+```text
+EstudianteGrupo.id = matrícula
+idEstudiante       = estudiante real y studentId de asistencia
+documento          = studentCode mostrado en UI
+```
+
+### Consulta de asistencia
+
+```http
+GET /api/v1/grupos/{grupoId}/asistencias?sesionId={sesionId}
+```
+
+El frontend usa exclusivamente `estado`, cuyos valores válidos son `AN`, `SJC` y `EX`. Nunca reconstruye el estado con `presente`; por ello `estado=EX` y `presente=false` se conserva como `EX`. Una asistencia inexistente se inicializa como `AN`; un estado existente fuera del contrato se trata como mismatch.
+
+### Command batch
+
+```http
+POST /api/v1/asistencias/lote
+Content-Type: application/json
+```
+
+```json
+{
+  "sesionId": "UUID",
+  "registros": [
+    { "estudianteId": "UUID", "estado": "AN" },
+    { "estudianteId": "UUID", "estado": "SJC" },
+    { "estudianteId": "UUID", "estado": "EX" }
+  ]
+}
+```
+
+No se envían `grupoId`, `studentId`, `status`, `notes` ni `observaciones`. El flujo individual `POST /asistencias` no forma parte de esta vertical.
+
+## Realtime
+
+El stream es `GET /api/v1/realtime/stream?grupoId={UUID}` y publica `ASISTENCIAS_SESION_ACTUALIZADAS`. El detalle de lifecycle, scope y reconexión está en `docs/frontend-realtime.md`.
+
+## Configuración
+
+Docker publica el frontend en `http://localhost:4200`. `API_URL`, `KEYCLOAK_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID` y `USE_MOCKS` generan `assets/env.js` en runtime. El client público es `asistencias-uco-frontend`; el client `asistencias-api` continúa siendo la fuente de roles del JWT.

@@ -4,5 +4,6 @@ export interface AsistenciaConsultadaApiDto {
   grupo: string;
   sesion: string;
   presente: boolean | null;
+  estado: 'AN' | 'SJC' | 'EX';
   observacion: string | null;
 }

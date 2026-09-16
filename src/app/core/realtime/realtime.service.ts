@@ -29,9 +29,9 @@ export class RealtimeService {
     );
   }
 
-  /** Idempotente. Inicia la conexión (no-op si ya está iniciada). */
-  start(): void {
-    this.transport.start();
+  /** Conecta al stream del grupo; repetir el mismo grupo es idempotente. */
+  startForGroup(grupoId: string): void {
+    this.transport.start({ grupoId });
   }
 
   /** Termina la conexión y cancela cualquier reintento pendiente. */

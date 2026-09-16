@@ -3,7 +3,10 @@ import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { EventSourceMessage, EventStreamContentType } from '@microsoft/fetch-event-source';
 import { environment } from '../../../../../environments/environment';
 import { AuthService } from '../../../services/auth.service';
-import { RealtimeTransport } from '../../contract/realtime-transport';
+import {
+  RealtimeSubscriptionScope,
+  RealtimeTransport,
+} from '../../contract/realtime-transport';
 import { RealtimeEvent, isValidRealtimeEvent } from '../../model/realtime-event.model';
 import { RealtimeConnectionState } from '../../model/realtime-connection-state.model';
 import { FetchEventSourceFn, SSE_FETCH_EVENT_SOURCE } from './sse-fetch-event-source.token';
@@ -53,6 +56,8 @@ export class FetchSseRealtimeTransport implements RealtimeTransport {
   private abortController: AbortController | null = null;
   private running = false;
   private reconnectAttempt = 0;
+  private activeGroupId: string | null = null;
+  private connectionGeneration = 0;
 
   constructor(
     private authService: AuthService,
@@ -60,19 +65,26 @@ export class FetchSseRealtimeTransport implements RealtimeTransport {
     @Inject(SSE_FETCH_EVENT_SOURCE) private fetchEventSourceFn: FetchEventSourceFn
   ) {}
 
-  start(): void {
-    if (this.running) {
+  start(scope: RealtimeSubscriptionScope): void {
+    if (this.running && this.activeGroupId === scope.grupoId) {
       return;
     }
+
+    this.abortController?.abort();
+    this.connectionGeneration++;
+    const generation = this.connectionGeneration;
+    this.activeGroupId = scope.grupoId;
     this.running = true;
     this.reconnectAttempt = 0;
     this.ngZone.runOutsideAngular(() => {
-      void this.runLoop();
+      void this.runLoop(scope.grupoId, generation);
     });
   }
 
   stop(): void {
     this.running = false;
+    this.activeGroupId = null;
+    this.connectionGeneration++;
     this.abortController?.abort();
     this.abortController = null;
     this.setState('DISCONNECTED');
@@ -82,8 +94,16 @@ export class FetchSseRealtimeTransport implements RealtimeTransport {
     this.ngZone.run(() => this.stateSubject.next(state));
   }
 
-  private async runLoop(): Promise<void> {
-    while (this.running) {
+  private isActive(groupId: string, generation: number): boolean {
+    return (
+      this.running &&
+      this.activeGroupId === groupId &&
+      this.connectionGeneration === generation
+    );
+  }
+
+  private async runLoop(groupId: string, generation: number): Promise<void> {
+    while (this.isActive(groupId, generation)) {
       if (environment.useMocks) {
         this.setState('DISCONNECTED');
         return;
@@ -92,11 +112,11 @@ export class FetchSseRealtimeTransport implements RealtimeTransport {
       const token = await this.authService.getValidAccessToken(
         MIN_TOKEN_VALIDITY_SECONDS
       );
-      if (!token) {
-        this.setState('DISCONNECTED');
+      if (!this.isActive(groupId, generation)) {
         return;
       }
-      if (!this.running) {
+      if (!token) {
+        this.setState('DISCONNECTED');
         return;
       }
 
@@ -104,7 +124,11 @@ export class FetchSseRealtimeTransport implements RealtimeTransport {
       this.abortController = new AbortController();
 
       try {
-        await this.fetchEventSourceFn(`${environment.apiUrl}/realtime/stream`, {
+        await this.fetchEventSourceFn(
+          `${environment.apiUrl}/realtime/stream?grupoId=${encodeURIComponent(
+            groupId
+          )}`,
+          {
           method: 'GET',
           headers: {
             Accept: 'text/event-stream',
@@ -117,8 +141,10 @@ export class FetchSseRealtimeTransport implements RealtimeTransport {
           onopen: async (response) => {
             const contentType = response.headers.get('content-type') || '';
             if (response.ok && contentType.startsWith(EventStreamContentType)) {
-              this.reconnectAttempt = 0;
-              this.setState('CONNECTED');
+              if (this.isActive(groupId, generation)) {
+                this.reconnectAttempt = 0;
+                this.setState('CONNECTED');
+              }
               return;
             }
             if (response.status === 401) {
@@ -131,28 +157,36 @@ export class FetchSseRealtimeTransport implements RealtimeTransport {
               `Respuesta inesperada del stream realtime: HTTP ${response.status}`
             );
           },
-          onmessage: (msg) => this.handleMessage(msg),
+          onmessage: (msg) => {
+            if (this.isActive(groupId, generation)) {
+              this.handleMessage(msg);
+            }
+          },
           onerror: (err) => {
             // Relanzar SIEMPRE: nunca delegar la política de reintento a la
             // librería, la gobierna este bucle exclusivamente.
             throw err;
           },
-        });
+          }
+        );
 
         // El servidor cerró el stream sin error (ej. ciclo de vida del LB):
         // tratar como recuperable y reconectar con backoff.
-        if (!this.running) {
+        if (!this.isActive(groupId, generation)) {
           return;
         }
-        await this.waitBeforeReconnect();
+        await this.waitBeforeReconnect(groupId, generation);
       } catch (err) {
-        if (!this.running || isAbortError(err)) {
+        if (!this.isActive(groupId, generation) || isAbortError(err)) {
           return;
         }
 
         if (err instanceof UnauthorizedStreamError) {
           const refreshed = await this.authService.refreshAccessToken();
-          if (refreshed && this.running) {
+          if (!this.isActive(groupId, generation)) {
+            return;
+          }
+          if (refreshed) {
             continue;
           }
           this.setState('UNAUTHORIZED');
@@ -166,13 +200,16 @@ export class FetchSseRealtimeTransport implements RealtimeTransport {
           return;
         }
 
-        await this.waitBeforeReconnect();
+        await this.waitBeforeReconnect(groupId, generation);
       }
     }
   }
 
-  private async waitBeforeReconnect(): Promise<void> {
-    if (!this.running || !this.abortController) {
+  private async waitBeforeReconnect(
+    groupId: string,
+    generation: number
+  ): Promise<void> {
+    if (!this.isActive(groupId, generation) || !this.abortController) {
       return;
     }
     const delay =

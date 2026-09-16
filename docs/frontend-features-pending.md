@@ -1,7 +1,7 @@
 # Funcionalidades pendientes
 
-- `numeroIdentificacion`: migración coordinada futura cuando la base de datos pase de `INT` a `VARCHAR` (el frontend ya lo captura como texto, pero lo envía como `number` por compatibilidad temporal con el backend).
-- Estados de asistencia (`AN`, `SJC`, `EX`): confirmar con backend si su definición en base de datos sigue siendo definitiva o está aún en evolución.
-- Autenticación: el client de Keycloak local tiene `directAccessGrantsEnabled=true` y `AuthService` usa `grant_type=password`. Es deuda de seguridad migrar el SPA a Authorization Code + PKCE (vía `keycloak-js`, ya presente como dependencia pero sin uso activo) antes de producción, si ese es el estándar que se decide adoptar. No se cambió en la fase de alineación realtime (fuera de alcance) — ver `docs/frontend-realtime.md`.
-- Realtime: `POST /api/v1/asistencias/lote` (guardado por lote en `AttendanceControlComponent`) todavía no publica `ASISTENCIA_REGISTRADA`; solo el flujo individual `POST /api/v1/asistencias` lo hace. Un E2E UI -> backend -> SSE que empiece en el guardado por lote requiere una fase de backend que publique un evento tras el lote. Ver `docs/frontend-realtime.md` para el detalle y las dos formas de E2E válidas mientras tanto.
-- E2E completo (frontend + Keycloak + backend + DB con Playwright/Cypress) sigue pendiente; esta fase solo deja lista la base (unit/integration verdes, SSE autenticado funcional, smoke de contrato en `scripts/realtime-smoke.mjs`).
+- `numeroIdentificacion`: migración coordinada futura cuando la base de datos pase de `INT` a `VARCHAR`; el frontend ya lo captura como texto, pero todavía lo envía como `number` por compatibilidad.
+- Autenticación: migrar el SPA de `grant_type=password` a Authorization Code + PKCE antes de producción si ese es el estándar acordado. Está fuera de la fase de asistencia realtime.
+- E2E automatizado integral con navegador, Keycloak, backend y SQL Server. La fase actual conserva el smoke real de batch + SSE en `scripts/realtime-smoke.mjs`, sin incorporar Playwright ni Cypress.
+
+El contrato batch, el evento `ASISTENCIAS_SESION_ACTUALIZADAS`, el scope SSE por `grupoId` y los estados `AN`/`SJC`/`EX` ya no son gaps pendientes.

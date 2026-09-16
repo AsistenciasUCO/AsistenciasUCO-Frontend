@@ -5,7 +5,7 @@ import { environment } from '../../../environments/environment';
 import { ApiListResponse } from '../api/models/api-list-response.model';
 import { ApiMessageResponse } from '../api/models/api-message-response.model';
 import { AsistenciaConsultadaApiDto } from '../api/models/asistencia-consultada-api-dto.model';
-import { RegistrarAsistenciaRequest } from '../api/models/registrar-asistencia-request.model';
+import { RegistrarAsistenciasSesionRequest } from '../api/models/registrar-asistencias-sesion-request.model';
 import { SolicitarRevisionAsistenciaRequest } from '../api/models/solicitar-revision-asistencia-request.model';
 
 @Injectable({
@@ -32,24 +32,6 @@ export class AttendanceService {
       {
         params: sesionId ? { sesionId } : {},
       }
-    );
-  }
-
-  registerAttendance(
-    request: RegistrarAsistenciaRequest
-  ): Observable<ApiMessageResponse> {
-    if (!environment.features.attendanceEnabled) {
-      return throwError(
-        () =>
-          new Error(
-            'Funcionalidad de asistencia temporalmente no disponible.'
-          )
-      );
-    }
-
-    return this.http.post<ApiMessageResponse>(
-      `${environment.apiUrl}/asistencias`,
-      request
     );
   }
 
@@ -82,16 +64,9 @@ export class AttendanceService {
     );
   }
 
-  saveBatchAttendance(payload: {
-    sesionId: string;
-    grupoId?: string;
-    registros: Array<{
-      studentId: string;
-      status: string;
-      notes?: string;
-      observaciones?: string;
-    }>;
-  }): Observable<ApiMessageResponse> {
+  saveBatchAttendance(
+    payload: RegistrarAsistenciasSesionRequest
+  ): Observable<ApiMessageResponse> {
     return this.http.post<ApiMessageResponse>(
       `${environment.apiUrl}/asistencias/lote`,
       payload

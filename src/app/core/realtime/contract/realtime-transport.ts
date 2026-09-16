@@ -13,11 +13,15 @@ export interface RealtimeTransport {
   readonly events$: Observable<RealtimeEvent>;
   readonly connectionState$: Observable<RealtimeConnectionState>;
 
-  /** Idempotente: si ya hay una conexión/intento en curso, no abre una segunda. */
-  start(): void;
+  /** Idempotente para el mismo grupo; cambia de stream si cambia el scope. */
+  start(scope: RealtimeSubscriptionScope): void;
 
   /** Aborta el transporte y cancela cualquier reintento pendiente. */
   stop(): void;
+}
+
+export interface RealtimeSubscriptionScope {
+  grupoId: string;
 }
 
 export const REALTIME_TRANSPORT = new InjectionToken<RealtimeTransport>(

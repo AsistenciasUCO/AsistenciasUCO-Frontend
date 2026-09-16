@@ -1,4 +1,6 @@
 import { StudentAttendance, ClassSession, AttendanceStatus } from '../models/attendance.model';
+import { AsistenciaConsultadaApiDto } from '../api/models/asistencia-consultada-api-dto.model';
+import { EstudianteGrupoApiDto } from '../api/models/estudiante-grupo-api-dto.model';
 
 /**
  * Data Transfer Object (DTO) para la asistencia individual de un estudiante según el contrato API/JSON.
@@ -9,7 +11,6 @@ export interface StudentAttendanceDTO {
   codigo_estudiante: string;
   avatar_url?: string | null;
   estado_asistencia: 'AN' | 'SJC' | 'EX';
-  observaciones?: string | null;
   hora_llegada?: string | null;
 }
 
@@ -46,7 +47,6 @@ export class AttendanceMapper {
       studentCode: dto.codigo_estudiante,
       avatarUrl: dto.avatar_url ?? undefined,
       status: (dto.estado_asistencia as AttendanceStatus) || 'AN',
-      notes: dto.observaciones ?? undefined,
       arrivalTime: dto.hora_llegada ?? undefined,
     };
   }
@@ -61,9 +61,41 @@ export class AttendanceMapper {
       codigo_estudiante: model.studentCode,
       avatar_url: model.avatarUrl ?? null,
       estado_asistencia: model.status,
-      observaciones: model.notes ?? null,
       hora_llegada: model.arrivalTime ?? null,
     };
+  }
+
+  static fromGroupStudentsAndAttendances(
+    students: EstudianteGrupoApiDto[],
+    attendances: AsistenciaConsultadaApiDto[]
+  ): StudentAttendance[] {
+    const attendanceByStudent = new Map(
+      attendances.map((attendance) => [attendance.estudiante, attendance])
+    );
+
+    return students.map((student) => {
+      const attendance = attendanceByStudent.get(student.idEstudiante);
+      const status = attendance?.estado ?? 'AN';
+
+      if (!AttendanceMapper.isAttendanceStatus(status)) {
+        throw new Error(
+          `Estado de asistencia no soportado para ${student.idEstudiante}: ${String(
+            status
+          )}`
+        );
+      }
+
+      return {
+        studentId: student.idEstudiante,
+        studentName: student.nombreCompleto,
+        studentCode: student.documento,
+        status,
+      };
+    });
+  }
+
+  private static isAttendanceStatus(value: unknown): value is AttendanceStatus {
+    return value === 'AN' || value === 'SJC' || value === 'EX';
   }
 
   /**

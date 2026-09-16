@@ -54,10 +54,10 @@ function flushAsync(): Promise<void> {
 function validEvent(overrides: Partial<RealtimeEvent> = {}): RealtimeEvent {
   return {
     eventId: 'evt-1',
-    type: 'ASISTENCIA_REGISTRADA',
+    type: 'ASISTENCIAS_SESION_ACTUALIZADAS',
     occurredAt: '2026-09-15T10:00:00Z',
     correlationId: null,
-    payload: { estudiante: 'e1', grupo: 'g1', sesion: 's1', presente: true },
+    payload: { grupo: 'g1', sesion: 's1', totalRegistros: 1 },
     ...overrides,
   };
 }
@@ -93,26 +93,28 @@ describe('FetchSseRealtimeTransport', () => {
 
   it('construye la URL /realtime/stream correcta', async () => {
     setup();
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
 
     expect(fake.calls.length).toBe(1);
-    expect(fake.calls[0].input).toBe(`${environment.apiUrl}/realtime/stream`);
+    expect(fake.calls[0].input).toBe(
+      `${environment.apiUrl}/realtime/stream?grupoId=g1`
+    );
   });
 
   it('nunca agrega el token como query param', async () => {
     setup();
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
 
     const url = String(fake.calls[0].input);
     expect(url).not.toContain('token-abc');
-    expect(url).not.toContain('?');
+    expect(url).toContain('?grupoId=g1');
   });
 
   it('envía el header Authorization Bearer correcto', async () => {
     setup();
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
 
     expect(fake.calls[0].init.headers?.['Authorization']).toBe('Bearer token-abc');
@@ -120,7 +122,7 @@ describe('FetchSseRealtimeTransport', () => {
 
   it('envía X-Correlation-Id y credentials: omit', async () => {
     setup();
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
 
     expect(fake.calls[0].init.headers?.['X-Correlation-Id']).toBeTruthy();
@@ -131,7 +133,7 @@ describe('FetchSseRealtimeTransport', () => {
     setup();
     spyOnProperty(environment, 'useMocks', 'get').and.returnValue(true);
 
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
 
     expect(fake.calls.length).toBe(0);
@@ -141,7 +143,7 @@ describe('FetchSseRealtimeTransport', () => {
     setup();
     authServiceSpy.getValidAccessToken.and.resolveTo(null);
 
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
 
     expect(fake.calls.length).toBe(0);
@@ -152,7 +154,7 @@ describe('FetchSseRealtimeTransport', () => {
     const states: RealtimeConnectionState[] = [];
     transport.connectionState$.subscribe((s) => states.push(s));
 
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
     await openWith(fake.calls[0], fakeResponse(200, 'text/event-stream'));
     await flushAsync();
@@ -165,7 +167,7 @@ describe('FetchSseRealtimeTransport', () => {
     const received: RealtimeEvent[] = [];
     transport.events$.subscribe((evt) => received.push(evt));
 
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
     const call = fake.calls[0];
     await openWith(call, fakeResponse(200, 'text/event-stream'));
@@ -187,13 +189,13 @@ describe('FetchSseRealtimeTransport', () => {
     transport.events$.subscribe((evt) => received.push(evt));
     spyOn(console, 'warn');
 
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
     const call = fake.calls[0];
     await openWith(call, fakeResponse(200, 'text/event-stream'));
 
-    call.init.onmessage?.({ id: '1', event: 'ASISTENCIA_REGISTRADA', data: 'not-json{{' });
-    call.init.onmessage?.({ id: '2', event: 'ASISTENCIA_REGISTRADA', data: JSON.stringify({ foo: 'bar' }) });
+    call.init.onmessage?.({ id: '1', event: 'ASISTENCIAS_SESION_ACTUALIZADAS', data: 'not-json{{' });
+    call.init.onmessage?.({ id: '2', event: 'ASISTENCIAS_SESION_ACTUALIZADAS', data: JSON.stringify({ foo: 'bar' }) });
 
     expect(received.length).toBe(0);
     expect(console.warn).toHaveBeenCalled();
@@ -204,7 +206,7 @@ describe('FetchSseRealtimeTransport', () => {
     const received: RealtimeEvent[] = [];
     transport.events$.subscribe((evt) => received.push(evt));
 
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
     const call = fake.calls[0];
     await openWith(call, fakeResponse(200, 'text/event-stream'));
@@ -220,7 +222,7 @@ describe('FetchSseRealtimeTransport', () => {
     transport.events$.subscribe((evt) => received.push(evt));
     spyOn(console, 'warn');
 
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
     const call = fake.calls[0];
     await openWith(call, fakeResponse(200, 'text/event-stream'));
@@ -238,7 +240,7 @@ describe('FetchSseRealtimeTransport', () => {
 
   it('stop() aborta el transporte', async () => {
     setup();
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
     const call = fake.calls[0];
 
@@ -249,7 +251,7 @@ describe('FetchSseRealtimeTransport', () => {
 
   it('stop() no deja temporizadores de reconexión pendientes', async () => {
     setup();
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
     const call = fake.calls[0];
 
@@ -268,7 +270,7 @@ describe('FetchSseRealtimeTransport', () => {
     const states: RealtimeConnectionState[] = [];
     transport.connectionState$.subscribe((s) => states.push(s));
 
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
     fake.calls[0].reject(new TypeError('network error'));
     await flushAsync();
@@ -284,7 +286,7 @@ describe('FetchSseRealtimeTransport', () => {
       return true;
     });
 
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
     await openWith(fake.calls[0], fakeResponse(401));
     await flushAsync();
@@ -301,7 +303,7 @@ describe('FetchSseRealtimeTransport', () => {
     const states: RealtimeConnectionState[] = [];
     transport.connectionState$.subscribe((s) => states.push(s));
 
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
     await openWith(fake.calls[0], fakeResponse(401));
     await flushAsync();
@@ -317,7 +319,7 @@ describe('FetchSseRealtimeTransport', () => {
     const states: RealtimeConnectionState[] = [];
     transport.connectionState$.subscribe((s) => states.push(s));
 
-    transport.start();
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
     await openWith(fake.calls[0], fakeResponse(403));
     await flushAsync();
@@ -329,10 +331,40 @@ describe('FetchSseRealtimeTransport', () => {
 
   it('start() es idempotente: no abre dos streams simultáneos', async () => {
     setup();
-    transport.start();
-    transport.start();
+    transport.start({ grupoId: 'g1' });
+    transport.start({ grupoId: 'g1' });
     await flushAsync();
 
     expect(fake.calls.length).toBe(1);
+  });
+
+  it('cambiar de grupo aborta el stream anterior y abre el nuevo scope', async () => {
+    setup();
+    transport.start({ grupoId: 'g1' });
+    await flushAsync();
+    const previousCall = fake.calls[0];
+
+    transport.start({ grupoId: 'g2' });
+    await flushAsync();
+
+    expect(previousCall.init.signal?.aborted).toBeTrue();
+    expect(fake.calls.length).toBe(2);
+    expect(fake.calls[1].input).toBe(
+      `${environment.apiUrl}/realtime/stream?grupoId=g2`
+    );
+  });
+
+  it('el loop abortado de otro grupo no vuelve a reconectar', async () => {
+    setup();
+    transport.start({ grupoId: 'g1' });
+    await flushAsync();
+    const previousCall = fake.calls[0];
+
+    transport.start({ grupoId: 'g2' });
+    await flushAsync();
+    previousCall.resolve();
+    await flushAsync();
+
+    expect(fake.calls.length).toBe(2);
   });
 });

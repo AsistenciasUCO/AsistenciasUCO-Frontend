@@ -6,7 +6,6 @@ export interface StudentAttendance {
   studentCode: string;
   avatarUrl?: string;
   status: AttendanceStatus;
-  notes?: string;
   arrivalTime?: string;
 }
 

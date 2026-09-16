@@ -1671,13 +1671,19 @@ export class TeacherGruposComponent implements OnInit {
               tipo: 'REGULAR',
             })
             .subscribe({
-              next: (created) => {
-                if (created.datos) {
-                  this.sessions.set([created.datos]);
-                  this.sesionActivaId.set(created.datos.id);
-                  this.modalProyeccionVisible.set(true);
-                  this.obtenerQrParaSesion(created.datos.id);
-                }
+              next: () => {
+                this.sessionService.getSessionsByGroup(course.id).subscribe({
+                  next: (sessionsResponse) => {
+                    const latest = sessionsResponse.datos.at(-1);
+                    if (latest) {
+                      this.sessions.set(sessionsResponse.datos);
+                      this.sesionActivaId.set(latest.id);
+                      this.modalProyeccionVisible.set(true);
+                      this.obtenerQrParaSesion(latest.id);
+                    }
+                  },
+                  error: (err) => this.toast.error(getApiErrorMessage(err)),
+                });
               },
               error: (err) => this.toast.error(getApiErrorMessage(err)),
             });
@@ -1868,7 +1874,7 @@ export class TeacherGruposComponent implements OnInit {
         .subscribe({
           next: (res) => {
             if (res.exitoso) {
-              this.toast.success(res.mensajeUsuario || 'Sesión programada con éxito.');
+              this.toast.success(res.mensaje || 'Sesión programada con éxito.');
               this.cargarSesiones(course.id);
               this.volverASesiones();
             }

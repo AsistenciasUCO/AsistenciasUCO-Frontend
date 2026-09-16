@@ -3,6 +3,9 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, of, delay, catchError, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
+import { ApiListResponse } from '../api/models/api-list-response.model';
+import { ApiMessageResponse } from '../api/models/api-message-response.model';
+import { SesionConsultadaApiDto } from '../api/models/sesion-consultada-api-dto.model';
 import { ClassSession } from '../models/attendance.model';
 import { AttendanceMapper, ClassSessionDTO } from '../mappers/attendance.mapper';
 import { StorageSerializer } from '../utils/storage-serializer.util';
@@ -158,50 +161,30 @@ export class SessionService {
     }
 
     return this.http
-      .get<any>(`${environment.apiUrl}/sesiones/grupo/${grupoId}`)
+      .get<ApiListResponse<SesionConsultadaApiDto>>(
+        `${environment.apiUrl}/sesiones/grupo/${grupoId}`
+      )
       .pipe(
-        catchError(() =>
-          this.http.post<any>(`${environment.apiUrl}/sesiones/consultas`, {
-            sesion: grupoId,
-          })
-        ),
-        map((res: any) => {
-          const raw = res.datos || res.elementos || (Array.isArray(res) ? res : []);
-          const list = Array.isArray(raw) ? raw : [raw];
-          const hasValidSession = list.length > 0 && list[0] && (list[0].id || list[0].sesion);
-
-          const mapped: ClassSession[] = hasValidSession
-            ? list.map((s: any, idx: number) => ({
-                id: s.id || s.sesion || `ses-${idx + 1}`,
-                courseId: s.grupo || grupoId,
-                sessionNumber: s.numero || idx + 1,
-                date: s.fechaHoraInicio ? s.fechaHoraInicio.split('T')[0] : new Date().toISOString().split('T')[0],
-                startTime: s.fechaHoraInicio ? s.fechaHoraInicio.split('T')[1]?.substring(0, 5) : '08:00',
-                endTime: s.fechaHoraFin ? s.fechaHoraFin.split('T')[1]?.substring(0, 5) : '10:00',
-                room: s.aula || 'Aula Principal',
-                tipo: s.tipo || 'REGULAR',
-                title: s.nombre || `Sesión #${idx + 1}`,
-                topic: s.descripcion || s.nombre || 'Control de Asistencia',
-                status: s.cerrada ? 'CONCLUIDA' : 'PROGRAMADA',
-                records: [],
-              }))
-            : [];
+        map((response) => {
+          const sessions: ClassSession[] = response.datos.map((session) => ({
+            id: session.sesion,
+            courseId: session.grupo,
+            sessionNumber: session.numero,
+            title: session.nombre,
+            topic: session.nombre,
+            date: session.fechaHoraInicio,
+            startTime: session.fechaHoraInicio,
+            endTime: session.fechaHoraFin,
+            status: 'PROGRAMADA',
+            records: [],
+          }));
 
           return {
-            idTransaccion: 'tx-ses-001',
-            exitoso: true,
-            total: mapped.length,
-            datos: mapped,
+            exitoso: response.exitoso,
+            total: sessions.length,
+            datos: sessions,
           };
-        }),
-        catchError(() =>
-          of({
-            idTransaccion: 'tx-ses-fallback',
-            exitoso: true,
-            total: 0,
-            datos: [],
-          })
-        )
+        })
       );
   }
 
@@ -216,7 +199,7 @@ export class SessionService {
       room?: string;
       tipo?: 'REGULAR' | 'EXTRAORDINARIA' | 'REPOSICION';
     }
-  ): Observable<ApiResponse<ClassSession>> {
+  ): Observable<ApiMessageResponse> {
     if (environment.useMocks) {
       const currentList = this.sessionsByGroupSignal()[grupoId] || [];
       const sessionNumber = currentList.length + 1;
@@ -246,15 +229,12 @@ export class SessionService {
 
       const tipoStr = (newSession.tipo || 'EXTRAORDINARIA').toLowerCase();
       return of({
-        idTransaccion: `mock-tx-create-ses-${newSession.id}`,
         exitoso: true,
-        mensajeUsuario: `Sesión ${tipoStr} #${sessionNumber} programada correctamente.`,
-        datos: newSession,
+        mensaje: `Sesión ${tipoStr} #${sessionNumber} programada correctamente.`,
       }).pipe(delay(250));
     }
 
-    return this.http
-      .post<any>(`${environment.apiUrl}/sesiones`, {
+    return this.http.post<ApiMessageResponse>(`${environment.apiUrl}/sesiones`, {
         grupo: grupoId,
         nombre: data.title,
         descripcion: data.topic,
@@ -262,23 +242,7 @@ export class SessionService {
         fechaHoraFin: `${data.date}T${data.endTime}:00`,
         aula: data.room,
         tipo: data.tipo,
-      })
-      .pipe(
-        map((res) => ({
-          idTransaccion: res.idTransaccion || 'tx-ses-crear-001',
-          exitoso: true,
-          mensajeUsuario: 'Sesión de clase creada correctamente.',
-          datos: res.datos,
-        })),
-        catchError(() =>
-          of({
-            idTransaccion: 'tx-ses-crear-fallback',
-            exitoso: false,
-            mensajeUsuario: 'No fue posible crear la sesión.',
-            datos: undefined as any,
-          })
-        )
-      );
+      });
   }
 
   updateSession(

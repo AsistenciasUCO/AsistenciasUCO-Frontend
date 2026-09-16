@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, auditTime, filter } from 'rxjs';
+import { Observable, auditTime, filter, map, merge, pairwise } from 'rxjs';
 import { RealtimeService } from '../../../core/realtime/realtime.service';
 import {
-  AttendanceRegisteredRealtimePayload,
+  AttendanceSessionUpdatedRealtimePayload,
   REALTIME_EVENT_TYPE,
   RealtimeEvent,
 } from '../../../core/realtime/model/realtime-event.model';
@@ -12,7 +12,7 @@ import {
 export const ATTENDANCE_REALTIME_COALESCE_MS = 250;
 
 /**
- * Filtra `ASISTENCIA_REGISTRADA` a los eventos que pertenecen al
+ * Filtra `ASISTENCIAS_SESION_ACTUALIZADAS` a los eventos que pertenecen al
  * grupo/sesión actualmente visibles en `AttendanceControlComponent`, y
  * coalesce ráfagas. Extraído como clase propia para poder probarlo sin
  * instanciar el componente completo (que además de esto orquesta
@@ -22,13 +22,21 @@ export const ATTENDANCE_REALTIME_COALESCE_MS = 250;
 export class AttendanceRealtimeSyncService {
   private readonly realtimeService = inject(RealtimeService);
 
+  connectGroup(grupoId: string): void {
+    this.realtimeService.startForGroup(grupoId);
+  }
+
+  disconnect(): void {
+    this.realtimeService.stop();
+  }
+
   watch(
     getGroupId: () => string,
     getSessionId: () => string
-  ): Observable<RealtimeEvent<AttendanceRegisteredRealtimePayload>> {
-    return this.realtimeService
-      .listenType<AttendanceRegisteredRealtimePayload>(
-        REALTIME_EVENT_TYPE.ASISTENCIA_REGISTRADA
+  ): Observable<RealtimeEvent<AttendanceSessionUpdatedRealtimePayload> | void> {
+    const businessEvent$ = this.realtimeService
+      .listenType<AttendanceSessionUpdatedRealtimePayload>(
+        REALTIME_EVENT_TYPE.ASISTENCIAS_SESION_ACTUALIZADAS
       )
       .pipe(
         filter((evt) => {
@@ -43,5 +51,16 @@ export class AttendanceRealtimeSyncService {
         }),
         auditTime(ATTENDANCE_REALTIME_COALESCE_MS)
       );
+
+    const reconnected$ = this.realtimeService.connectionState$.pipe(
+      pairwise(),
+      filter(
+        ([previous, current]) =>
+          previous === 'RECONNECTING' && current === 'CONNECTED'
+      ),
+      map(() => undefined)
+    );
+
+    return merge(businessEvent$, reconnected$);
   }
 }

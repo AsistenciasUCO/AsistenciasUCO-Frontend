@@ -1,12 +1,12 @@
-import { Component, signal, computed, HostListener, inject } from '@angular/core';
+import { Component, DestroyRef, signal, computed, HostListener, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
+import { finalize, forkJoin, map } from 'rxjs';
 import { StudentService } from '../../../core/services/student.service';
 import { SessionService } from '../../../core/services/session.service';
 import { AttendanceService } from '../../../core/services/attendance.service';
-import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
+import { GroupService } from '../../../core/services/group.service';
 import { AttendanceRealtimeSyncService } from './attendance-realtime-sync.service';
 import { CardComponent } from '../../../shared/components/card/card.component';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
@@ -25,6 +25,8 @@ import {
 import { TipoIdentificacionApiDto } from '../../../core/api/models/tipo-identificacion-api-dto.model';
 import { Course } from '../../../core/models/course.model';
 import { ClassSession, AttendanceStatus } from '../../../core/models/attendance.model';
+import { AttendanceMapper } from '../../../core/mappers/attendance.mapper';
+import { RegistrarAsistenciasSesionRequest } from '../../../core/api/models/registrar-asistencias-sesion-request.model';
 import { environment } from '../../../../environments/environment';
 import {
   getPasswordValidationError,
@@ -665,10 +667,10 @@ type StudentEnrollmentField =
 export class AttendanceControlComponent {
   private courseService = inject(CourseService);
   private sessionService = inject(SessionService);
-  private coordinatorService = inject(CoordinatorManagementService);
+  private groupService = inject(GroupService);
   private attendanceService = inject(AttendanceService);
   private attendanceRealtimeSync = inject(AttendanceRealtimeSyncService);
-  private http = inject(HttpClient);
+  private destroyRef = inject(DestroyRef);
 
   readonly sessionsEnabled = environment.features.sessionsEnabled;
   readonly attendanceEnabled = environment.features.attendanceEnabled;
@@ -743,9 +745,9 @@ export class AttendanceControlComponent {
       },
     });
 
-    this.courseService.getTeacherCourses().subscribe({
-      next: (res: any) => {
-        const courses: Course[] = Array.isArray(res) ? res : (res?.datos || []);
+    this.courseService.getCurrentTeacherCourses().subscribe({
+      next: (res) => {
+        const courses = res.datos;
         this.courses = courses;
         this.courseOptions.set(
           courses.map((course) => ({
@@ -757,17 +759,23 @@ export class AttendanceControlComponent {
           this.onCourseSelect(courses[0].id);
         }
       },
+      error: (err) => {
+        this.courses = [];
+        this.courseOptions.set([]);
+        this.toastType.set('error');
+        this.toastMessage.set(
+          getApiErrorMessage(err) || 'No fue posible cargar los grupos del docente.'
+        );
+        this.showToast.set(true);
+      },
     });
 
-    // Refresca la asistencia visible cuando llega ASISTENCIA_REGISTRADA para
-    // el grupo/sesión actualmente seleccionados (registro individual; el
-    // guardado por lote no publica este evento todavía, ver docs/frontend-realtime.md).
     this.attendanceRealtimeSync
       .watch(
         () => this.selectedCourseId(),
         () => this.selectedSessionId()
       )
-      .pipe(takeUntilDestroyed())
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         const courseId = this.selectedCourseId();
         const sessionId = this.selectedSessionId();
@@ -775,6 +783,8 @@ export class AttendanceControlComponent {
           this.cargarEstudiantesYSesion(courseId, sessionId);
         }
       });
+
+    this.destroyRef.onDestroy(() => this.attendanceRealtimeSync.disconnect());
   }
 
   sessionOptions = computed<SelectOption[]>(() => {
@@ -927,18 +937,25 @@ export class AttendanceControlComponent {
           this.isCreatingSession.set(false);
           this.isNewSessionModalOpen.set(false);
           this.toastType.set('success');
-          this.toastMessage.set(res?.mensajeUsuario || 'Sesión de clase programada exitosamente.');
+          this.toastMessage.set(res.mensaje || 'Sesión de clase programada exitosamente.');
           this.showToast.set(true);
 
           this.sessionService.getSessionsByGroup(courseId).subscribe({
             next: (sRes) => {
-              const list = sRes.datos || [];
+              const list = sRes.datos;
               this.sessions.set(list);
-              if (res?.datos?.id) {
-                this.onSessionSelect(res.datos.id);
-              } else if (list.length > 0) {
-                this.onSessionSelect(list[list.length - 1].id);
+              const latest = this.getMostRecentSession(list);
+              if (latest) {
+                this.onSessionSelect(latest.id);
               }
+            },
+            error: (err) => {
+              this.toastType.set('error');
+              this.toastMessage.set(
+                getApiErrorMessage(err) ||
+                  'La sesión se creó, pero no fue posible volver a consultar las sesiones.'
+              );
+              this.showToast.set(true);
             },
           });
         },
@@ -952,6 +969,7 @@ export class AttendanceControlComponent {
   }
 
   onCourseSelect(courseId: string) {
+    this.attendanceRealtimeSync.connectGroup(courseId);
     this.selectedCourseId.set(courseId);
     this.isLoadingSession.set(true);
     this.sessions.set([]);
@@ -959,18 +977,43 @@ export class AttendanceControlComponent {
 
     this.sessionService.getSessionsByGroup(courseId).subscribe({
       next: (res) => {
-        const list = res.datos || [];
+        const list = res.datos;
         this.sessions.set(list);
         this.isLoadingSession.set(false);
         if (list.length > 0) {
           this.onSessionSelect(list[0].id);
         }
       },
-      error: () => {
+      error: (err) => {
         this.isLoadingSession.set(false);
         this.sessions.set([]);
+        this.toastType.set('error');
+        this.toastMessage.set(
+          getApiErrorMessage(err) || 'No fue posible cargar las sesiones del grupo.'
+        );
+        this.showToast.set(true);
       },
     });
+  }
+
+  private getMostRecentSession(sessions: ClassSession[]): ClassSession | undefined {
+    return sessions.reduce<ClassSession | undefined>((latest, session) => {
+      if (!latest) {
+        return session;
+      }
+
+      const sessionTime = Date.parse(session.date);
+      const latestTime = Date.parse(latest.date);
+      if (
+        (Number.isFinite(sessionTime) && sessionTime > latestTime) ||
+        (sessionTime === latestTime &&
+          session.sessionNumber > latest.sessionNumber)
+      ) {
+        return session;
+      }
+
+      return latest;
+    }, undefined);
   }
 
   onSessionSelect(sessionId: string) {
@@ -978,70 +1021,55 @@ export class AttendanceControlComponent {
       return;
     }
 
-    this.triggerSkeleton(() => {
-      this.selectedSessionId.set(sessionId);
-      this.cargarEstudiantesYSesion(this.selectedCourseId(), sessionId);
-    });
+    this.selectedSessionId.set(sessionId);
+    this.cargarEstudiantesYSesion(this.selectedCourseId(), sessionId);
   }
 
   cargarEstudiantesYSesion(courseId: string, sessionId: string) {
     if (!courseId || !sessionId) return;
 
-    this.coordinatorService.getEstudiantesPorGrupo(courseId).subscribe({
-      next: (res) => {
-        const estudiantes = res.datos || [];
-        this.attendanceService.getAttendancesByGroup(courseId, sessionId).subscribe({
-          next: (attRes) => {
-            const attMap = new Map<string, AttendanceStatus>();
-            const obsMap = new Map<string, string>();
-            if (attRes.datos) {
-              for (const a of attRes.datos) {
-                const estId = a.estudiante || (a as any).estudianteId;
-                if (estId) {
-                  const status: AttendanceStatus = (a as any).estado || (a as any).status || (a.presente === false ? 'SJC' : 'AN');
-                  attMap.set(estId, status);
-                  obsMap.set(estId, a.observacion || (a as any).observaciones || '');
-                }
-              }
-            }
-
-            const records: any[] = estudiantes.map((e: any) => ({
-              studentId: e.id,
-              studentName: e.nombreCompleto,
-              studentCode: e.codigo,
-              status: attMap.get(e.id) || 'AN',
-              notes: obsMap.get(e.id) || '',
-            }));
-
-            this.sessions.update((list) =>
-              list.map((s) => (s.id === sessionId ? { ...s, records } : s))
-            );
-          },
-          error: () => {
-            const records: any[] = estudiantes.map((e: any) => ({
-              studentId: e.id,
-              studentName: e.nombreCompleto,
-              studentCode: e.codigo,
-              status: 'AN' as AttendanceStatus,
-              notes: '',
-            }));
-
-            this.sessions.update((list) =>
-              list.map((s) => (s.id === sessionId ? { ...s, records } : s))
-            );
-          },
-        });
-      },
-      error: () => {},
-    });
-  }
-
-  private triggerSkeleton(action: () => void) {
     this.isLoadingSession.set(true);
-    action();
-    setTimeout(() => {
-      this.isLoadingSession.set(false);
-    }, 300);
+    forkJoin({
+      students: this.groupService.getStudentsByGroup(courseId),
+      attendances: this.attendanceService.getAttendancesByGroup(
+        courseId,
+        sessionId
+      ),
+    })
+      .pipe(
+        map(({ students, attendances }) =>
+          AttendanceMapper.fromGroupStudentsAndAttendances(
+            students.datos,
+            attendances.datos
+          )
+        ),
+        finalize(() => this.isLoadingSession.set(false)),
+        takeUntilDestroyed(this.destroyRef)
+      )
+      .subscribe({
+        next: (records) => {
+          if (
+            this.selectedCourseId() !== courseId ||
+            this.selectedSessionId() !== sessionId
+          ) {
+            return;
+          }
+
+          this.sessions.update((list) =>
+            list.map((session) =>
+              session.id === sessionId ? { ...session, records } : session
+            )
+          );
+        },
+        error: (err) => {
+          this.toastType.set('error');
+          this.toastMessage.set(
+            getApiErrorMessage(err) ||
+              'No fue posible cargar estudiantes y asistencias desde el servidor.'
+          );
+          this.showToast.set(true);
+        },
+      });
   }
 
   setStatus(studentId: string, status: AttendanceStatus) {
@@ -1059,22 +1087,6 @@ export class AttendanceControlComponent {
             }
             return s;
           });
-          return { ...session, records: updatedRecords };
-        }
-        return session;
-      })
-    );
-  }
-
-  updateNotes(studentId: string, event: Event) {
-    const notes = (event.target as HTMLInputElement).value;
-    const sessionId = this.selectedSessionId();
-    this.sessions.update((list) =>
-      list.map((session) => {
-        if (session.id === sessionId) {
-          const updatedRecords = session.records.map((s) =>
-            s.studentId === studentId ? { ...s, notes } : s
-          );
           return { ...session, records: updatedRecords };
         }
         return session;
@@ -1150,14 +1162,11 @@ export class AttendanceControlComponent {
     }
 
     this.isSaving.set(true);
-    const payload = {
+    const payload: RegistrarAsistenciasSesionRequest = {
       sesionId: sessionId,
-      grupoId: cursoId,
       registros: currentRecords.map((r) => ({
-        studentId: r.studentId,
-        status: r.status,
-        notes: r.notes || '',
-        observaciones: r.notes || '',
+        estudianteId: r.studentId,
+        estado: r.status,
       })),
     };
 
@@ -1167,6 +1176,7 @@ export class AttendanceControlComponent {
         this.toastType.set('success');
         this.toastMessage.set('¡Asistencia consolidada y guardada exitosamente!');
         this.showToast.set(true);
+        this.cargarEstudiantesYSesion(cursoId, sessionId);
       },
       error: (err) => {
         this.isSaving.set(false);

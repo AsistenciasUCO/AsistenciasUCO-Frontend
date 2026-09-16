@@ -1,9 +1,8 @@
-import { Component, DestroyRef, signal, inject, computed } from '@angular/core';
+import { Component, signal, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { AuthService } from '../../core/services/auth.service';
-import { RealtimeService } from '../../core/realtime/realtime.service';
 import { UserRole } from '../../core/models/user.model';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
 import { BadgeComponent } from '../../shared/components/badge/badge.component';
@@ -210,7 +209,6 @@ interface ProcessedNavItem {
 export class DashboardLayoutComponent {
   private sanitizer = inject(DomSanitizer);
   private authService = inject(AuthService);
-  private realtimeService = inject(RealtimeService);
   toastService = inject(ToastService);
   toastState = this.toastService.currentToast;
 
@@ -218,15 +216,6 @@ export class DashboardLayoutComponent {
   isMockMode = this.authService.isMockMode;
   isCollapsed = signal<boolean>(false);
   isMobileMenuOpen = signal<boolean>(false);
-
-  constructor() {
-    // Realtime solo vive durante la sesión autenticada de este layout; nunca
-    // se conecta en modo mock ni sin autenticación.
-    if (this.authService.isAuthenticated() && !this.authService.isMockMode()) {
-      this.realtimeService.start();
-    }
-    inject(DestroyRef).onDestroy(() => this.realtimeService.stop());
-  }
 
   currentRole = computed<UserRole>(() => {
     const role = this.user()?.role;

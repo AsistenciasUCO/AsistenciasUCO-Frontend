@@ -14,19 +14,16 @@ export interface RealtimeEvent<TPayload = unknown> {
 
 /** Único evento de negocio actualmente conectado por el backend. */
 export const REALTIME_EVENT_TYPE = {
-  ASISTENCIA_REGISTRADA: 'ASISTENCIA_REGISTRADA',
+  ASISTENCIAS_SESION_ACTUALIZADAS: 'ASISTENCIAS_SESION_ACTUALIZADAS',
 } as const;
 
 export type RealtimeEventType =
   (typeof REALTIME_EVENT_TYPE)[keyof typeof REALTIME_EVENT_TYPE];
 
-/** payload de `ASISTENCIA_REGISTRADA`, publicado desde el flujo individual
- * `POST /api/v1/asistencias` (no desde `/asistencias/lote`). */
-export interface AttendanceRegisteredRealtimePayload {
-  estudiante: string;
+export interface AttendanceSessionUpdatedRealtimePayload {
   grupo: string;
   sesion: string;
-  presente: boolean;
+  totalRegistros: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
