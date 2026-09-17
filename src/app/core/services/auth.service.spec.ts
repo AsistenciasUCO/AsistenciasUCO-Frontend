@@ -161,26 +161,26 @@ describe('AuthService', () => {
   });
 
   describe('refresh de token', () => {
-    it('refreshAccessToken exitoso guarda el nuevo access token', async () => {
-      localStorage.setItem('gestio_refresh_token', 'refresh-old');
+    it('refreshAccessToken exitoso guarda el nuevo access token en memoria y no en localStorage', async () => {
       mockTokenResponse(basePayload(), 'refresh-new');
 
-      const result = await service.refreshAccessToken();
+      const result = await service.refreshAccessToken('refresh-old');
 
       expect(result).toBeTrue();
-      expect(localStorage.getItem('gestio_refresh_token')).toBe('refresh-new');
+      expect(service.token()).toBeTruthy();
+      expect(localStorage.getItem('gestio_refresh_token')).toBeNull();
+      expect(localStorage.getItem('gestio_access_token')).toBeNull();
     });
 
     it('refreshAccessToken fallido (HTTP no ok) devuelve false', async () => {
-      localStorage.setItem('gestio_refresh_token', 'refresh-old');
       fetchSpy.and.resolveTo({ ok: false, json: () => Promise.resolve({}) } as Response);
 
-      const result = await service.refreshAccessToken();
+      const result = await service.refreshAccessToken('refresh-old');
 
       expect(result).toBeFalse();
     });
 
-    it('refreshAccessToken sin refresh token guardado devuelve false sin llamar a fetch', async () => {
+    it('refreshAccessToken sin refresh token disponible devuelve false sin llamar a fetch', async () => {
       const result = await service.refreshAccessToken();
 
       expect(result).toBeFalse();
@@ -257,20 +257,15 @@ describe('AuthService', () => {
     });
   });
 
-  describe('initKeycloak (sesión persistida)', () => {
-    it('sin token guardado devuelve false', async () => {
+  describe('initKeycloak (gestión de sesión segura en memoria)', () => {
+    it('sin token en memoria devuelve false', async () => {
       const result = await service.initKeycloak();
       expect(result).toBeFalse();
     });
 
-    it('con token vigente y usuario cacheado, restaura la sesión sin llamar al backend', async () => {
-      const nowSeconds = Math.floor(Date.now() / 1000);
-      const payload = basePayload({ exp: nowSeconds + 3600 });
-      localStorage.setItem('gestio_access_token', makeJwt(payload));
-      localStorage.setItem(
-        'gestio_current_user',
-        JSON.stringify({ id: VALID_UUID, name: 'Ana Gómez', role: 'DOCENTE' })
-      );
+    it('con token vigente en memoria mantiene la sesión', async () => {
+      mockTokenResponse(basePayload());
+      await service.loginWithCredentials('docente@uco.edu.co', 'pass');
 
       const result = await service.initKeycloak();
 
@@ -278,42 +273,27 @@ describe('AuthService', () => {
       expect(service.currentUser()?.name).toBe('Ana Gómez');
     });
 
-    it('con token vigente pero rol inválido, limpia la sesión y devuelve false', async () => {
+    it('no lee ni restaura tokens desde localStorage (seguridad OWASP/AGENTS.md)', async () => {
       const nowSeconds = Math.floor(Date.now() / 1000);
-      const payload = basePayload({
-        exp: nowSeconds + 3600,
-        resource_access: { 'asistencias-api': { roles: [] } },
-      });
+      const payload = basePayload({ exp: nowSeconds + 3600 });
       localStorage.setItem('gestio_access_token', makeJwt(payload));
 
       const result = await service.initKeycloak();
 
       expect(result).toBeFalse();
-      expect(localStorage.getItem('gestio_access_token')).toBeNull();
-    });
-
-    it('con token expirado y refresh exitoso, restaura la sesión', async () => {
-      const nowSeconds = Math.floor(Date.now() / 1000);
-      const expiredPayload = basePayload({ exp: nowSeconds - 100 });
-      localStorage.setItem('gestio_access_token', makeJwt(expiredPayload));
-      localStorage.setItem('gestio_refresh_token', 'refresh-old');
-      mockTokenResponse(basePayload({ exp: nowSeconds + 3600 }));
-
-      const result = await service.initKeycloak();
-
-      expect(result).toBeTrue();
-      expect(service.isAuthenticated()).toBeTrue();
-    });
-
-    it('con token expirado y sin refresh token, limpia la sesión', async () => {
-      const nowSeconds = Math.floor(Date.now() / 1000);
-      const expiredPayload = basePayload({ exp: nowSeconds - 100 });
-      localStorage.setItem('gestio_access_token', makeJwt(expiredPayload));
-
-      const result = await service.initKeycloak();
-
-      expect(result).toBeFalse();
       expect(service.isAuthenticated()).toBeFalse();
+    });
+
+    it('purga credenciales legacy residuales de versiones anteriores', () => {
+      localStorage.setItem('gestio_access_token', 'legacy-token');
+      localStorage.setItem('gestio_refresh_token', 'legacy-refresh');
+      localStorage.setItem('gestio_current_user', '{"id":"123"}');
+
+      service.clearSession();
+
+      expect(localStorage.getItem('gestio_access_token')).toBeNull();
+      expect(localStorage.getItem('gestio_refresh_token')).toBeNull();
+      expect(localStorage.getItem('gestio_current_user')).toBeNull();
     });
   });
 
@@ -584,17 +564,17 @@ describe('AuthService', () => {
   });
 
   describe('refreshAccessToken: fallback de refresh_token', () => {
-    it('si la respuesta no incluye refresh_token nuevo, conserva el anterior', async () => {
-      localStorage.setItem('gestio_refresh_token', 'refresh-original');
+    it('si la respuesta no incluye refresh_token nuevo, conserva el anterior en memoria y no en localStorage', async () => {
       fetchSpy.and.resolveTo({
         ok: true,
         json: () => Promise.resolve({ access_token: makeJwt(basePayload()) }),
       } as Response);
 
-      const result = await service.refreshAccessToken();
+      const result = await service.refreshAccessToken('refresh-original');
 
       expect(result).toBeTrue();
-      expect(localStorage.getItem('gestio_refresh_token')).toBe('refresh-original');
+      expect(service.token()).toBeTruthy();
+      expect(localStorage.getItem('gestio_refresh_token')).toBeNull();
     });
   });
 });

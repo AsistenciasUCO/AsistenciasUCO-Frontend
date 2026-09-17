@@ -6,10 +6,19 @@ import { User, UserRole } from '../models/user.model';
 import { MOCK_USERS_BY_ROLE, MOCK_USERS_LIST } from '../mocks/user.mock';
 import { environment } from '../../../environments/environment';
 
+// MOCK_STORAGE_KEY: preferencia de rol mock (dato no sensible, se mantiene en localStorage).
+// Los tokens JWT NUNCA se persisten en localStorage (AGENTS.md §3.3).
 const MOCK_STORAGE_KEY = 'gestio_asistencia_mock_role';
-const ACCESS_TOKEN_KEY = 'gestio_access_token';
-const REFRESH_TOKEN_KEY = 'gestio_refresh_token';
-const USER_STORAGE_KEY = 'gestio_current_user';
+
+/** Claves residuales de versiones anteriores que pudieran quedar en el navegador del usuario. */
+const LEGACY_STORAGE_KEYS = [
+  'gestio_access_token',
+  'gestio_refresh_token',
+  'gestio_current_user',
+] as const;
+
+/** Canal BroadcastChannel para sincronización de sesión entre pestañas sin transmitir datos sensibles. */
+const AUTH_BROADCAST_CHANNEL = 'uco_auth_bus';
 
 const API_RESOURCE_CLIENT_ID = 'asistencias-api';
 
@@ -87,12 +96,28 @@ function isValidUuid(value: unknown): value is string {
   providedIn: 'root',
 })
 export class AuthService {
+  // ── Signals públicos ──────────────────────────────────────────────────────
   currentUser = signal<User | null>(null);
   token = signal<string | null>(null);
   isAuthenticated = computed(() => !!this.token());
   private mockModeSignal = signal<boolean>(environment.useMocks);
   isMockMode = computed(() => this.mockModeSignal());
+
+  // ── Estado interno de renovación (SOLO en memoria — jamás localStorage) ──
+  /**
+   * Refresh token guardado SOLO en memoria.
+   * NUNCA se persiste en localStorage (AGENTS.md §3.3).
+   */
+  private refreshTokenInMemory = signal<string | null>(null);
+
+  /**
+   * Promise de renovación en vuelo para serializar llamadas concurrentes
+   * (complementado por la cola BehaviorSubject del AuthInterceptor).
+   */
   private refreshInFlight: Promise<boolean> | null = null;
+
+  // ── BroadcastChannel multi-pestaña ────────────────────────────────────────
+  private readonly authChannel = new BroadcastChannel(AUTH_BROADCAST_CHANNEL);
 
   setMockMode(enabled: boolean): void {
     if (enabled) {
@@ -103,12 +128,45 @@ export class AuthService {
     this.mockModeSignal.set(enabled);
   }
 
-  constructor(private router: Router) { }
+  constructor(private router: Router) {
+    // Limpieza defensiva: eliminar claves residuales de versiones anteriores.
+    this.purgeLegacyStorage();
+
+    // Escuchar eventos de otras pestañas (LOGOUT, SESSION_EXPIRED).
+    this.authChannel.onmessage = (event: MessageEvent) => {
+      const { type } = (event.data ?? {}) as { type?: string };
+      if (type === 'LOGOUT' || type === 'SESSION_EXPIRED') {
+        // Limpiar signals en memoria sin re-emitir el evento (evita bucle).
+        this.token.set(null);
+        this.currentUser.set(null);
+        this.refreshTokenInMemory.set(null);
+        const currentUrl: string = this.router.url ?? '';
+        if (!currentUrl.startsWith('/login')) {
+          this.router.navigate(['/login']);
+        }
+      }
+    };
+  }
+
+  /** Elimina del navegador toda clave sensible que pudo haber dejado una versión anterior. */
+  private purgeLegacyStorage(): void {
+    for (const key of LEGACY_STORAGE_KEYS) {
+      localStorage.removeItem(key);
+    }
+  }
 
   private resolveAuthMessage(code: string): string {
     return AUTH_MESSAGES_FALLBACK[code] || 'Error en la autenticación institucional.';
   }
 
+  /**
+   * Inicialización de sesión al arrancar la app (APP_INITIALIZER).
+   *
+   * En modo real: intenta un silent refresh si el refresh token está en memoria
+   * (disponible si la app navegó internamente sin F5). Tras un F5 los signals
+   * son null y se retorna false — el guard redirige al /login.
+   * En modo mock: restaura el rol guardado en localStorage.
+   */
   async initKeycloak(): Promise<boolean> {
     if (this.mockModeSignal()) {
       const savedRole = localStorage.getItem(MOCK_STORAGE_KEY) as UserRole | null;
@@ -117,47 +175,27 @@ export class AuthService {
       return true;
     }
 
-    const savedToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-    if (savedToken) {
-      const payload = parseJwt(savedToken);
+    // Sin token en memoria (ej. F5), no hay nada que rehidratar.
+    // La autenticación silenciosa real requeriría un iframe/popup OIDC;
+    // por ahora el usuario vuelve al login — comportamiento correcto y seguro.
+    const currentToken = this.token();
+    if (currentToken) {
+      const payload = parseJwt(currentToken);
       const nowSeconds = Math.floor(Date.now() / 1000);
-
-      // Si el token aún es válido (con margen de 10s)
-      if (payload && payload.exp && payload.exp > nowSeconds + 10) {
-        const user = this.mapPayloadToUser(payload);
-        if (!user) {
-          this.clearSession();
-          return false;
-        }
-        this.token.set(savedToken);
-        const savedUserJson = localStorage.getItem(USER_STORAGE_KEY);
-        if (savedUserJson) {
-          try {
-            this.currentUser.set(JSON.parse(savedUserJson));
-            return true;
-          } catch {
-            // Ignorar error de parsing
-          }
-        }
-        this.currentUser.set(user);
-        this.fetchProfileFromBackend(savedToken);
+      if (payload?.exp && payload.exp > nowSeconds + 10) {
         return true;
       }
+    }
 
-      // Si expiró, intentar renovar con refresh_token
-      const savedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-      if (savedRefreshToken) {
-        const refreshed = await this.refreshAccessToken(savedRefreshToken);
-        if (refreshed) {
-          return true;
-        }
-      }
-
-      this.clearSession();
+    // Intentar renovar si hay refresh token en memoria.
+    const refreshToken = this.refreshTokenInMemory();
+    if (refreshToken) {
+      return await this.refreshAccessToken(refreshToken);
     }
 
     return false;
   }
+
 
   async loginWithCredentials(usernameInput: string, passwordInput: string): Promise<User> {
     const username = (usernameInput || '').trim();
@@ -221,8 +259,8 @@ export class AuthService {
     }
 
     const tokenData = await response.json();
-    const accessToken = tokenData.access_token;
-    const refreshToken = tokenData.refresh_token;
+    const accessToken: string = tokenData.access_token;
+    const refreshToken: string | undefined = tokenData.refresh_token;
 
     const payload = parseJwt(accessToken);
     if (!payload) {
@@ -234,14 +272,12 @@ export class AuthService {
       throw new Error(this.resolveAuthMessage('AUTH_NO_ROLE_ASSIGNED'));
     }
 
+    // Persistir SOLO en signals de memoria — NUNCA en localStorage (AGENTS.md §3.3).
     this.token.set(accessToken);
     this.currentUser.set(user);
-
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
     if (refreshToken) {
-      localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+      this.refreshTokenInMemory.set(refreshToken);
     }
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
 
     await this.fetchProfileFromBackend(accessToken);
 
@@ -250,7 +286,8 @@ export class AuthService {
   }
 
   async refreshAccessToken(refreshTokenStr?: string): Promise<boolean> {
-    const refreshToken = refreshTokenStr || localStorage.getItem(REFRESH_TOKEN_KEY);
+    // Prioridad: parámetro explícito > signal en memoria. NUNCA localStorage.
+    const refreshToken = refreshTokenStr || this.refreshTokenInMemory();
     if (!refreshToken) return false;
 
     const keycloakUrl = environment.keycloak.url.replace(/\/+$/, '');
@@ -276,8 +313,8 @@ export class AuthService {
       }
 
       const tokenData = await response.json();
-      const accessToken = tokenData.access_token;
-      const newRefreshToken = tokenData.refresh_token || refreshToken;
+      const accessToken: string = tokenData.access_token;
+      const newRefreshToken: string = tokenData.refresh_token || refreshToken;
 
       const payload = parseJwt(accessToken);
       if (!payload) return false;
@@ -285,12 +322,11 @@ export class AuthService {
       const user = this.mapPayloadToUser(payload);
       if (!user) return false;
 
+      // Actualizar SOLO signals en memoria — sin tocar localStorage.
       this.token.set(accessToken);
       this.currentUser.set(user);
+      this.refreshTokenInMemory.set(newRefreshToken);
 
-      localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-      localStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken);
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
       this.fetchProfileFromBackend(accessToken);
       return true;
     } catch {
@@ -335,9 +371,8 @@ export class AuthService {
     this.currentUser.set(selectedUser);
     const mockToken = `mock-jwt-token-${role.toLowerCase()}-${selectedUser.id}`;
     this.token.set(mockToken);
+    // En modo mock solo persistimos el rol (no sensible).
     localStorage.setItem(MOCK_STORAGE_KEY, role);
-    localStorage.setItem(ACCESS_TOKEN_KEY, mockToken);
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(selectedUser));
 
     if (navigateToApp) {
       this.navigateForRole(role);
@@ -378,18 +413,46 @@ export class AuthService {
   }
 
   async logout(): Promise<void> {
-    this.clearSession();
+    this.clearSession(true);
     this.router.navigate(['/login']);
   }
 
-  clearSession(): void {
+  clearSession(broadcast = false): void {
     this.token.set(null);
     this.currentUser.set(null);
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
-    localStorage.removeItem(USER_STORAGE_KEY);
+    this.refreshTokenInMemory.set(null);
+    // Limpiar preferencia de rol mock (único dato no sensible en localStorage).
     localStorage.removeItem(MOCK_STORAGE_KEY);
+    // Limpieza defensiva de claves que pudieran haber quedado de versiones anteriores.
+    this.purgeLegacyStorage();
+
+    if (broadcast) {
+      try {
+        this.authChannel.postMessage({ type: 'LOGOUT' });
+      } catch {
+        // Ignorar si el canal no está disponible.
+      }
+    }
   }
+
+  /** Expira la sesión definitivamente: limpia estado, notifica otras pestañas y redirige al login. */
+  notifySessionExpired(): void {
+    this.token.set(null);
+    this.currentUser.set(null);
+    this.refreshTokenInMemory.set(null);
+    this.purgeLegacyStorage();
+    try {
+      this.authChannel.postMessage({ type: 'SESSION_EXPIRED' });
+    } catch {
+      // Ignorar si el canal no está disponible.
+    }
+    if (!(this.router.url ?? '').startsWith('/login')) {
+      this.router.navigate(['/login'], {
+        queryParams: { returnUrl: this.router.url ?? '/' },
+      });
+    }
+  }
+
 
   updateUserProfile(updatedData: Partial<User>): Observable<ApiResponse<User>> {
     const current = this.currentUser();
@@ -421,7 +484,7 @@ export class AuthService {
 
     if (this.mockModeSignal()) {
       this.currentUser.set(updatedUser);
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser));
+      // En modo mock, el usuario sincronizado vive solo en el signal de memoria.
       return of({
         idTransaccion: 'mock-tx-update-profile',
         exitoso: true,
@@ -461,7 +524,7 @@ export class AuthService {
             numeroIdentificacion: raw.numeroIdentificacion || updatedUser.numeroIdentificacion,
           };
           this.currentUser.set(syncedUser);
-          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(syncedUser));
+          // Usuario sincronizado solo en signal de memoria — sin localStorage.
           subscriber.next({
             idTransaccion: data.idTransaccion || 'tx-profile-ok',
             exitoso: true,
@@ -515,7 +578,7 @@ export class AuthService {
       };
 
       this.currentUser.set(syncedUser);
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(syncedUser));
+      // Perfil sincronizado solo en signal de memoria — sin localStorage.
       return syncedUser;
     } catch (e) {
       console.warn('No se pudo hidratar el perfil desde el backend:', e);
