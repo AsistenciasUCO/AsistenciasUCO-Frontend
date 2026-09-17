@@ -1,4 +1,4 @@
-import { Component, input, computed } from '@angular/core';
+import { Component, ChangeDetectionStrategy, input, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 export type CardPadding = 'none' | 'sm' | 'md' | 'lg';
@@ -7,6 +7,7 @@ export type CardPadding = 'none' | 'sm' | 'md' | 'lg';
   selector: 'app-card',
   standalone: true,
   imports: [CommonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'flex flex-col h-full w-full',
   },

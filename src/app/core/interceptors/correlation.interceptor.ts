@@ -13,8 +13,21 @@ export const correlationInterceptor: HttpInterceptorFn = (req, next) => {
   );
 };
 
+function normalizeHost(hostname: string): string {
+  return hostname === '127.0.0.1' ? 'localhost' : hostname;
+}
+
 function isApiRequest(url: string): boolean {
-  const requestUrl = new URL(url, window.location.origin);
-  const apiUrl = new URL(environment.apiUrl, window.location.origin);
-  return requestUrl.origin === apiUrl.origin && requestUrl.pathname.startsWith(apiUrl.pathname);
+  try {
+    const requestUrl = new URL(url, window.location.origin);
+    const apiUrl = new URL(environment.apiUrl, window.location.origin);
+    return (
+      requestUrl.protocol === apiUrl.protocol &&
+      normalizeHost(requestUrl.hostname) === normalizeHost(apiUrl.hostname) &&
+      requestUrl.port === apiUrl.port &&
+      requestUrl.pathname.startsWith(apiUrl.pathname)
+    );
+  } catch {
+    return false;
+  }
 }

@@ -1,4 +1,4 @@
-import { Component, input, computed } from '@angular/core';
+import { Component, ChangeDetectionStrategy, input, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 export type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
@@ -7,6 +7,7 @@ export type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral'
   selector: 'app-badge',
   standalone: true,
   imports: [CommonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <span [class]="badgeClasses()">
       @if (dot()) {

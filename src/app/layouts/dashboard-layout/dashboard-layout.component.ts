@@ -1,31 +1,25 @@
-import { Component, signal, inject, computed } from '@angular/core';
+import { Component, signal, inject, computed, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { AuthService } from '../../core/services/auth.service';
 import { UserRole } from '../../core/models/user.model';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
 import { BadgeComponent } from '../../shared/components/badge/badge.component';
 import { ToastComponent, ToastService } from '../../shared/components/toast/toast.component';
+import { IconComponent, IconName } from '../../shared/components/icon/icon.component';
 
 interface NavItem {
   label: string;
   route: string;
   roles: UserRole[];
-  icon: string;
-}
-
-interface ProcessedNavItem {
-  label: string;
-  route: string;
-  roles: UserRole[];
-  icon: SafeHtml;
+  icon: IconName;
 }
 
 @Component({
   selector: 'app-dashboard-layout',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, AvatarComponent, BadgeComponent, ToastComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, AvatarComponent, BadgeComponent, ToastComponent, IconComponent],
   template: `
     <app-toast
       [visible]="toastState().visible"
@@ -106,7 +100,7 @@ interface ProcessedNavItem {
               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-warm-700 hover:bg-warm-100 hover:text-warm-900 transition-all duration-150 group"
               [title]="isCollapsed() ? item.label : ''"
             >
-              <div [innerHTML]="item.icon" class="w-5 h-5 text-warm-500 group-hover:text-primary-700 shrink-0 transition-colors flex items-center justify-center"></div>
+              <app-icon [name]="item.icon" cssClass="w-5 h-5 text-warm-500 group-hover:text-primary-700 shrink-0 transition-colors"></app-icon>
               @if (!isCollapsed()) {
                 <span class="truncate">{{ item.label }}</span>
               }
@@ -207,7 +201,6 @@ interface ProcessedNavItem {
   `,
 })
 export class DashboardLayoutComponent {
-  private sanitizer = inject(DomSanitizer);
   private authService = inject(AuthService);
   toastService = inject(ToastService);
   toastState = this.toastService.currentToast;
@@ -228,102 +221,97 @@ export class DashboardLayoutComponent {
       label: 'Panel Principal',
       route: '/app/dashboard',
       roles: ['ADMINISTRADOR', 'DECANO', 'COORDINADOR', 'DOCENTE', 'ESTUDIANTE', 'ADMIN'],
-      icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>`,
+      icon: 'dashboard',
     },
     {
       label: 'Gestión de Decanos',
       route: '/app/admin/decanos',
       roles: ['ADMINISTRADOR', 'ADMIN'],
-      icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>`,
+      icon: 'decanos',
     },
     {
       label: 'Infraestructura & Sedes',
       route: '/app/admin/catalogos',
       roles: ['ADMINISTRADOR', 'ADMIN'],
-      icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" /></svg>`,
+      icon: 'catalogos',
     },
     {
       label: 'Sistema & Auditoría',
       route: '/app/admin/sistema',
       roles: ['ADMINISTRADOR', 'ADMIN'],
-      icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>`,
+      icon: 'sistema',
     },
     {
       label: 'Facultad & Grupos',
       route: '/app/decano/facultad',
       roles: ['DECANO'],
-      icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>`,
+      icon: 'facultad',
     },
     {
       label: 'Gestión de Coordinadores',
       route: '/app/decano/coordinadores',
       roles: ['DECANO'],
-      icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>`,
+      icon: 'coordinadores',
     },
     {
       label: 'Gestión de Docentes',
       route: '/app/coordinador/docentes',
       roles: ['COORDINADOR'],
-      icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>`,
+      icon: 'docentes',
     },
     {
       label: 'Planes de Estudio',
       route: '/app/coordinador/planes-estudio',
       roles: ['COORDINADOR'],
-      icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>`,
+      icon: 'planes-estudio',
     },
     {
       label: 'Estudiantes & Matrícula',
       route: '/app/coordinador/estudiantes',
       roles: ['COORDINADOR'],
-      icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>`,
+      icon: 'estudiantes',
     },
     {
       label: 'Mis Horarios',
       route: '/app/docente/horarios',
       roles: ['DOCENTE'],
-      icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>`,
+      icon: 'horarios',
     },
     {
       label: 'Gestión de Grupos',
       route: '/app/docente/grupos',
       roles: ['DOCENTE'],
-      icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>`,
+      icon: 'grupos',
     },
     {
       label: 'Toma de Asistencia',
       route: '/app/asistencia',
       roles: ['DOCENTE'],
-      icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>`,
+      icon: 'asistencia',
     },
     {
       label: 'Reclamos de Asistencia',
       route: '/app/docente/reclamos',
       roles: ['DOCENTE'],
-      icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>`,
+      icon: 'reclamos',
     },
     {
       label: 'Mis Horarios',
       route: '/app/estudiante/horarios',
       roles: ['ESTUDIANTE'],
-      icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>`,
+      icon: 'horarios',
     },
     {
       label: 'Mis Materias',
       route: '/app/estudiante/materias',
       roles: ['ESTUDIANTE'],
-      icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>`,
+      icon: 'materias',
     },
   ];
 
-  filteredNavItems = computed<ProcessedNavItem[]>(() => {
+  filteredNavItems = computed<NavItem[]>(() => {
     const role = this.currentRole();
-    return this.allNavItems
-      .filter((item) => item.roles.includes(role))
-      .map((item) => ({
-        ...item,
-        icon: this.sanitizer.bypassSecurityTrustHtml(item.icon),
-      }));
+    return this.allNavItems.filter((item) => item.roles.includes(role));
   });
 
   toggleCollapsed(): void {

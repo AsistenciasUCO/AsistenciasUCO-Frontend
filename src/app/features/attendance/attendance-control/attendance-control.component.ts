@@ -1,4 +1,4 @@
-import { Component, DestroyRef, signal, computed, HostListener, inject } from '@angular/core';
+import { Component, DestroyRef, signal, computed, HostListener, inject, ChangeDetectionStrategy } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -46,6 +46,7 @@ type StudentEnrollmentField =
 @Component({
   selector: 'app-attendance-control',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
     FormsModule,

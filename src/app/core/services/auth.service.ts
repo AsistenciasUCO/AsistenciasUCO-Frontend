@@ -21,6 +21,19 @@ const VALID_INSTITUTIONAL_ROLES: readonly UserRole[] = [
   'ESTUDIANTE',
 ];
 
+/**
+ * Fallbacks institucionales para mensajes de autenticación.
+ * La única fuente de verdad en la nube es Azure App Configuration (messages:user:AUTH_*).
+ */
+const AUTH_MESSAGES_FALLBACK: Record<string, string> = {
+  AUTH_FIELDS_REQUIRED: 'Por favor ingresa tu usuario y contraseña.',
+  AUTH_NETWORK_ERROR: 'No se pudo establecer conexión con el servidor de autenticación institucional.',
+  AUTH_GENERIC_ERROR: 'Usuario o contraseña incorrectos.',
+  AUTH_INVALID_CREDENTIALS: 'Credenciales inválidas. Verifica tu usuario y contraseña institucional.',
+  AUTH_INVALID_RESPONSE: 'Respuesta de autenticación inválida.',
+  AUTH_NO_ROLE_ASSIGNED: 'Tu cuenta institucional no tiene un rol o identidad válidos asignados. Contacta al administrador del sistema.',
+};
+
 // Forma general de UUID (RFC 4122, cualquier versión/variante): valida que
 // idUsuario sea un identificador institucional real, no una versión concreta.
 const UUID_PATTERN =
@@ -90,7 +103,11 @@ export class AuthService {
     this.mockModeSignal.set(enabled);
   }
 
-  constructor(private router: Router) {}
+  constructor(private router: Router) { }
+
+  private resolveAuthMessage(code: string): string {
+    return AUTH_MESSAGES_FALLBACK[code] || 'Error en la autenticación institucional.';
+  }
 
   async initKeycloak(): Promise<boolean> {
     if (this.mockModeSignal()) {
@@ -147,7 +164,7 @@ export class AuthService {
     const password = passwordInput || '';
 
     if (!username || !password) {
-      throw new Error('Por favor ingresa tu usuario y contraseña.');
+      throw new Error(this.resolveAuthMessage('AUTH_FIELDS_REQUIRED'));
     }
 
     if (this.mockModeSignal()) {
@@ -182,17 +199,19 @@ export class AuthService {
       });
     } catch (networkError) {
       console.error('Error de red al conectar con el servidor de autenticación institucional:', networkError);
-      throw new Error('No se pudo establecer conexión con el servidor de autenticación institucional.');
+      throw new Error(this.resolveAuthMessage('AUTH_NETWORK_ERROR'));
     }
 
     if (!response.ok) {
-      let errorDesc = 'Usuario o contraseña incorrectos.';
+      let errorDesc = this.resolveAuthMessage('AUTH_GENERIC_ERROR');
       try {
         const errorJson = await response.json();
         if (errorJson?.error_description) {
-          errorDesc = errorJson.error_description;
-          if (errorDesc === 'Invalid user credentials') {
-            errorDesc = 'Credenciales inválidas. Verifica tu usuario y contraseña institucional.';
+          const rawDescription = errorJson.error_description;
+          if (rawDescription === 'Invalid user credentials') {
+            errorDesc = this.resolveAuthMessage('AUTH_INVALID_CREDENTIALS');
+          } else {
+            errorDesc = rawDescription;
           }
         }
       } catch {
@@ -207,14 +226,12 @@ export class AuthService {
 
     const payload = parseJwt(accessToken);
     if (!payload) {
-      throw new Error('Respuesta de autenticación inválida.');
+      throw new Error(this.resolveAuthMessage('AUTH_INVALID_RESPONSE'));
     }
 
     const user = this.mapPayloadToUser(payload);
     if (!user) {
-      throw new Error(
-        'Tu cuenta institucional no tiene un rol o identidad válidos asignados. Contacta al administrador del sistema.'
-      );
+      throw new Error(this.resolveAuthMessage('AUTH_NO_ROLE_ASSIGNED'));
     }
 
     this.token.set(accessToken);

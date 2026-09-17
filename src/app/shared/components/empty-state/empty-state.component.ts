@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, ChangeDetectionStrategy, input, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 export type EmptyStateVariant = 'neutral' | 'search' | 'info' | 'error';
@@ -7,6 +7,7 @@ export type EmptyStateVariant = 'neutral' | 'search' | 'info' | 'error';
   selector: 'app-empty-state',
   standalone: true,
   imports: [CommonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div
       class="flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-2xl border border-dashed border-warm-300 bg-white/60 min-h-[220px]"
@@ -45,7 +46,7 @@ export class EmptyStateComponent {
   description = input<string>('');
   variant = input<EmptyStateVariant>('neutral');
 
-  iconBgClasses(): string {
+  readonly iconBgClasses = computed(() => {
     const base = 'w-14 h-14 rounded-2xl flex items-center justify-center shadow-xs transition-colors shrink-0';
     switch (this.variant()) {
       case 'search':
@@ -57,5 +58,5 @@ export class EmptyStateComponent {
       default:
         return `${base} bg-warm-100 text-warm-600`;
     }
-  }
+  });
 }

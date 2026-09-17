@@ -1,6 +1,6 @@
 import { ApplicationConfig, provideZoneChangeDetection, APP_INITIALIZER } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withInterceptors, withXsrfConfiguration } from '@angular/common/http';
 import { routes } from './app.routes';
 import { correlationInterceptor } from './core/interceptors/correlation.interceptor';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
@@ -17,7 +17,13 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
-    provideHttpClient(withInterceptors([correlationInterceptor, authInterceptor, errorInterceptor])),
+    provideHttpClient(
+      withInterceptors([correlationInterceptor, authInterceptor, errorInterceptor]),
+      withXsrfConfiguration({
+        cookieName: 'XSRF-TOKEN',
+        headerName: 'X-XSRF-TOKEN',
+      })
+    ),
     { provide: REALTIME_TRANSPORT, useClass: FetchSseRealtimeTransport },
     {
       provide: APP_INITIALIZER,

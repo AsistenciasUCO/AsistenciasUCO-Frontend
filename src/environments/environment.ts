@@ -30,8 +30,7 @@ export const environment = {
     get url(): string {
       const explicit = (window as any)['env']?.['KEYCLOAK_URL'];
       if (explicit) return explicit;
-      const host = getHost();
-      return `http://${host}:8081`;
+      return 'http://127.0.0.1:8081';
     },
     realm: (window as any)['env']?.['KEYCLOAK_REALM'] || 'asistencias-uco',
     clientId: (window as any)['env']?.['KEYCLOAK_CLIENT_ID'] || 'asistencias-uco-frontend',

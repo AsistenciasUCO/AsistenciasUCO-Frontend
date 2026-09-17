@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { Component, ChangeDetectionStrategy, input, output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 export interface SelectOption {
@@ -11,6 +11,7 @@ export interface SelectOption {
   selector: 'app-form-select',
   standalone: true,
   imports: [CommonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="relative w-full">
       <select

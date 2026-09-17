@@ -1,4 +1,4 @@
-import { Component, input, output, HostListener } from '@angular/core';
+import { Component, ChangeDetectionStrategy, input, output, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 let modalIdCounter = 0;
@@ -7,6 +7,7 @@ let modalIdCounter = 0;
   selector: 'app-modal',
   standalone: true,
   imports: [CommonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (isOpen()) {
       <div

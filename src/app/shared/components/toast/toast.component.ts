@@ -1,4 +1,4 @@
-import { Component, input, output, signal, OnChanges, SimpleChanges, Injectable, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, input, output, signal, computed, effect, Injectable, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -50,6 +50,7 @@ export class ToastService {
   selector: 'app-toast',
   standalone: true,
   imports: [CommonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (visible() || isExiting()) {
       <div
@@ -108,7 +109,7 @@ export class ToastService {
     }
   `,
 })
-export class ToastComponent implements OnChanges {
+export class ToastComponent {
   visible = input<boolean>(false);
   message = input<string>('');
   type = input<ToastType>('success');
@@ -119,13 +120,13 @@ export class ToastComponent implements OnChanges {
   isExiting = signal<boolean>(false);
   private timerId: ReturnType<typeof setTimeout> | null = null;
 
-  ngOnChanges(changes: SimpleChanges): void {
-    if (changes['visible']) {
+  constructor() {
+    effect(() => {
       if (this.visible()) {
         this.isExiting.set(false);
         this.startAutoDismissTimer();
       }
-    }
+    });
   }
 
   private startAutoDismissTimer(): void {
@@ -152,9 +153,9 @@ export class ToastComponent implements OnChanges {
     }
   }
 
-  containerClasses(): string {
+  readonly containerClasses = computed(() => {
     const base = 'fixed top-16 right-6 z-50 flex flex-col gap-2 p-3.5 bg-warm-950 text-white rounded-2xl shadow-warm-lg border border-primary-800/80 max-w-xs sm:max-w-sm w-full select-none';
     const anim = this.isExiting() ? 'animate-toast-exit' : 'animate-toast-enter';
     return `${base} ${anim}`;
-  }
+  });
 }

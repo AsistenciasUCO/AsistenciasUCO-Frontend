@@ -38,36 +38,13 @@ export class CourseService {
   constructor(private http: HttpClient) {}
 
   getTeacherCourses(docenteId?: string): Observable<ApiResponse<Course[]>> {
-    if (environment.useMocks) {
-      return of({
-        idTransaccion: 'mock-tx-courses-001',
-        exitoso: true,
-        total: this.coursesSignal().length,
-        datos: [...this.coursesSignal()],
-      }).pipe(delay(250));
-    }
-
-    return this.http.get<any>(`${environment.apiUrl}/grupos`).pipe(
-      map((res: any) => {
-        const grupos: any[] = Array.isArray(res) ? res : (res && res.datos ? res.datos : []);
-        return {
-          idTransaccion: 'tx-courses-001',
-          exitoso: true,
-          total: grupos ? grupos.length : 0,
-          datos: grupos ? grupos.map((g, idx) => ({
-            id: g.id,
-            code: g.codigo || g.codigoGrupo || `GRP-00${idx + 1}`,
-            name: g.nombreAsignatura || g.nombreMateria || g.nombre || 'Asignatura',
-            section: g.nombre || g.seccion || 'Sección A',
-            schedule: g.horario || 'Lun, Mié 08:00 - 10:00 AM',
-            room: g.aula || 'Aula Principal',
-            enrolledStudentsCount: g.estudiantesActivos || g.totalEstudiantes || 0,
-            cupoMaximo: g.cupoMaximo || 35,
-            docenteName: g.nombreDocente || 'Docente UCO',
-            colorCategory: (['emerald', 'amber', 'blue', 'purple'][idx % 4]) as any,
-          })) : []
-        };
-      }),
+    return this.getCurrentTeacherCourses().pipe(
+      map((res) => ({
+        idTransaccion: 'tx-courses-teacher',
+        exitoso: res.exitoso,
+        total: res.total,
+        datos: res.datos,
+      })),
       catchError(() =>
         of({
           idTransaccion: 'tx-courses-error',

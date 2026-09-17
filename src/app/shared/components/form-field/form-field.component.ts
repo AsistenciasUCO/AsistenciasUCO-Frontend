@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, ChangeDetectionStrategy, input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 let fieldIdCounter = 0;
@@ -7,6 +7,7 @@ let fieldIdCounter = 0;
   selector: 'app-form-field',
   standalone: true,
   imports: [CommonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="flex flex-col gap-1.5 w-full">
       @if (label()) {

@@ -1,4 +1,4 @@
-import { Component, input, computed } from '@angular/core';
+import { Component, ChangeDetectionStrategy, input, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 export type SkeletonVariant = 'text' | 'circular' | 'rectangular' | 'card';
@@ -7,6 +7,7 @@ export type SkeletonVariant = 'text' | 'circular' | 'rectangular' | 'card';
   selector: 'app-skeleton',
   standalone: true,
   imports: [CommonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div
       [class]="skeletonClasses()"
