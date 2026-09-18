@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of, delay, catchError } from 'rxjs';
+import { Observable, of, delay, catchError, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 import {
@@ -13,33 +13,11 @@ import {
   MOCK_SOLICITUDES_REVISION,
   MOCK_HORARIOS_DOCENTE,
 } from '../mocks/role-management.mock';
-import { ClaimMapper, SolicitudRevisionDTO } from '../mappers/claim.mapper';
-import { StorageSerializer } from '../utils/storage-serializer.util';
-
 @Injectable({
   providedIn: 'root',
 })
 export class AttendanceClaimService {
-  private readonly STORAGE_KEY = 'gestio_claims_db';
-
-  private loadStoredClaims(): SolicitudRevisionItem[] {
-    const cached = StorageSerializer.deserializeWithMapper<SolicitudRevisionDTO, SolicitudRevisionItem>(
-      this.STORAGE_KEY,
-      ClaimMapper.fromDTO,
-      []
-    );
-    return cached.length > 0 ? cached : [...MOCK_SOLICITUDES_REVISION];
-  }
-
-  private persistClaims(list: SolicitudRevisionItem[]): void {
-    StorageSerializer.serializeWithMapper<SolicitudRevisionDTO, SolicitudRevisionItem>(
-      this.STORAGE_KEY,
-      list,
-      ClaimMapper.toDTO
-    );
-  }
-
-  private solicitudes = signal<SolicitudRevisionItem[]>(this.loadStoredClaims());
+  private solicitudes = signal<SolicitudRevisionItem[]>([...MOCK_SOLICITUDES_REVISION]);
   private sesionesPorMateria = signal<Record<string, SesionMateriaDetalle[]>>({
     ...MOCK_SESIONES_MATERIAS,
   });
@@ -132,11 +110,7 @@ export class AttendanceClaimService {
 
     if (environment.useMocks) {
       // 1. Agregar a la lista global de solicitudes
-      this.solicitudes.update((prev) => {
-        const next = [nuevaSolicitud, ...prev];
-        this.persistClaims(next);
-        return next;
-      });
+      this.solicitudes.update((prev) => [nuevaSolicitud, ...prev]);
 
       // 2. Actualizar la sesión en el desglose de la materia
       this.sesionesPorMateria.update((map) => {
@@ -177,11 +151,7 @@ export class AttendanceClaimService {
     sesionId: string
   ): Observable<ApiResponse<boolean>> {
     if (environment.useMocks) {
-      this.solicitudes.update((prev) => {
-        const next = prev.filter((item) => item.id !== id);
-        this.persistClaims(next);
-        return next;
-      });
+      this.solicitudes.update((prev) => prev.filter((item) => item.id !== id));
 
       this.sesionesPorMateria.update((map) => {
         const sesiones = map[materiaId] || [];
@@ -194,7 +164,6 @@ export class AttendanceClaimService {
               categoriaReclamo: undefined,
               soporteAdjuntoNombre: undefined,
               justificacionEstudiante: undefined,
-              respuestaDocente: undefined,
             };
           }
           return s;
@@ -203,16 +172,23 @@ export class AttendanceClaimService {
       });
 
       return of({
-        idTransaccion: 'mock-tx-claim-deleted',
+        idTransaccion: 'mock-tx-claim-delete',
         exitoso: true,
-        mensajeUsuario: 'La solicitud de revisión ha sido eliminada correctamente.',
+        mensajeUsuario: 'Solicitud de revisión eliminada correctamente.',
         datos: true,
-      }).pipe(delay(300));
+      }).pipe(delay(200));
     }
 
-    return this.http.delete<ApiResponse<boolean>>(
-      `${environment.apiUrl}/estudiante/reclamos/${id}`
-    );
+    return this.http
+      .delete<ApiResponse<boolean>>(`${environment.apiUrl}/estudiante/reclamos/${id}`)
+      .pipe(
+        map((res) => ({
+          idTransaccion: res.idTransaccion || 'tx-claim-delete',
+          exitoso: res.exitoso,
+          mensajeUsuario: res.mensajeUsuario || 'Solicitud de revisión eliminada.',
+          datos: res.datos,
+        }))
+      );
   }
 
   resolverReclamo(
@@ -220,12 +196,12 @@ export class AttendanceClaimService {
     accion: 'APROBADA' | 'RECHAZADA',
     respuestaDocente: string = ''
   ): Observable<ApiResponse<SolicitudRevisionItem | null>> {
+    const fechaRespuesta = new Date().toISOString().split('T')[0];
+
     if (environment.useMocks) {
       let resolvedItem: SolicitudRevisionItem | null = null;
-      const fechaRespuesta = new Date().toISOString().split('T')[0];
-
       this.solicitudes.update((prev) => {
-        const next = prev.map((item) => {
+        return prev.map((item) => {
           if (item.id === id) {
             resolvedItem = {
               ...item,
@@ -237,8 +213,6 @@ export class AttendanceClaimService {
           }
           return item;
         });
-        this.persistClaims(next);
-        return next;
       });
 
       if (resolvedItem) {

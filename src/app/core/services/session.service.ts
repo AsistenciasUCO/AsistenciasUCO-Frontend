@@ -1,14 +1,12 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of, delay, catchError, map } from 'rxjs';
+import { Observable, of, delay, map, catchError, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 import { ApiListResponse } from '../api/models/api-list-response.model';
 import { ApiMessageResponse } from '../api/models/api-message-response.model';
 import { SesionConsultadaApiDto } from '../api/models/sesion-consultada-api-dto.model';
 import { ClassSession } from '../models/attendance.model';
-import { AttendanceMapper, ClassSessionDTO } from '../mappers/attendance.mapper';
-import { StorageSerializer } from '../utils/storage-serializer.util';
 
 @Injectable({
   providedIn: 'root',
@@ -105,29 +103,7 @@ export class SessionService {
     ],
   };
 
-  private readonly STORAGE_KEY = 'gestio_sessions_db';
-
-  private loadStoredSessions(): Record<string, ClassSession[]> {
-    const raw = StorageSerializer.deserialize<Record<string, ClassSessionDTO[]>>(this.STORAGE_KEY, {});
-    if (!raw || Object.keys(raw).length === 0) {
-      return this.initialSessions;
-    }
-    const result: Record<string, ClassSession[]> = {};
-    for (const [key, dtos] of Object.entries(raw)) {
-      result[key] = dtos.map(AttendanceMapper.sessionFromDTO);
-    }
-    return result;
-  }
-
-  private persistSessions(data: Record<string, ClassSession[]>): void {
-    const dtosRecord: Record<string, ClassSessionDTO[]> = {};
-    for (const [key, models] of Object.entries(data)) {
-      dtosRecord[key] = models.map(AttendanceMapper.sessionToDTO);
-    }
-    StorageSerializer.serialize(this.STORAGE_KEY, dtosRecord);
-  }
-
-  private sessionsByGroupSignal = signal<Record<string, ClassSession[]>>(this.loadStoredSessions());
+  private sessionsByGroupSignal = signal<Record<string, ClassSession[]>>(this.initialSessions);
 
   constructor(private http: HttpClient) {}
 
@@ -204,7 +180,7 @@ export class SessionService {
       const currentList = this.sessionsByGroupSignal()[grupoId] || [];
       const sessionNumber = currentList.length + 1;
       const newSession: ClassSession = {
-        id: `ses-${grupoId}-${Date.now()}`,
+        id: `mock-ses-${sessionNumber}`,
         courseId: grupoId,
         sessionNumber,
         title: data.title,
@@ -218,14 +194,10 @@ export class SessionService {
         records: [],
       };
 
-      this.sessionsByGroupSignal.update((map) => {
-        const next = {
-          ...map,
-          [grupoId]: [...(map[grupoId] || []), newSession],
-        };
-        this.persistSessions(next);
-        return next;
-      });
+      this.sessionsByGroupSignal.update((map) => ({
+        ...map,
+        [grupoId]: [...(map[grupoId] || []), newSession],
+      }));
 
       const tipoStr = (newSession.tipo || 'EXTRAORDINARIA').toLowerCase();
       return of({
@@ -261,9 +233,7 @@ export class SessionService {
           }
           return s;
         });
-        const next = { ...map, [grupoId]: modified };
-        this.persistSessions(next);
-        return next;
+        return { ...map, [grupoId]: modified };
       });
 
       return of({
@@ -275,45 +245,29 @@ export class SessionService {
     }
 
     return this.http
-      .put<any>(`${environment.apiUrl}/sesiones/${sesionId}`, cambios)
+      .put<ApiResponse<ClassSession>>(`${environment.apiUrl}/sesiones/${sesionId}`, cambios)
       .pipe(
         map((res) => ({
           idTransaccion: res.idTransaccion || 'tx-ses-update-001',
-          exitoso: true,
-          mensajeUsuario: 'Sesión actualizada.',
+          exitoso: res.exitoso,
+          mensajeUsuario: res.mensajeUsuario || 'Sesión actualizada.',
           datos: res.datos,
-        })),
-        catchError(() =>
-          of({
-            idTransaccion: 'tx-ses-update-error',
-            exitoso: false,
-            mensajeUsuario: 'Error al actualizar sesión.',
-            datos: undefined as any,
-          })
-        )
+        }))
       );
   }
 
   closeSession(sesionId: string): Observable<ApiResponse<void>> {
     return this.http
-      .post<any>(`${environment.apiUrl}/sesiones/cierres`, {
+      .post<ApiResponse<void>>(`${environment.apiUrl}/sesiones/cierres`, {
         sesion: sesionId,
       })
       .pipe(
         map((res) => ({
           idTransaccion: res.idTransaccion || 'tx-ses-cierre-001',
-          exitoso: true,
-          mensajeUsuario: 'Sesión cerrada y consolidada exitosamente.',
+          exitoso: res.exitoso,
+          mensajeUsuario: res.mensajeUsuario || 'Sesión cerrada y consolidada exitosamente.',
           datos: undefined,
-        })),
-        catchError(() =>
-          of({
-            idTransaccion: 'tx-ses-cierre-fallback',
-            exitoso: true,
-            mensajeUsuario: 'Sesión cerrada y consolidada exitosamente.',
-            datos: undefined,
-          })
-        )
+        }))
       );
   }
 
@@ -328,7 +282,6 @@ export class SessionService {
               : s
           );
         }
-        this.persistSessions(next);
         return next;
       });
 
@@ -368,43 +321,35 @@ export class SessionService {
     expiraEnSegundos: number;
     expiraEn: string;
   }>> {
-    return this.http.get<any>(`${environment.apiUrl}/sesiones/${sesionId}/qr-token`).pipe(
+    return this.http.get<ApiResponse<{
+      sesionId: string;
+      grupoId: string;
+      token: string;
+      codigoAcceso: string;
+      expiraEnSegundos: number;
+      expiraEn: string;
+    }>>(`${environment.apiUrl}/sesiones/${sesionId}/qr-token`).pipe(
       map((res) => ({
         idTransaccion: res.idTransaccion || 'tx-qr-token',
         exitoso: res.exitoso,
         mensajeUsuario: res.mensajeUsuario || 'Token generado con éxito.',
         datos: res.datos,
-      })),
-      catchError(() => {
-        const pin = String(Math.floor(100000 + Math.random() * 900000));
-        return of({
-          idTransaccion: 'tx-qr-mock',
-          exitoso: true,
-          mensajeUsuario: 'Código temporal generado.',
-          datos: {
-            sesionId,
-            grupoId: 'grp-001',
-            token: `UCO-QR-${Date.now()}`,
-            codigoAcceso: pin,
-            expiraEnSegundos: 60,
-            expiraEn: new Date(Date.now() + 60000).toISOString(),
-          },
-        });
-      })
+      }))
     );
   }
 
-  registrarAutoAsistencia(payload: { token?: string; codigoAcceso?: string }): Observable<ApiResponse<any>> {
-    return this.http.post<any>(`${environment.apiUrl}/estudiante/asistencia-qr`, payload).pipe(
+  registrarAutoAsistencia(payload: { token?: string; codigoAcceso?: string }): Observable<ApiResponse<unknown>> {
+    return this.http.post<ApiResponse<unknown>>(`${environment.apiUrl}/estudiante/asistencia-qr`, payload).pipe(
       map((res) => ({
         idTransaccion: res.idTransaccion || 'tx-auto-asistencia',
         exitoso: res.exitoso,
         mensajeUsuario: res.mensajeUsuario || '¡Asistencia registrada con éxito!',
         datos: res.datos,
       })),
-      catchError((err) => {
-        const msg = err?.error?.message || err?.error?.mensajeUsuario || 'El código ingresado no es válido o ha expirado.';
-        throw new Error(msg);
+      catchError((err: unknown) => {
+        const errAny = err as { error?: { message?: string; mensajeUsuario?: string } };
+        const msg = errAny?.error?.message || errAny?.error?.mensajeUsuario || 'El código ingresado no es válido o ha expirado.';
+        return throwError(() => new Error(msg));
       })
     );
   }

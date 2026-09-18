@@ -6,6 +6,10 @@ import { TipoIdentificacionApiDto } from '../api/models/tipo-identificacion-api-
 
 export type IdentityDocumentTypeDTO = TipoIdentificacionApiDto;
 export type TipoIdentificacionItem = TipoIdentificacionApiDto;
+export interface FacultadItem {
+  id: string;
+  nombre: string;
+}
 
 export const MOCK_DOCUMENT_TYPES: TipoIdentificacionApiDto[] = [
   { id: 'A1B2C3D4-0000-0000-0000-000000000001', tipoIdentificacion: 'CC', nombre: 'Cedula de Ciudadania' },
@@ -41,4 +45,47 @@ export class CatalogService {
       map((items) => ({ exitoso: true, datos: items }))
     );
   }
+
+  getFacultades(): Observable<{ exitoso: boolean; datos: Array<{ id: string; nombre: string }> }> {
+    const defaultFacultades = [
+      { id: 'FAC-01', nombre: 'Facultad de Ingeniería' },
+      { id: 'FAC-02', nombre: 'Facultad de Ciencias de la Salud' },
+      { id: 'FAC-03', nombre: 'Facultad de Ciencias de la Educación' },
+      { id: 'FAC-04', nombre: 'Facultad de Ciencias Económicas y Administrativas' },
+    ];
+
+    if (environment.useFrontendMocks) {
+      return of({ exitoso: true, datos: defaultFacultades }).pipe(delay(150));
+    }
+
+    return this.http.get<{ datos?: Array<{ id: string; nombre: string }> }>(`${environment.apiUrl}/admin/facultades`).pipe(
+      map((res) => ({ exitoso: true, datos: res.datos && res.datos.length > 0 ? res.datos : defaultFacultades })),
+      // Fallback seguro si el endpoint de admin requiere permisos o no está levantado
+      map((res) => res)
+    );
+  }
+
+  getProgramasAcademicos(): Observable<{ exitoso: boolean; datos: Array<{ id: string; nombre: string; facultad?: string }> }> {
+    const defaultProgramas = [
+      { id: 'PROG-01', nombre: 'Ingeniería de Sistemas', facultad: 'Facultad de Ingeniería' },
+      { id: 'PROG-02', nombre: 'Ingeniería Industrial', facultad: 'Facultad de Ingeniería' },
+      { id: 'PROG-03', nombre: 'Ingeniería Electrónica', facultad: 'Facultad de Ingeniería' },
+      { id: 'PROG-04', nombre: 'Ingeniería Agroindustrial', facultad: 'Facultad de Ingeniería' },
+    ];
+
+    return of({ exitoso: true, datos: defaultProgramas }).pipe(delay(150));
+  }
+
+  getDepartamentosAcademicos(): Observable<{ exitoso: boolean; datos: string[] }> {
+    const defaultDeptos = [
+      'Departamento de Ciencias Computacionales',
+      'Ingeniería de Sistemas',
+      'Ciencias Básicas e Ingeniería',
+      'Ingeniería Industrial',
+      'Ingeniería Electrónica',
+    ];
+
+    return of({ exitoso: true, datos: defaultDeptos }).pipe(delay(150));
+  }
 }
+

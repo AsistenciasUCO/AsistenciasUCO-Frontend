@@ -37,15 +37,13 @@ export class DeanManagementService {
   }
 
   createCoordinador(nuevoCoord: Omit<CoordinadorItem, 'id' | 'totalDocentes' | 'totalGrupos'>): Observable<ApiResponse<CoordinadorItem>> {
-    const id = `COORD-${String(this.coordinadoresList.length + 1).padStart(3, '0')}`;
-    const coordinadorCreado: CoordinadorItem = {
-      ...nuevoCoord,
-      id,
-      totalDocentes: 0,
-      totalGrupos: 0,
-    };
-
     if (environment.useMocks) {
+      const coordinadorCreado: CoordinadorItem = {
+        ...nuevoCoord,
+        id: `mock-coord-${this.coordinadoresList.length + 1}`,
+        totalDocentes: 0,
+        totalGrupos: 0,
+      };
       this.coordinadoresList = [coordinadorCreado, ...this.coordinadoresList];
       return of({
         idTransaccion: 'mock-tx-coord-create',

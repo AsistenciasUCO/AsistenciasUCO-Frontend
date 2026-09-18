@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AttendanceClaimService } from '../../../core/services/attendance-claim.service';
@@ -20,6 +20,7 @@ type VistaDocenteReclamos = 'BANDEJA' | 'RESOLUCION';
 @Component({
   selector: 'app-teacher-claims',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
     FormsModule,

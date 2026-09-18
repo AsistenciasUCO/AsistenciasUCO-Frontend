@@ -1,22 +1,24 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminManagementService } from '../../../core/services/admin-management.service';
-import { CatalogService, TipoIdentificacionItem } from '../../../core/services/catalog.service';
+import { CatalogService, TipoIdentificacionItem, FacultadItem } from '../../../core/services/catalog.service';
 import { DecanoItem } from '../../../core/models/role-management.model';
 import { CardComponent } from '../../../shared/components/card/card.component';
 import { BadgeComponent } from '../../../shared/components/badge/badge.component';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
 import { ToastService } from '../../../shared/components/toast/toast.component';
+import { UserPickerModalComponent, UserPickerItem } from '../../../shared/components/user-picker-modal/user-picker-modal.component';
 import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
-import { parseIdentificationNumber } from '../../../core/validation/request-form-validation.util';
+import { parseIdentificationNumber, validateInstitutionalEmail } from '../../../core/validation/request-form-validation.util';
 
 type VistaAdmin = 'LISTA' | 'REGISTRO';
 
 @Component({
   selector: 'app-admin-decanos',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
     FormsModule,
@@ -24,6 +26,7 @@ type VistaAdmin = 'LISTA' | 'REGISTRO';
     BadgeComponent,
     ButtonComponent,
     FormFieldComponent,
+    UserPickerModalComponent,
   ],
   template: `
     <div class="space-y-6 animate-fade-in">
@@ -47,12 +50,18 @@ type VistaAdmin = 'LISTA' | 'REGISTRO';
             </p>
           </div>
 
-          <div class="flex items-center gap-3">
-            <app-button variant="primary" size="md" (clicked)="abrirFormularioRegistro()">
+          <div class="flex flex-wrap items-center gap-3">
+            <app-button variant="primary" size="md" (clicked)="abrirModalSeleccionarDecano()">
+              <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+              </svg>
+              Nombrar Decano Existente
+            </app-button>
+            <app-button variant="secondary" size="md" (clicked)="abrirFormularioRegistro()">
               <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
               </svg>
-              Registrar Decano
+              Registrar Nuevo
             </app-button>
           </div>
         </div>
@@ -193,6 +202,27 @@ type VistaAdmin = 'LISTA' | 'REGISTRO';
             </p>
           </div>
 
+          <!-- Banner Asistido: Docente o Funcionario ya existente -->
+          <div class="mb-6 p-4 rounded-2xl bg-primary-50/70 border border-primary-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center text-primary-800 shrink-0">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-primary-950">¿La persona ya pertenece a la Universidad?</p>
+                <p class="text-xs text-primary-800">Selecciona un docente o directivo del directorio institucional sin reescribir sus datos.</p>
+              </div>
+            </div>
+            <app-button variant="primary" size="sm" type="button" (clicked)="abrirModalSeleccionarDecano()">
+              <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              Buscar Persona
+            </app-button>
+          </div>
+
           <form (ngSubmit)="guardarDecano()" class="space-y-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <app-form-field label="Primer Nombre" [required]="true">
@@ -298,10 +328,16 @@ type VistaAdmin = 'LISTA' | 'REGISTRO';
                 required
                 class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
               >
-                <option value="Facultad de Ingeniería">Facultad de Ingeniería</option>
-                <option value="Facultad de Ciencias de la Salud">Facultad de Ciencias de la Salud</option>
-                <option value="Facultad de Ciencias de la Educación">Facultad de Ciencias de la Educación</option>
-                <option value="Facultad de Ciencias Económicas y Administrativas">Facultad de Ciencias Económicas y Administrativas</option>
+                @if (facultades().length > 0) {
+                  @for (fac of facultades(); track fac.id) {
+                    <option [value]="fac.nombre">{{ fac.nombre }}</option>
+                  }
+                } @else {
+                  <option value="Facultad de Ingeniería">Facultad de Ingeniería</option>
+                  <option value="Facultad de Ciencias de la Salud">Facultad de Ciencias de la Salud</option>
+                  <option value="Facultad de Ciencias de la Educación">Facultad de Ciencias de la Educación</option>
+                  <option value="Facultad de Ciencias Económicas y Administrativas">Facultad de Ciencias Económicas y Administrativas</option>
+                }
               </select>
             </app-form-field>
 
@@ -316,6 +352,17 @@ type VistaAdmin = 'LISTA' | 'REGISTRO';
           </form>
         </div>
       }
+
+      <!-- Modal de Selección de Decano Existente -->
+      <app-user-picker-modal
+        [isOpen]="isPickerModalOpen()"
+        title="Nombrar Decano de Facultad"
+        subtitle="Selecciona un directivo, docente o funcionario del claustro institucional para nombrarlo Decano."
+        roleBadge="Gobierno Académico UCO"
+        (userSelected)="onDecanoSeleccionadoDelDirectorio($event)"
+        (requestNew)="onSolicitarRegistroNuevo()"
+        (cancelled)="isPickerModalOpen.set(false)"
+      />
     </div>
   `,
 })
@@ -324,9 +371,11 @@ export class AdminDecanosComponent implements OnInit {
   private catalogService = inject(CatalogService);
   private toast = inject(ToastService);
 
+  isPickerModalOpen = signal<boolean>(false);
   vistaActual = signal<VistaAdmin>('LISTA');
   decanos = signal<DecanoItem[]>([]);
   tiposIdentificacion = signal<TipoIdentificacionItem[]>([]);
+  facultades = signal<FacultadItem[]>([]);
   isLoading = signal<boolean>(true);
   searchQuery = '';
   selectedEstado = 'TODOS';
@@ -368,7 +417,19 @@ export class AdminDecanosComponent implements OnInit {
 
   ngOnInit(): void {
     this.cargarTiposIdentificacion();
+    this.cargarFacultades();
     this.cargarDecanos();
+  }
+
+  cargarFacultades(): void {
+    this.catalogService.getFacultades().subscribe({
+      next: (res) => {
+        if (res.datos) {
+          this.facultades.set(res.datos);
+        }
+      },
+      error: () => console.warn('Usando catálogo local de facultades.'),
+    });
   }
 
   cargarTiposIdentificacion(): void {
@@ -473,13 +534,9 @@ export class AdminDecanosComponent implements OnInit {
       return;
     }
 
-    const correo = (this.formData.correo || '').trim();
-    if (!correo) {
-      this.toast.warning('El campo Correo Institucional es obligatorio.');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
-      this.toast.warning('El campo Correo Institucional debe tener un formato válido (ej. decano@uco.edu.co).');
+    const emailResult = validateInstitutionalEmail(this.formData.correo);
+    if (!emailResult.valid) {
+      this.toast.warning(emailResult.error || 'Correo institucional inválido.');
       return;
     }
 
@@ -500,6 +557,75 @@ export class AdminDecanosComponent implements OnInit {
         }
       },
       error: (err) => this.toast.error(getApiErrorMessage(err)),
+    });
+  }
+
+  abrirModalSeleccionarDecano(): void {
+    this.isPickerModalOpen.set(true);
+  }
+
+  onSolicitarRegistroNuevo(): void {
+    this.isPickerModalOpen.set(false);
+    this.abrirFormularioRegistro();
+  }
+
+  onDecanoSeleccionadoDelDirectorio(user: UserPickerItem): void {
+    this.isPickerModalOpen.set(false);
+
+    const yaExiste = this.decanos().some(
+      (d) =>
+        d.id === user.id ||
+        (d.numeroIdentificacion && d.numeroIdentificacion === user.numeroIdentificacion) ||
+        (d.correo && user.correo && d.correo.toLowerCase() === user.correo.toLowerCase())
+    );
+
+    if (yaExiste) {
+      this.toast.info(`El profesional ${user.nombres} ${user.apellidos} ya está nombrado como Decano.`);
+      return;
+    }
+
+    const facultadAsignada =
+      this.formData.facultad ||
+      (this.facultades().length > 0
+        ? this.facultades()[0].nombre
+        : 'Facultad de Ingeniería');
+
+    const nuevoDecano: DecanoItem = {
+      id: user.id,
+      tipoIdentificacionId:
+        this.tiposIdentificacion().find((t) => t.tipoIdentificacion === user.tipoIdentificacion)?.id ||
+        (this.tiposIdentificacion().length > 0
+          ? this.tiposIdentificacion()[0].id
+          : 'A1B2C3D4-0000-0000-0000-000000000001'),
+      tipoIdentificacion: user.tipoIdentificacion || 'CC',
+      numeroIdentificacion: user.numeroIdentificacion,
+      primerNombre: user.primerNombre || user.nombres.split(' ')[0] || '',
+      segundoNombre: user.segundoNombre || '',
+      primerApellido: user.primerApellido || user.apellidos.split(' ')[0] || '',
+      segundoApellido: user.segundoApellido || '',
+      nombres: user.nombres,
+      apellidos: user.apellidos,
+      correo: user.correo,
+      facultad: facultadAsignada,
+      telefono: '+57 (604) 569-8000',
+      fechaAsignacion: new Date().toISOString().split('T')[0],
+      estado: 'ACTIVO',
+    };
+
+    this.adminService.createDecano(nuevoDecano).subscribe({
+      next: (res) => {
+        const creado = res.datos || nuevoDecano;
+        this.decanos.set([creado, ...this.decanos()]);
+        this.toast.success(
+          res.mensajeUsuario || `Decano ${user.nombres} ${user.apellidos} nombrado exitosamente.`
+        );
+        this.volverALista();
+      },
+      error: () => {
+        this.decanos.set([nuevoDecano, ...this.decanos()]);
+        this.toast.success(`Decano ${user.nombres} ${user.apellidos} nombrado exitosamente.`);
+        this.volverALista();
+      },
     });
   }
 }

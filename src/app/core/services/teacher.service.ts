@@ -44,11 +44,11 @@ export class TeacherService {
   }
 
   getCurrentTeacher(): Observable<DocenteApiDto> {
-    const currentUserId = this.authService.currentUser()?.idUsuario;
+    const currentUserId = this.authService.currentUser()?.id;
 
     if (!currentUserId) {
       return throwError(
-        () => new Error('El usuario autenticado no tiene idUsuario.')
+        () => new Error('El usuario autenticado no tiene id.')
       );
     }
 

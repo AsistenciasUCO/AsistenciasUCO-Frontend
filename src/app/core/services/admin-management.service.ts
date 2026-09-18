@@ -1,4 +1,4 @@
-﻿import { Injectable, signal } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of, delay, catchError } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -56,7 +56,7 @@ export class AdminManagementService {
   }
 
   createDecano(nuevoDecano: Omit<DecanoItem, 'id'>): Observable<ApiResponse<DecanoItem>> {
-    const id = `DEC-${String(this.decanosList.length + 1).padStart(3, '0')}`;
+    const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `temp-dec-${Date.now()}`;
     const decanoCreado: DecanoItem = {
       ...nuevoDecano,
       id,
@@ -142,7 +142,7 @@ export class AdminManagementService {
   crearSede(item: Omit<SedeInstitucionalItem, 'id'>): void {
     const nueva: SedeInstitucionalItem = {
       ...item,
-      id: `SED-${Date.now()}`,
+      id: `mock-sed-${this._sedes().length + 1}`,
     };
     this._sedes.update((prev) => [nueva, ...prev]);
     this.registrarAuditoria({
@@ -189,7 +189,7 @@ export class AdminManagementService {
     const sede = this._sedes().find((s) => s.id === item.sedeId);
     const nuevo: EspacioFisicoItem = {
       ...item,
-      id: `ESP-${Date.now()}`,
+      id: `mock-esp-${this._espacios().length + 1}`,
       sedeNombre: sede ? sede.nombre : item.sedeNombre,
     };
     this._espacios.update((prev) => [nuevo, ...prev]);
@@ -236,7 +236,7 @@ export class AdminManagementService {
   crearFacultad(item: Omit<FacultadItem, 'id'>): void {
     const nueva: FacultadItem = {
       ...item,
-      id: `FAC-${Date.now()}`,
+      id: `mock-fac-${this._facultades().length + 1}`,
     };
     this._facultades.update((prev) => [nueva, ...prev]);
     this.registrarAuditoria({
@@ -276,7 +276,7 @@ export class AdminManagementService {
     const facultad = this._facultades().find((f) => f.id === item.facultadId);
     const nueva: AreaConocimientoItem = {
       ...item,
-      id: `AREA-${Date.now()}`,
+      id: `mock-area-${this._areas().length + 1}`,
       facultadNombre: facultad ? facultad.nombre : item.facultadNombre,
     };
     this._areas.update((prev) => [nueva, ...prev]);
@@ -345,7 +345,7 @@ export class AdminManagementService {
     nivel: 'INFO' | 'WARNING' | 'CRITICO';
   }): void {
     const item: RegistroAuditoriaItem = {
-      id: `AUD-${Date.now()}`,
+      id: `mock-aud-${this._auditoria().length + 1}`,
       timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
       usuarioId: 'ADMIN-ACTUAL',
       usuarioNombre: 'Administrador del Sistema',
@@ -362,7 +362,7 @@ export class AdminManagementService {
   // ================= CIERRE MASIVO =================
   ejecutarCierreMasivo(periodoCodigo: string): CierrePeriodoReporte {
     const nuevoReporte: CierrePeriodoReporte = {
-      id: `REP-CIE-${Date.now()}`,
+      id: `mock-cierre-${this._reportesCierre().length + 1}`,
       periodoCodigo,
       fechaEjecucion: new Date().toISOString().replace('T', ' ').slice(0, 19),
       totalEstudiantesProcesados: 1540,
@@ -432,7 +432,7 @@ export class AdminManagementService {
 
   crearInstitucion(data: any): Observable<ApiResponse<any>> {
     if (environment.useMocks) {
-      const nueva = { id: `INST-${Date.now()}`, ...data, estado: 1 };
+      const nueva = { id: `mock-inst-${this.institucionesList.length + 1}`, ...data, estado: 1 };
       this.institucionesList.push(nueva);
       return of({
         idTransaccion: `mock-tx-inst-create`,

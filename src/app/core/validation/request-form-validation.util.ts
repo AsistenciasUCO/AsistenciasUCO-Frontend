@@ -92,3 +92,18 @@ export function getPasswordValidationError(
 
   return undefined;
 }
+
+export function validateInstitutionalEmail(email: string): { valid: boolean; error?: string } {
+  const normalized = (email || '').trim();
+  if (!normalized) {
+    return { valid: false, error: 'El campo Correo Institucional es obligatorio.' };
+  }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(normalized)) {
+    return {
+      valid: false,
+      error: 'El campo Correo Institucional debe tener un formato válido (ej. usuario@uco.edu.co).',
+    };
+  }
+  return { valid: true };
+}

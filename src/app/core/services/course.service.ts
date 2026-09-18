@@ -1,39 +1,18 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of, delay, map, catchError } from 'rxjs';
+import { Observable, of, delay, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 import { ApiListResponse } from '../api/models/api-list-response.model';
 import { HorarioDocenteApiDto } from '../api/models/horario-docente-api-dto.model';
 import { Course } from '../models/course.model';
 import { MOCK_COURSES } from '../mocks/course.mock';
-import { CourseMapper, CourseDTO } from '../mappers/course.mapper';
-import { StorageSerializer } from '../utils/storage-serializer.util';
 
 @Injectable({
   providedIn: 'root',
 })
 export class CourseService {
-  private readonly STORAGE_KEY = 'gestio_courses_db';
-
-  private loadStoredCourses(): Course[] {
-    const cached = StorageSerializer.deserializeWithMapper<CourseDTO, Course>(
-      this.STORAGE_KEY,
-      CourseMapper.fromDTO,
-      []
-    );
-    return cached.length > 0 ? cached : [...MOCK_COURSES];
-  }
-
-  private persistCourses(courses: Course[]): void {
-    StorageSerializer.serializeWithMapper<CourseDTO, Course>(
-      this.STORAGE_KEY,
-      courses,
-      CourseMapper.toDTO
-    );
-  }
-
-  private coursesSignal = signal<Course[]>(this.loadStoredCourses());
+  private coursesSignal = signal<Course[]>([...MOCK_COURSES]);
 
   constructor(private http: HttpClient) {}
 
@@ -44,15 +23,7 @@ export class CourseService {
         exitoso: res.exitoso,
         total: res.total,
         datos: res.datos,
-      })),
-      catchError(() =>
-        of({
-          idTransaccion: 'tx-courses-error',
-          exitoso: true,
-          total: 0,
-          datos: [],
-        })
-      )
+      }))
     );
   }
 
@@ -124,29 +95,24 @@ export class CourseService {
       );
   }
 
-  crearGrupo(nuevo: Partial<Course>): Observable<ApiResponse<Course>> {
-    const id = `crs-${Date.now()}`;
-    const cursoCreado: Course = {
-      id,
-      code: nuevo.code || 'ASIG-001',
-      name: nuevo.name || 'Nueva Asignatura',
-      section: nuevo.section || 'Grupo 01',
-      schedule: nuevo.schedule || 'Lun, Mié 08:00 - 10:00 AM',
-      room: nuevo.room || 'Aula Por Asignar',
-      enrolledStudentsCount: nuevo.enrolledStudentsCount || 0,
-      cupoMaximo: nuevo.cupoMaximo || 35,
-      docenteName: nuevo.docenteName || 'Docente Titular',
-      colorCategory: nuevo.colorCategory || 'emerald',
-    };
-
+  crearGrupo(nuevo: Partial<Course> & Record<string, unknown>): Observable<ApiResponse<Course>> {
     if (environment.useMocks) {
-      this.coursesSignal.update((prev) => {
-        const next = [cursoCreado, ...prev];
-        this.persistCourses(next);
-        return next;
-      });
+      const cursoCreado: Course = {
+        id: `mock-crs-${this.coursesSignal().length + 1}`,
+        code: nuevo.code || 'ASIG-001',
+        name: nuevo.name || 'Nueva Asignatura',
+        section: nuevo.section || 'Grupo 01',
+        schedule: nuevo.schedule || 'Lun, Mié 08:00 - 10:00 AM',
+        room: nuevo.room || 'Aula Por Asignar',
+        enrolledStudentsCount: nuevo.enrolledStudentsCount || 0,
+        cupoMaximo: nuevo.cupoMaximo || 35,
+        docenteName: nuevo.docenteName || 'Docente Titular',
+        colorCategory: nuevo.colorCategory || 'emerald',
+      };
+
+      this.coursesSignal.update((prev) => [cursoCreado, ...prev]);
       return of({
-        idTransaccion: `mock-tx-create-course-${id}`,
+        idTransaccion: 'mock-tx-create-course',
         exitoso: true,
         mensajeUsuario: `Grupo ${cursoCreado.section} de ${cursoCreado.name} creado exitosamente.`,
         datos: cursoCreado,
@@ -154,17 +120,23 @@ export class CourseService {
     }
 
     return this.http.post<ApiResponse<Course>>(`${environment.apiUrl}/grupos`, {
-      ...cursoCreado,
-      asignaturaId: (nuevo as any).asignaturaId,
-      dias: (nuevo as any).dias,
-      horaInicio: (nuevo as any).horaInicio,
-      horaFin: (nuevo as any).horaFin,
+      code: nuevo.code,
+      name: nuevo.name,
+      section: nuevo.section,
+      cupoMaximo: nuevo.cupoMaximo || 35,
+      docenteName: nuevo.docenteName,
+      colorCategory: nuevo.colorCategory,
+      room: nuevo.room,
       schedule: nuevo.schedule,
-      generarSesionesAutomaticas: (nuevo as any).generarSesionesAutomaticas,
+      asignaturaId: nuevo['asignaturaId'],
+      dias: nuevo['dias'],
+      horaInicio: nuevo['horaInicio'],
+      horaFin: nuevo['horaFin'],
+      generarSesionesAutomaticas: nuevo['generarSesionesAutomaticas'],
     });
   }
 
-  getAsignaturasDocente(): Observable<ApiResponse<any[]>> {
+  getAsignaturasDocente(): Observable<ApiResponse<unknown[]>> {
     if (environment.useMocks) {
       return of({
         idTransaccion: 'mock-tx-asig-docente',
@@ -177,21 +149,13 @@ export class CourseService {
       }).pipe(delay(150));
     }
 
-    return this.http.get<any>(`${environment.apiUrl}/docente/asignaturas`).pipe(
-      map((res: any) => ({
+    return this.http.get<ApiResponse<unknown[]>>(`${environment.apiUrl}/docente/asignaturas`).pipe(
+      map((res) => ({
         idTransaccion: res.idTransaccion || 'tx-docente-asig',
-        exitoso: true,
+        exitoso: res.exitoso ?? true,
         total: res.total || (res.datos ? res.datos.length : 0),
         datos: res.datos || [],
-      })),
-      catchError(() =>
-        of({
-          idTransaccion: 'tx-docente-asig-error',
-          exitoso: true,
-          total: 0,
-          datos: [],
-        })
-      )
+      }))
     );
   }
 
@@ -199,15 +163,13 @@ export class CourseService {
     if (environment.useMocks) {
       let actualizado: Course | null = null;
       this.coursesSignal.update((prev) => {
-        const next = prev.map((c) => {
+        return prev.map((c) => {
           if (c.id === id) {
             actualizado = { ...c, ...cambios };
             return actualizado;
           }
           return c;
         });
-        this.persistCourses(next);
-        return next;
       });
 
       return of({

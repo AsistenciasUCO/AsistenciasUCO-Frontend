@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { StudentManagementService } from '../../../core/services/student-management.service';
 import { HorarioItem, DiaSemana } from '../../../core/models/role-management.model';
@@ -8,6 +8,7 @@ import { ToastService } from '../../../shared/components/toast/toast.component';
 @Component({
   selector: 'app-student-schedule',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
     CardComponent,

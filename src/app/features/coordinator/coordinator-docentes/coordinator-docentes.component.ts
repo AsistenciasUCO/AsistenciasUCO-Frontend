@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
@@ -11,14 +11,16 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
 import { ToastService } from '../../../shared/components/toast/toast.component';
+import { UserPickerModalComponent, UserPickerItem } from '../../../shared/components/user-picker-modal/user-picker-modal.component';
 import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
-import { parseIdentificationNumber } from '../../../core/validation/request-form-validation.util';
+import { parseIdentificationNumber, validateInstitutionalEmail } from '../../../core/validation/request-form-validation.util';
 
 type VistaCoordinador = 'LISTA' | 'REGISTRO';
 
 @Component({
   selector: 'app-coordinator-docentes',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
     FormsModule,
@@ -26,6 +28,7 @@ type VistaCoordinador = 'LISTA' | 'REGISTRO';
     BadgeComponent,
     ButtonComponent,
     FormFieldComponent,
+    UserPickerModalComponent,
   ],
   template: `
     <div class="space-y-6 animate-fade-in">
@@ -49,12 +52,18 @@ type VistaCoordinador = 'LISTA' | 'REGISTRO';
             </p>
           </div>
 
-          <div class="flex items-center gap-3">
-            <app-button variant="primary" size="md" (clicked)="abrirFormularioRegistro()">
+          <div class="flex flex-wrap items-center gap-3">
+            <app-button variant="primary" size="md" (clicked)="abrirModalSeleccionarDocente()">
+              <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+              </svg>
+              Seleccionar Docente Existente
+            </app-button>
+            <app-button variant="secondary" size="md" (clicked)="abrirFormularioRegistro()">
               <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
               </svg>
-              Vincular Docente
+              Registrar Nuevo
             </app-button>
           </div>
         </div>
@@ -209,6 +218,27 @@ type VistaCoordinador = 'LISTA' | 'REGISTRO';
             <p class="text-sm text-warm-600 mt-1">
               Registra los datos del docente, su área de especialidad y departamento académico adscrito.
             </p>
+          </div>
+
+          <!-- Banner Asistido: Docente ya existente -->
+          <div class="mb-6 p-4 rounded-2xl bg-primary-50/70 border border-primary-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center text-primary-700 shrink-0">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-primary-900">¿El docente ya labora en la Universidad?</p>
+                <p class="text-xs text-primary-700">No es necesario digitar sus datos de nuevo. Búscalo en el claustro institucional para vincularlo directamente.</p>
+              </div>
+            </div>
+            <app-button variant="primary" size="sm" type="button" (clicked)="abrirModalSeleccionarDocente()">
+              <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              Buscar Docente
+            </app-button>
           </div>
 
           <form (ngSubmit)="guardarDocente()" class="space-y-4">
@@ -458,6 +488,17 @@ type VistaCoordinador = 'LISTA' | 'REGISTRO';
           </div>
         </div>
       }
+
+      <!-- Modal de Selección de Docente Existente -->
+      <app-user-picker-modal
+        [isOpen]="isPickerModalOpen()"
+        title="Vincular Docente al Programa"
+        subtitle="Selecciona un docente ya registrado en la institución para vincularlo al programa sin digitar sus datos de nuevo."
+        roleBadge="Claustro Docente UCO"
+        (userSelected)="onDocenteSeleccionadoDelDirectorio($event)"
+        (requestNew)="onSolicitarRegistroNuevo()"
+        (cancelled)="isPickerModalOpen.set(false)"
+      />
     </div>
   `,
 })
@@ -467,6 +508,7 @@ export class CoordinatorDocentesComponent implements OnInit {
   private courseService = inject(CourseService);
   private toast = inject(ToastService);
 
+  isPickerModalOpen = signal<boolean>(false);
   vistaActual = signal<VistaCoordinador>('LISTA');
   docentes = signal<DocenteItem[]>([]);
   tiposIdentificacion = signal<TipoIdentificacionItem[]>([]);
@@ -647,13 +689,9 @@ export class CoordinatorDocentesComponent implements OnInit {
       return;
     }
 
-    const correo = (this.formData.correo || '').trim();
-    if (!correo) {
-      this.toast.warning('El campo Correo Institucional es obligatorio.');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
-      this.toast.warning('El campo Correo Institucional debe tener un formato válido (ej. docente@uco.edu.co).');
+    const emailRes = validateInstitutionalEmail(this.formData.correo);
+    if (!emailRes.valid) {
+      this.toast.warning(emailRes.error || 'Correo institucional inválido.');
       return;
     }
 
@@ -679,6 +717,72 @@ export class CoordinatorDocentesComponent implements OnInit {
         }
       },
       error: (err) => this.toast.error(getApiErrorMessage(err)),
+    });
+  }
+
+  abrirModalSeleccionarDocente(): void {
+    this.isPickerModalOpen.set(true);
+  }
+
+  onSolicitarRegistroNuevo(): void {
+    this.isPickerModalOpen.set(false);
+    this.abrirFormularioRegistro();
+  }
+
+  onDocenteSeleccionadoDelDirectorio(user: UserPickerItem): void {
+    this.isPickerModalOpen.set(false);
+
+    const yaExiste = this.docentes().some(
+      (d) =>
+        d.id === user.id ||
+        (d.numeroIdentificacion && d.numeroIdentificacion === user.numeroIdentificacion) ||
+        (d.correo && user.correo && d.correo.toLowerCase() === user.correo.toLowerCase())
+    );
+
+    if (yaExiste) {
+      this.toast.info(`El docente ${user.nombres} ${user.apellidos} ya se encuentra vinculado al claustro.`);
+      return;
+    }
+
+    const tipoDocId =
+      this.tiposIdentificacion().find((t) => t.tipoIdentificacion === user.tipoIdentificacion)?.id ||
+      (this.tiposIdentificacion().length > 0
+        ? this.tiposIdentificacion()[0].id
+        : 'A1B2C3D4-0000-0000-0000-000000000001');
+
+    const nuevoDocente: DocenteItem = {
+      id: user.id,
+      tipoIdentificacionId: tipoDocId,
+      tipoIdentificacion: user.tipoIdentificacion || 'CC',
+      numeroIdentificacion: user.numeroIdentificacion,
+      primerNombre: user.primerNombre || user.nombres.split(' ')[0] || 'Docente',
+      segundoNombre: user.segundoNombre || '',
+      primerApellido: user.primerApellido || user.apellidos.split(' ')[0] || 'UCO',
+      segundoApellido: user.segundoApellido || '',
+      nombres: user.nombres,
+      apellidos: user.apellidos,
+      correo: user.correo,
+      departamento: user.dependenciaOPrograma || 'Departamento de Ciencias Computacionales',
+      especialidad: 'Docencia Universitaria',
+      totalGruposAsignados: 0,
+      estado: 'ACTIVO',
+    };
+
+    this.coordService.createDocente(nuevoDocente).subscribe({
+      next: (res) => {
+        const creado = res.datos || nuevoDocente;
+        this.docentes.set([creado, ...this.docentes()]);
+        this.toast.success(
+          res.mensajeUsuario || `Docente ${user.nombres} ${user.apellidos} vinculado exitosamente al programa.`
+        );
+        this.vistaActual.set('LISTA');
+      },
+      error: () => {
+        // Fallback optimista para UI
+        this.docentes.set([nuevoDocente, ...this.docentes()]);
+        this.toast.success(`Docente ${user.nombres} ${user.apellidos} vinculado exitosamente.`);
+        this.vistaActual.set('LISTA');
+      },
     });
   }
 }

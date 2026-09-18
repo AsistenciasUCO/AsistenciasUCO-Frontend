@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { CourseService } from '../../../core/services/course.service';
@@ -11,10 +11,6 @@ import {
   PlanEstudioItem,
   AsignaturaPlanItem,
 } from '../../../core/models/role-management.model';
-import {
-  MOCK_PLANES_ESTUDIO,
-  MOCK_ASIGNATURAS_PLAN,
-} from '../../../core/mocks/role-management.mock';
 import { CardComponent } from '../../../shared/components/card/card.component';
 import { BadgeComponent } from '../../../shared/components/badge/badge.component';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
@@ -26,6 +22,7 @@ type SubVistaDecano = 'LISTA' | 'DETALLE_GRUPO';
 @Component({
   selector: 'app-dean-faculty',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
     FormsModule,
@@ -685,9 +682,14 @@ export class DeanFacultyComponent implements OnInit {
   }
 
   verPlanEstudio(prog: any): void {
-    const plan = MOCK_PLANES_ESTUDIO.find((p) => p.id === prog.planEstudioId) || MOCK_PLANES_ESTUDIO[0];
-    this.planVisualizado.set(plan);
-    this.asignaturasPlan.set(MOCK_ASIGNATURAS_PLAN[plan.id] || MOCK_ASIGNATURAS_PLAN['PLAN-SIS-2024'] || []);
+    const planes: PlanEstudioItem[] = this.coordService.planes();
+    const plan = planes.find((p: PlanEstudioItem) => p.id === prog.planEstudioId) || planes[0];
+    this.planVisualizado.set(plan || null);
+    if (plan) {
+      this.asignaturasPlan.set(this.coordService.getAsignaturasPlan(plan.id));
+    } else {
+      this.asignaturasPlan.set([]);
+    }
   }
 
   cerrarPlanEstudio(): void {

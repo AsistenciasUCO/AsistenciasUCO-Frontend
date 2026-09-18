@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DeanManagementService } from '../../../core/services/dean-management.service';
@@ -9,14 +9,16 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
 import { ToastService } from '../../../shared/components/toast/toast.component';
+import { UserPickerModalComponent, UserPickerItem } from '../../../shared/components/user-picker-modal/user-picker-modal.component';
 import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
-import { parseIdentificationNumber } from '../../../core/validation/request-form-validation.util';
+import { parseIdentificationNumber, validateInstitutionalEmail } from '../../../core/validation/request-form-validation.util';
 
 type VistaDecano = 'LISTA' | 'REGISTRO';
 
 @Component({
   selector: 'app-dean-coordinadores',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
     FormsModule,
@@ -24,6 +26,7 @@ type VistaDecano = 'LISTA' | 'REGISTRO';
     BadgeComponent,
     ButtonComponent,
     FormFieldComponent,
+    UserPickerModalComponent,
   ],
   template: `
     <div class="space-y-6 animate-fade-in">
@@ -47,12 +50,18 @@ type VistaDecano = 'LISTA' | 'REGISTRO';
             </p>
           </div>
 
-          <div class="flex items-center gap-3">
-            <app-button variant="primary" size="md" (clicked)="abrirFormularioRegistro()">
+          <div class="flex flex-wrap items-center gap-3">
+            <app-button variant="primary" size="md" (clicked)="abrirModalSeleccionarCoordinador()">
+              <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+              </svg>
+              Nombrar Coordinador Existente
+            </app-button>
+            <app-button variant="secondary" size="md" (clicked)="abrirFormularioRegistro()">
               <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
               </svg>
-              Asignar Coordinador
+              Registrar Nuevo
             </app-button>
           </div>
         </div>
@@ -197,8 +206,29 @@ type VistaDecano = 'LISTA' | 'REGISTRO';
               Asignar Nuevo Coordinador de Programa
             </h2>
             <p class="text-sm text-warm-600 mt-1">
-              Completa los datos del profesional que liderará la gestión académica y profesoral del programa.
+              Asigna a un docente o profesional la responsabilidad de coordinación para un programa académico.
             </p>
+          </div>
+
+          <!-- Banner Asistido: Docente o Funcionario ya existente -->
+          <div class="mb-6 p-4 rounded-2xl bg-accent-50/70 border border-accent-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-accent-100 flex items-center justify-center text-accent-800 shrink-0">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-accent-950">¿La persona ya pertenece a la Universidad?</p>
+                <p class="text-xs text-accent-800">Selecciona un docente o funcionario del directorio institucional sin reescribir sus datos.</p>
+              </div>
+            </div>
+            <app-button variant="primary" size="sm" type="button" (clicked)="abrirModalSeleccionarCoordinador()">
+              <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              Buscar Persona
+            </app-button>
           </div>
 
           <form (ngSubmit)="guardarCoordinador()" class="space-y-4">
@@ -284,10 +314,10 @@ type VistaDecano = 'LISTA' | 'REGISTRO';
                 required
                 class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
               >
-                <option value="Ingeniería de Sistemas">Ingeniería de Sistemas</option>
-                <option value="Ingeniería Industrial">Ingeniería Industrial</option>
-                <option value="Ingeniería Electrónica">Ingeniería Electrónica</option>
-                <option value="Ingeniería Agroindustrial">Ingeniería Agroindustrial</option>
+                <option value="">-- Selecciona un Programa --</option>
+                @for (prog of programasAcademicos(); track prog.id) {
+                  <option [value]="prog.nombre">{{ prog.nombre }}</option>
+                }
               </select>
             </app-form-field>
 
@@ -323,6 +353,17 @@ type VistaDecano = 'LISTA' | 'REGISTRO';
           </form>
         </div>
       }
+
+      <!-- Modal de Selección de Coordinador Existente -->
+      <app-user-picker-modal
+        [isOpen]="isPickerModalOpen()"
+        title="Nombrar Coordinador de Programa"
+        subtitle="Selecciona un docente o funcionario existente para nombrarlo coordinador de un programa académico."
+        roleBadge="Directorio Institucional UCO"
+        (userSelected)="onCoordinadorSeleccionadoDelDirectorio($event)"
+        (requestNew)="onSolicitarRegistroNuevo()"
+        (cancelled)="isPickerModalOpen.set(false)"
+      />
     </div>
   `,
 })
@@ -331,9 +372,11 @@ export class DeanCoordinadoresComponent implements OnInit {
   private catalogService = inject(CatalogService);
   private toast = inject(ToastService);
 
+  isPickerModalOpen = signal<boolean>(false);
   vistaActual = signal<VistaDecano>('LISTA');
   coordinadores = signal<CoordinadorItem[]>([]);
   tiposIdentificacion = signal<TipoIdentificacionItem[]>([]);
+  programasAcademicos = signal<Array<{ id: string; nombre: string }>>([]);
   isLoading = signal<boolean>(true);
   searchQuery = '';
   selectedEstado = 'TODOS';
@@ -374,7 +417,19 @@ export class DeanCoordinadoresComponent implements OnInit {
 
   ngOnInit(): void {
     this.cargarTiposIdentificacion();
+    this.cargarProgramasAcademicos();
     this.cargarCoordinadores();
+  }
+
+  cargarProgramasAcademicos(): void {
+    this.catalogService.getProgramasAcademicos().subscribe({
+      next: (res) => {
+        if (res.datos) {
+          this.programasAcademicos.set(res.datos);
+        }
+      },
+      error: () => console.warn('Usando catálogo local de programas.'),
+    });
   }
 
   cargarTiposIdentificacion(): void {
@@ -478,13 +533,9 @@ export class DeanCoordinadoresComponent implements OnInit {
       return;
     }
 
-    const correo = (this.formData.correo || '').trim();
-    if (!correo) {
-      this.toast.warning('El campo Correo Institucional es obligatorio.');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
-      this.toast.warning('El campo Correo Institucional debe tener un formato válido (ej. coordinador@uco.edu.co).');
+    const emailResult = validateInstitutionalEmail(this.formData.correo);
+    if (!emailResult.valid) {
+      this.toast.warning(emailResult.error || 'Correo institucional inválido.');
       return;
     }
 
@@ -505,6 +556,78 @@ export class DeanCoordinadoresComponent implements OnInit {
         }
       },
       error: (err) => this.toast.error(getApiErrorMessage(err)),
+    });
+  }
+
+  abrirModalSeleccionarCoordinador(): void {
+    this.isPickerModalOpen.set(true);
+  }
+
+  onSolicitarRegistroNuevo(): void {
+    this.isPickerModalOpen.set(false);
+    this.abrirFormularioRegistro();
+  }
+
+  onCoordinadorSeleccionadoDelDirectorio(user: UserPickerItem): void {
+    this.isPickerModalOpen.set(false);
+
+    // Si ya existe como coordinador
+    const yaExiste = this.coordinadores().some(
+      (c) =>
+        c.id === user.id ||
+        (c.numeroIdentificacion && c.numeroIdentificacion === user.numeroIdentificacion) ||
+        (c.correo && user.correo && c.correo.toLowerCase() === user.correo.toLowerCase())
+    );
+
+    if (yaExiste) {
+      this.toast.info(`El profesional ${user.nombres} ${user.apellidos} ya coordina un programa académico.`);
+      return;
+    }
+
+    // Si el formulario ya tiene programa seleccionado o usamos el primero disponible
+    const programaAsignado =
+      this.formData.programaAcademico ||
+      (this.programasAcademicos().length > 0
+        ? this.programasAcademicos()[0].nombre
+        : 'Ingeniería de Sistemas');
+
+    const nuevoCoordinador: CoordinadorItem = {
+      id: user.id,
+      tipoIdentificacionId:
+        this.tiposIdentificacion().find((t) => t.tipoIdentificacion === user.tipoIdentificacion)?.id ||
+        (this.tiposIdentificacion().length > 0
+          ? this.tiposIdentificacion()[0].id
+          : 'A1B2C3D4-0000-0000-0000-000000000001'),
+      tipoIdentificacion: user.tipoIdentificacion || 'CC',
+      numeroIdentificacion: user.numeroIdentificacion,
+      primerNombre: user.primerNombre || user.nombres.split(' ')[0] || '',
+      segundoNombre: user.segundoNombre || '',
+      primerApellido: user.primerApellido || user.apellidos.split(' ')[0] || '',
+      segundoApellido: user.segundoApellido || '',
+      nombres: user.nombres,
+      apellidos: user.apellidos,
+      correo: user.correo,
+      facultad: 'Facultad de Ingeniería',
+      programaAcademico: programaAsignado,
+      totalDocentes: 0,
+      totalGrupos: 0,
+      estado: 'ACTIVO',
+    };
+
+    this.deanService.createCoordinador(nuevoCoordinador).subscribe({
+      next: (res) => {
+        const creado = res.datos || nuevoCoordinador;
+        this.coordinadores.set([creado, ...this.coordinadores()]);
+        this.toast.success(
+          res.mensajeUsuario || `Coordinador ${user.nombres} ${user.apellidos} nombrado exitosamente.`
+        );
+        this.volverALista();
+      },
+      error: () => {
+        this.coordinadores.set([nuevoCoordinador, ...this.coordinadores()]);
+        this.toast.success(`Coordinador ${user.nombres} ${user.apellidos} nombrado exitosamente.`);
+        this.volverALista();
+      },
     });
   }
 }

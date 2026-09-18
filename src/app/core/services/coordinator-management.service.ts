@@ -1,4 +1,4 @@
-﻿import { Injectable, signal } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of, delay, catchError } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -53,14 +53,12 @@ export class CoordinatorManagementService {
   }
 
   createDocente(nuevoDocente: Omit<DocenteItem, 'id' | 'totalGruposAsignados'>): Observable<ApiResponse<DocenteItem>> {
-    const id = `DOC-${String(this.docentesList.length + 1).padStart(3, '0')}`;
-    const docenteCreado: DocenteItem = {
-      ...nuevoDocente,
-      id,
-      totalGruposAsignados: 0,
-    };
-
     if (environment.useMocks) {
+      const docenteCreado: DocenteItem = {
+        ...nuevoDocente,
+        id: `mock-doc-${this.docentesList.length + 1}`,
+        totalGruposAsignados: 0,
+      };
       this.docentesList = [docenteCreado, ...this.docentesList];
       return of({
         idTransaccion: 'mock-tx-docente-create',
@@ -97,9 +95,14 @@ export class CoordinatorManagementService {
   }
 
   private planesSignal = signal<PlanEstudioItem[]>([...MOCK_PLANES_ESTUDIO]);
+  public planes = this.planesSignal.asReadonly();
   private asignaturasSignal = signal<Record<string, AsignaturaPlanItem[]>>({ ...MOCK_ASIGNATURAS_PLAN });
   private periodosSignal = signal<PeriodoAcademicoItem[]>([...MOCK_PERIODOS_ACADEMICOS]);
   public periodos = this.periodosSignal.asReadonly();
+
+  getAsignaturasPlan(planId: string): AsignaturaPlanItem[] {
+    return this.asignaturasSignal()[planId] || [];
+  }
 
   getPlanesEstudio(): Observable<ApiResponse<PlanEstudioItem[]>> {
     if (environment.useMocks) {
@@ -124,34 +127,45 @@ export class CoordinatorManagementService {
   }
 
   crearPlanEstudio(datos: Partial<PlanEstudioItem>): Observable<ApiResponse<PlanEstudioItem>> {
-    const id = `PLAN-${datos.codigo || Date.now()}`;
-    const nuevo: PlanEstudioItem = {
-      id,
-      codigo: datos.codigo || 'PLAN-NUEVO',
-      nombre: datos.nombre || 'Nuevo Plan de Estudio',
-      anioVigencia: datos.anioVigencia || new Date().getFullYear(),
-      programa: datos.programa || 'Ingeniería de Sistemas',
-      facultad: datos.facultad || 'Facultad de Ingeniería',
-      totalCreditos: datos.totalCreditos || 160,
-      totalSemestres: datos.totalSemestres || 10,
-      totalAsignaturas: 0,
-      estado: datos.estado || 'VIGENTE',
-      descripcion: datos.descripcion || 'Plan de estudios registrado por Coordinación.',
-    };
-
     if (environment.useMocks) {
+      const mockId = `mock-plan-${this.planesSignal().length + 1}`;
+      const nuevo: PlanEstudioItem = {
+        id: mockId,
+        codigo: datos.codigo || 'PLAN-NUEVO',
+        nombre: datos.nombre || 'Nuevo Plan de Estudio',
+        anioVigencia: datos.anioVigencia || new Date().getFullYear(),
+        programa: datos.programa || 'Ingeniería de Sistemas',
+        facultad: datos.facultad || 'Facultad de Ingeniería',
+        totalCreditos: datos.totalCreditos || 160,
+        totalSemestres: datos.totalSemestres || 10,
+        totalAsignaturas: 0,
+        estado: datos.estado || 'VIGENTE',
+        descripcion: datos.descripcion || 'Plan de estudios registrado por Coordinación.',
+      };
+
       this.planesSignal.update((prev) => [nuevo, ...prev]);
-      this.asignaturasSignal.update((map) => ({ ...map, [id]: [] }));
+      this.asignaturasSignal.update((map) => ({ ...map, [mockId]: [] }));
 
       return of({
-        idTransaccion: `mock-tx-plan-created-${id}`,
+        idTransaccion: `mock-tx-plan-created-${mockId}`,
         exitoso: true,
         mensajeUsuario: `Plan de estudio ${nuevo.codigo} creado exitosamente.`,
         datos: nuevo,
       }).pipe(delay(250));
     }
 
-    return this.http.post<ApiResponse<PlanEstudioItem>>(`${environment.apiUrl}/coordinador/planes-estudio`, nuevo);
+    const payload = {
+      codigo: datos.codigo,
+      nombre: datos.nombre,
+      anioVigencia: datos.anioVigencia,
+      programa: datos.programa,
+      facultad: datos.facultad,
+      totalCreditos: datos.totalCreditos,
+      totalSemestres: datos.totalSemestres,
+      estado: datos.estado,
+      descripcion: datos.descripcion,
+    };
+    return this.http.post<ApiResponse<PlanEstudioItem>>(`${environment.apiUrl}/coordinador/planes-estudio`, payload);
   }
 
   actualizarPlanEstudio(id: string, cambios: Partial<PlanEstudioItem>): Observable<ApiResponse<PlanEstudioItem>> {
@@ -235,21 +249,21 @@ export class CoordinatorManagementService {
   }
 
   crearAsignaturaPlan(planId: string, datos: Partial<AsignaturaPlanItem>): Observable<ApiResponse<AsignaturaPlanItem>> {
-    const id = `ASIG-${Date.now()}`;
-    const nueva: AsignaturaPlanItem = {
-      id,
-      planEstudioId: planId,
-      codigo: datos.codigo || 'ASIG-001',
-      nombre: datos.nombre || 'Nueva Asignatura',
-      creditos: datos.creditos || 3,
-      semestre: datos.semestre || 1,
-      area: datos.area || 'Ciencias Básicas',
-      componente: datos.componente || 'Obligatoria',
-      prerrequisitos: datos.prerrequisitos || [],
-      horasSemanales: datos.horasSemanales || 4,
-    };
-
     if (environment.useMocks) {
+      const mockId = `mock-asig-${(this.asignaturasSignal()[planId] || []).length + 1}`;
+      const nueva: AsignaturaPlanItem = {
+        id: mockId,
+        planEstudioId: planId,
+        codigo: datos.codigo || 'ASIG-001',
+        nombre: datos.nombre || 'Nueva Asignatura',
+        creditos: datos.creditos || 3,
+        semestre: datos.semestre || 1,
+        area: datos.area || 'Ciencias Básicas',
+        componente: datos.componente || 'Obligatoria',
+        prerrequisitos: datos.prerrequisitos || [],
+        horasSemanales: datos.horasSemanales || 4,
+      };
+
       this.asignaturasSignal.update((map) => ({
         ...map,
         [planId]: [...(map[planId] || []), nueva],
@@ -261,14 +275,25 @@ export class CoordinatorManagementService {
       );
 
       return of({
-        idTransaccion: `mock-tx-asig-created-${id}`,
+        idTransaccion: `mock-tx-asig-created-${mockId}`,
         exitoso: true,
         mensajeUsuario: `Asignatura ${nueva.nombre} agregada al plan.`,
         datos: nueva,
       }).pipe(delay(250));
     }
 
-    return this.http.post<ApiResponse<AsignaturaPlanItem>>(`${environment.apiUrl}/coordinador/planes-estudio/${planId}/asignaturas`, nueva);
+    const payload = {
+      planEstudioId: planId,
+      codigo: datos.codigo,
+      nombre: datos.nombre,
+      creditos: datos.creditos,
+      semestre: datos.semestre,
+      area: datos.area,
+      componente: datos.componente,
+      prerrequisitos: datos.prerrequisitos,
+      horasSemanales: datos.horasSemanales,
+    };
+    return this.http.post<ApiResponse<AsignaturaPlanItem>>(`${environment.apiUrl}/coordinador/planes-estudio/${planId}/asignaturas`, payload);
   }
 
   actualizarAsignaturaPlan(planId: string, asigId: string, cambios: Partial<AsignaturaPlanItem>): Observable<ApiResponse<AsignaturaPlanItem>> {
@@ -334,29 +359,38 @@ export class CoordinatorManagementService {
   }
 
   crearPeriodoAcademico(datos: Partial<PeriodoAcademicoItem>): Observable<ApiResponse<PeriodoAcademicoItem>> {
-    const id = `PER-${datos.codigo || Date.now()}`;
-    const nuevo: PeriodoAcademicoItem = {
-      id,
-      codigo: datos.codigo || '2027-1',
-      nombre: datos.nombre || `Período ${datos.codigo || '2027-1'}`,
-      fechaInicio: datos.fechaInicio || '2027-02-01',
-      fechaFin: datos.fechaFin || '2027-06-20',
-      fechaLimiteNotas: datos.fechaLimiteNotas || '2027-06-25',
-      estado: datos.estado || 'PLANEACION',
-      esActual: false,
-    };
-
     if (environment.useMocks) {
+      const mockId = `mock-per-${this.periodosSignal().length + 1}`;
+      const nuevo: PeriodoAcademicoItem = {
+        id: mockId,
+        codigo: datos.codigo || '2027-1',
+        nombre: datos.nombre || `Período ${datos.codigo || '2027-1'}`,
+        fechaInicio: datos.fechaInicio || '2027-02-01',
+        fechaFin: datos.fechaFin || '2027-06-20',
+        fechaLimiteNotas: datos.fechaLimiteNotas || '2027-06-25',
+        estado: datos.estado || 'PLANEACION',
+        esActual: false,
+      };
+
       this.periodosSignal.update((prev) => [nuevo, ...prev]);
       return of({
-        idTransaccion: `mock-tx-create-period-${id}`,
+        idTransaccion: `mock-tx-create-period-${mockId}`,
         exitoso: true,
         mensajeUsuario: `Período académico ${nuevo.codigo} creado exitosamente.`,
         datos: nuevo,
       }).pipe(delay(250));
     }
 
-    return this.http.post<ApiResponse<PeriodoAcademicoItem>>(`${environment.apiUrl}/coordinador/periodos-academicos`, nuevo);
+    const payload = {
+      codigo: datos.codigo,
+      nombre: datos.nombre,
+      fechaInicio: datos.fechaInicio,
+      fechaFin: datos.fechaFin,
+      fechaLimiteNotas: datos.fechaLimiteNotas,
+      estado: datos.estado,
+      esActual: datos.esActual ?? false,
+    };
+    return this.http.post<ApiResponse<PeriodoAcademicoItem>>(`${environment.apiUrl}/coordinador/periodos-academicos`, payload);
   }
 
   actualizarPeriodoAcademico(id: string, cambios: Partial<PeriodoAcademicoItem>): Observable<ApiResponse<PeriodoAcademicoItem>> {
@@ -512,18 +546,17 @@ export class CoordinatorManagementService {
   crearSolicitudMatricula(
     solicitud: Omit<SolicitudMatriculaItem, 'id' | 'fechaSolicitud' | 'estado'>
   ): Observable<ApiResponse<SolicitudMatriculaItem>> {
-    const id = `SOL-MAT-${String(this.solicitudesMatriculaSignal().length + 1).padStart(3, '0')}`;
-    const nueva: SolicitudMatriculaItem = {
-      ...solicitud,
-      id,
-      fechaSolicitud: new Date().toISOString().split('T')[0],
-      estado: 'PENDIENTE',
-    };
-
     if (environment.useMocks) {
+      const mockId = `mock-sol-${this.solicitudesMatriculaSignal().length + 1}`;
+      const nueva: SolicitudMatriculaItem = {
+        ...solicitud,
+        id: mockId,
+        fechaSolicitud: new Date().toISOString().split('T')[0],
+        estado: 'PENDIENTE',
+      };
       this.solicitudesMatriculaSignal.update((prev) => [nueva, ...prev]);
       return of({
-        idTransaccion: `mock-tx-crear-sol-mat-${id}`,
+        idTransaccion: `mock-tx-crear-sol-mat-${mockId}`,
         exitoso: true,
         mensajeUsuario: `Tu solicitud de inscripción a ${nueva.cursoNombre} ha sido enviada a Coordinación.`,
         datos: nueva,

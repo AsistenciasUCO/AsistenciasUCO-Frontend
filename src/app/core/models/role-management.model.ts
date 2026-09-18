@@ -258,6 +258,8 @@ export interface FacultadItem {
   decanoId?: string;
   decanoNombre?: string;
   estado: 'ACTIVO' | 'INACTIVO';
+  totalProgramas?: number;
+  totalEstudiantes?: number;
 }
 
 export interface AreaConocimientoItem {
@@ -268,6 +270,7 @@ export interface AreaConocimientoItem {
   facultadNombre?: string;
   coordinadorArea?: string;
   estado: 'ACTIVO' | 'INACTIVO';
+  totalAsignaturas?: number;
 }
 
 // ================= FASE 6: PARÁMETROS, AUDITORÍA Y CIERRE MASIVO =================
