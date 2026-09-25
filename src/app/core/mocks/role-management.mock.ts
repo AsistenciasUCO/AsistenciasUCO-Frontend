@@ -1,4 +1,4 @@
-﻿import {
+import {
   DecanoItem,
   CoordinadorItem,
   DocenteItem,
@@ -19,6 +19,7 @@
   ParametroInstitucionalItem,
   RegistroAuditoriaItem,
   CierrePeriodoReporte,
+  InstitucionItem,
 } from '../models/role-management.model';
 
 export const MOCK_DECANOS: DecanoItem[] = [
@@ -1276,6 +1277,35 @@ export const MOCK_REPORTES_CIERRE: CierrePeriodoReporte[] = [
     totalReprobadosFallas: 42,
     estado: 'COMPLETADO',
     ejecutadoPor: 'Administrador del Sistema',
+  },
+];
+
+export const MOCK_INSTITUCIONES: InstitucionItem[] = [
+  {
+    id: 'B1C2D3E4-0000-0000-0000-000000000001',
+    codigo: 'UCO',
+    nombre: 'Universidad Católica de Oriente',
+    nit: '890.984.746-1',
+    ciudad: 'Rionegro',
+    direccion: 'Sector 3 Cra 46 No 48-111',
+    telefono: '6045698686',
+    correo: 'contacto@uco.edu.co',
+    estado: 1,
+    estaActivaInstitucion: true,
+    estaActivaTextoInstitucion: 'Activa',
+  },
+  {
+    id: 'B1C2D3E4-0000-0000-0000-000000000002',
+    codigo: 'UDEA',
+    nombre: 'Universidad de Antioquia',
+    nit: '890.980.040-8',
+    ciudad: 'Medellín',
+    direccion: 'Calle 67 No 53 - 108',
+    telefono: '6042198332',
+    correo: 'informacion@udea.edu.co',
+    estado: 1,
+    estaActivaInstitucion: true,
+    estaActivaTextoInstitucion: 'Activa',
   },
 ];
 

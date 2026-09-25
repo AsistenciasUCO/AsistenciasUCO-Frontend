@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of, delay, catchError } from 'rxjs';
+import { Observable, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 import {
@@ -12,466 +12,284 @@ import {
   ParametroInstitucionalItem,
   RegistroAuditoriaItem,
   CierrePeriodoReporte,
+  InstitucionItem,
 } from '../models/role-management.model';
-import {
-  MOCK_DECANOS,
-  MOCK_SEDES,
-  MOCK_ESPACIOS_FISICOS,
-  MOCK_FACULTADES,
-  MOCK_AREAS_CONOCIMIENTO,
-  MOCK_PARAMETROS,
-  MOCK_REGISTROS_AUDITORIA,
-  MOCK_REPORTES_CIERRE,
-} from '../mocks/role-management.mock';
 
 @Injectable({
   providedIn: 'root',
 })
 export class AdminManagementService {
-  private decanosList: DecanoItem[] = [...MOCK_DECANOS];
+  // Sedes
+  private _sedes = signal<SedeInstitucionalItem[]>([]);
+  sedes = this._sedes.asReadonly();
 
-  constructor(private http: HttpClient) {}
+  // Espacios Físicos
+  private _espacios = signal<EspacioFisicoItem[]>([]);
+  espacios = this._espacios.asReadonly();
+
+  // Facultades
+  private _facultades = signal<FacultadItem[]>([]);
+  facultades = this._facultades.asReadonly();
+
+  // Áreas de Conocimiento
+  private _areas = signal<AreaConocimientoItem[]>([]);
+  areas = this._areas.asReadonly();
+
+  // Parámetros Institucionales
+  private _parametros = signal<ParametroInstitucionalItem[]>([]);
+  parametros = this._parametros.asReadonly();
+
+  // Auditoría
+  private _auditoria = signal<RegistroAuditoriaItem[]>([]);
+  auditoria = this._auditoria.asReadonly();
+
+  // Reportes Cierre Masivo
+  private _reportesCierre = signal<CierrePeriodoReporte[]>([]);
+  reportesCierre = this._reportesCierre.asReadonly();
+
+  constructor(private http: HttpClient) {
+    this.cargarDatosIniciales();
+  }
+
+  private cargarDatosIniciales(): void {
+    this.cargarSedes().subscribe();
+    this.cargarEspacios().subscribe();
+    this.cargarFacultades().subscribe();
+    this.cargarAreas().subscribe();
+    this.cargarParametros().subscribe();
+    this.cargarAuditoria().subscribe();
+  }
 
   // ================= DECANOS =================
   getDecanos(): Observable<ApiResponse<DecanoItem[]>> {
-    if (environment.useMocks) {
-      return of({
-        idTransaccion: 'mock-tx-decanos-list',
-        exitoso: true,
-        total: this.decanosList.length,
-        datos: [...this.decanosList],
-      }).pipe(delay(300));
-    }
-
-    return this.http.get<ApiResponse<DecanoItem[]>>(`${environment.apiUrl}/admin/decanos`).pipe(
-      catchError(() =>
-        of({
-          idTransaccion: 'error-decanos',
-          exitoso: false,
-          mensajeUsuario: 'No fue posible cargar la lista de decanos.',
-          datos: [],
-        })
-      )
-    );
+    return this.http.get<ApiResponse<DecanoItem[]>>(`${environment.apiUrl}/admin/decanos`);
   }
 
   createDecano(nuevoDecano: Omit<DecanoItem, 'id'>): Observable<ApiResponse<DecanoItem>> {
-    const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `temp-dec-${Date.now()}`;
-    const decanoCreado: DecanoItem = {
-      ...nuevoDecano,
-      id,
-    };
-
-    if (environment.useMocks) {
-      this.decanosList = [decanoCreado, ...this.decanosList];
-      this.registrarAuditoria({
-        modulo: 'USUARIOS',
-        accion: 'CREAR',
-        descripcion: `Se registró al decano ${decanoCreado.nombres} ${decanoCreado.apellidos}`,
-        nivel: 'INFO',
-      });
-      return of({
-        idTransaccion: 'mock-tx-decano-create',
-        exitoso: true,
-        mensajeUsuario: 'Decano registrado exitosamente.',
-        datos: decanoCreado,
-      }).pipe(delay(350));
-    }
-
     return this.http.post<ApiResponse<DecanoItem>>(`${environment.apiUrl}/admin/decanos`, nuevoDecano);
   }
 
   toggleDecanoStatus(id: string): Observable<ApiResponse<DecanoItem | null>> {
-    if (environment.useMocks) {
-      const decano = this.decanosList.find((d) => d.id === id);
-      if (decano) {
-        decano.estado = decano.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
-        this.registrarAuditoria({
-          modulo: 'USUARIOS',
-          accion: 'ACTUALIZAR',
-          descripcion: `Se cambió el estado del decano ${decano.nombres} a ${decano.estado}`,
-          nivel: 'INFO',
-        });
-        return of({
-          idTransaccion: 'mock-tx-decano-toggle',
-          exitoso: true,
-          mensajeUsuario: `Estado del decano actualizado a ${decano.estado}.`,
-          datos: { ...decano },
-        }).pipe(delay(200));
-      }
-      return of({
-        idTransaccion: 'mock-tx-decano-not-found',
-        exitoso: false,
-        mensajeUsuario: 'Decano no encontrado.',
-        datos: null,
-      });
-    }
-
-    return this.http.patch<ApiResponse<DecanoItem>>(`${environment.apiUrl}/admin/decanos/${id}/toggle`, {});
+    return this.http.patch<ApiResponse<DecanoItem | null>>(`${environment.apiUrl}/admin/decanos/${id}/toggle`, {});
   }
 
-  // Sedes
-  private _sedes = signal<SedeInstitucionalItem[]>(MOCK_SEDES);
-  sedes = this._sedes.asReadonly();
-
-  // Espacios Físicos
-  private _espacios = signal<EspacioFisicoItem[]>(MOCK_ESPACIOS_FISICOS);
-  espacios = this._espacios.asReadonly();
-
-  // Facultades
-  private _facultades = signal<FacultadItem[]>(MOCK_FACULTADES);
-  facultades = this._facultades.asReadonly();
-
-  // Áreas de Conocimiento
-  private _areas = signal<AreaConocimientoItem[]>(MOCK_AREAS_CONOCIMIENTO);
-  areas = this._areas.asReadonly();
-
-  // Parámetros Institucionales
-  private _parametros = signal<ParametroInstitucionalItem[]>(MOCK_PARAMETROS);
-  parametros = this._parametros.asReadonly();
-
-  // Auditoría
-  private _auditoria = signal<RegistroAuditoriaItem[]>(MOCK_REGISTROS_AUDITORIA);
-  auditoria = this._auditoria.asReadonly();
-
-  // Reportes Cierre Masivo
-  private _reportesCierre = signal<CierrePeriodoReporte[]>(MOCK_REPORTES_CIERRE);
-  reportesCierre = this._reportesCierre.asReadonly();
-
   // ================= SEDES =================
+  cargarSedes(): Observable<ApiResponse<SedeInstitucionalItem[]>> {
+    return this.http.get<ApiResponse<SedeInstitucionalItem[]>>(`${environment.apiUrl}/admin/sedes`).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._sedes.set(res.datos);
+        }
+      })
+    );
+  }
+
   crearSede(item: Omit<SedeInstitucionalItem, 'id'>): void {
-    const nueva: SedeInstitucionalItem = {
-      ...item,
-      id: `mock-sed-${this._sedes().length + 1}`,
-    };
-    this._sedes.update((prev) => [nueva, ...prev]);
-    this.registrarAuditoria({
-      modulo: 'SISTEMA',
-      accion: 'CREAR',
-      descripcion: `Se creó la sede ${nueva.nombre} (${nueva.codigo})`,
-      nivel: 'INFO',
-    });
-    if (!environment.useMocks) {
-      this.http.post(`${environment.apiUrl}/admin/sedes`, item).subscribe({ error: (err) => console.error(err) });
-    }
+    this.http.post<ApiResponse<SedeInstitucionalItem>>(`${environment.apiUrl}/admin/sedes`, item).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._sedes.update((prev) => [res.datos, ...prev]);
+        }
+      })
+    ).subscribe();
   }
 
   actualizarSede(id: string, cambios: Partial<SedeInstitucionalItem>): void {
-    this._sedes.update((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...cambios } : s))
-    );
-    this.registrarAuditoria({
-      modulo: 'SISTEMA',
-      accion: 'ACTUALIZAR',
-      descripcion: `Se actualizó la sede con ID ${id}`,
-      nivel: 'INFO',
-    });
-    if (!environment.useMocks) {
-      this.http.put(`${environment.apiUrl}/admin/sedes/${id}`, cambios).subscribe({ error: (err) => console.error(err) });
-    }
+    this.http.put<ApiResponse<SedeInstitucionalItem>>(`${environment.apiUrl}/admin/sedes/${id}`, cambios).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._sedes.update((prev) => prev.map((s) => (s.id === id ? res.datos : s)));
+        }
+      })
+    ).subscribe();
   }
 
   cambiarEstadoSede(id: string): void {
-    this._sedes.update((prev) =>
-      prev.map((s) =>
-        s.id === id
-          ? { ...s, estado: s.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO' }
-          : s
-      )
-    );
-    if (!environment.useMocks) {
-      this.http.patch(`${environment.apiUrl}/admin/sedes/${id}/estado`, {}).subscribe({ error: (err) => console.error(err) });
-    }
+    this.http.patch<ApiResponse<SedeInstitucionalItem>>(`${environment.apiUrl}/admin/sedes/${id}/estado`, {}).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._sedes.update((prev) => prev.map((s) => (s.id === id ? res.datos : s)));
+        }
+      })
+    ).subscribe();
   }
 
   // ================= ESPACIOS FÍSICOS =================
+  cargarEspacios(): Observable<ApiResponse<EspacioFisicoItem[]>> {
+    return this.http.get<ApiResponse<EspacioFisicoItem[]>>(`${environment.apiUrl}/admin/espacios-fisicos`).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._espacios.set(res.datos);
+        }
+      })
+    );
+  }
+
   crearEspacio(item: Omit<EspacioFisicoItem, 'id'>): void {
-    const sede = this._sedes().find((s) => s.id === item.sedeId);
-    const nuevo: EspacioFisicoItem = {
-      ...item,
-      id: `mock-esp-${this._espacios().length + 1}`,
-      sedeNombre: sede ? sede.nombre : item.sedeNombre,
-    };
-    this._espacios.update((prev) => [nuevo, ...prev]);
-    this.registrarAuditoria({
-      modulo: 'SISTEMA',
-      accion: 'CREAR',
-      descripcion: `Se creó el espacio físico ${nuevo.codigo} en ${nuevo.sedeNombre}`,
-      nivel: 'INFO',
-    });
-    if (!environment.useMocks) {
-      this.http.post(`${environment.apiUrl}/admin/espacios-fisicos`, item).subscribe({ error: (err) => console.error(err) });
-    }
+    this.http.post<ApiResponse<EspacioFisicoItem>>(`${environment.apiUrl}/admin/espacios-fisicos`, item).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._espacios.update((prev) => [res.datos, ...prev]);
+        }
+      })
+    ).subscribe();
   }
 
   actualizarEspacio(id: string, cambios: Partial<EspacioFisicoItem>): void {
-    this._espacios.update((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, ...cambios } : e))
-    );
-    this.registrarAuditoria({
-      modulo: 'SISTEMA',
-      accion: 'ACTUALIZAR',
-      descripcion: `Se actualizaron las propiedades del espacio con ID ${id}`,
-      nivel: 'INFO',
-    });
-    if (!environment.useMocks) {
-      this.http.put(`${environment.apiUrl}/admin/espacios-fisicos/${id}`, cambios).subscribe({ error: (err) => console.error(err) });
-    }
+    this.http.put<ApiResponse<EspacioFisicoItem>>(`${environment.apiUrl}/admin/espacios-fisicos/${id}`, cambios).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._espacios.update((prev) => prev.map((e) => (e.id === id ? res.datos : e)));
+        }
+      })
+    ).subscribe();
   }
 
   cambiarEstadoEspacio(id: string): void {
-    this._espacios.update((prev) =>
-      prev.map((e) =>
-        e.id === id
-          ? { ...e, estado: e.estado === 'DISPONIBLE' ? 'INACTIVO' : 'DISPONIBLE' }
-          : e
-      )
-    );
-    if (!environment.useMocks) {
-      this.http.patch(`${environment.apiUrl}/admin/espacios-fisicos/${id}/estado`, {}).subscribe({ error: (err) => console.error(err) });
-    }
+    this.http.patch<ApiResponse<EspacioFisicoItem>>(`${environment.apiUrl}/admin/espacios-fisicos/${id}/estado`, {}).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._espacios.update((prev) => prev.map((e) => (e.id === id ? res.datos : e)));
+        }
+      })
+    ).subscribe();
   }
 
   // ================= FACULTADES Y ÁREAS =================
+  cargarFacultades(): Observable<ApiResponse<FacultadItem[]>> {
+    return this.http.get<ApiResponse<FacultadItem[]>>(`${environment.apiUrl}/admin/facultades`).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._facultades.set(res.datos);
+        }
+      })
+    );
+  }
+
   crearFacultad(item: Omit<FacultadItem, 'id'>): void {
-    const nueva: FacultadItem = {
-      ...item,
-      id: `mock-fac-${this._facultades().length + 1}`,
-    };
-    this._facultades.update((prev) => [nueva, ...prev]);
-    this.registrarAuditoria({
-      modulo: 'PLANES_ESTUDIO',
-      accion: 'CREAR',
-      descripcion: `Se registró la facultad ${nueva.nombre} (${nueva.codigo})`,
-      nivel: 'INFO',
-    });
-    if (!environment.useMocks) {
-      this.http.post(`${environment.apiUrl}/admin/facultades`, item).subscribe({ error: (err) => console.error(err) });
-    }
+    this.http.post<ApiResponse<FacultadItem>>(`${environment.apiUrl}/admin/facultades`, item).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._facultades.update((prev) => [res.datos, ...prev]);
+        }
+      })
+    ).subscribe();
   }
 
   actualizarFacultad(id: string, cambios: Partial<FacultadItem>): void {
-    this._facultades.update((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, ...cambios } : f))
-    );
-    if (!environment.useMocks) {
-      this.http.put(`${environment.apiUrl}/admin/facultades/${id}`, cambios).subscribe({ error: (err) => console.error(err) });
-    }
+    this.http.put<ApiResponse<FacultadItem>>(`${environment.apiUrl}/admin/facultades/${id}`, cambios).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._facultades.update((prev) => prev.map((f) => (f.id === id ? res.datos : f)));
+        }
+      })
+    ).subscribe();
   }
 
   cambiarEstadoFacultad(id: string): void {
-    this._facultades.update((prev) =>
-      prev.map((f) =>
-        f.id === id
-          ? { ...f, estado: f.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO' }
-          : f
-      )
+    this.http.patch<ApiResponse<FacultadItem>>(`${environment.apiUrl}/admin/facultades/${id}/estado`, {}).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._facultades.update((prev) => prev.map((f) => (f.id === id ? res.datos : f)));
+        }
+      })
+    ).subscribe();
+  }
+
+  cargarAreas(): Observable<ApiResponse<AreaConocimientoItem[]>> {
+    return this.http.get<ApiResponse<AreaConocimientoItem[]>>(`${environment.apiUrl}/admin/areas`).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._areas.set(res.datos);
+        }
+      })
     );
-    if (!environment.useMocks) {
-      this.http.patch(`${environment.apiUrl}/admin/facultades/${id}/estado`, {}).subscribe({ error: (err) => console.error(err) });
-    }
   }
 
   crearArea(item: Omit<AreaConocimientoItem, 'id'>): void {
-    const facultad = this._facultades().find((f) => f.id === item.facultadId);
-    const nueva: AreaConocimientoItem = {
-      ...item,
-      id: `mock-area-${this._areas().length + 1}`,
-      facultadNombre: facultad ? facultad.nombre : item.facultadNombre,
-    };
-    this._areas.update((prev) => [nueva, ...prev]);
-    this.registrarAuditoria({
-      modulo: 'PLANES_ESTUDIO',
-      accion: 'CREAR',
-      descripcion: `Se registró el área de conocimiento ${nueva.nombre}`,
-      nivel: 'INFO',
-    });
-    if (!environment.useMocks) {
-      this.http.post(`${environment.apiUrl}/admin/areas`, item).subscribe({ error: (err) => console.error(err) });
-    }
+    this.http.post<ApiResponse<AreaConocimientoItem>>(`${environment.apiUrl}/admin/areas`, item).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._areas.update((prev) => [res.datos, ...prev]);
+        }
+      })
+    ).subscribe();
   }
 
   actualizarArea(id: string, cambios: Partial<AreaConocimientoItem>): void {
-    this._areas.update((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, ...cambios } : a))
-    );
-    if (!environment.useMocks) {
-      this.http.put(`${environment.apiUrl}/admin/areas/${id}`, cambios).subscribe({ error: (err) => console.error(err) });
-    }
+    this.http.put<ApiResponse<AreaConocimientoItem>>(`${environment.apiUrl}/admin/areas/${id}`, cambios).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._areas.update((prev) => prev.map((a) => (a.id === id ? res.datos : a)));
+        }
+      })
+    ).subscribe();
   }
 
   cambiarEstadoArea(id: string): void {
-    this._areas.update((prev) =>
-      prev.map((a) =>
-        a.id === id
-          ? { ...a, estado: a.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO' }
-          : a
-      )
-    );
-    if (!environment.useMocks) {
-      this.http.patch(`${environment.apiUrl}/admin/areas/${id}/estado`, {}).subscribe({ error: (err) => console.error(err) });
-    }
+    this.http.patch<ApiResponse<AreaConocimientoItem>>(`${environment.apiUrl}/admin/areas/${id}/estado`, {}).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._areas.update((prev) => prev.map((a) => (a.id === id ? res.datos : a)));
+        }
+      })
+    ).subscribe();
   }
 
   // ================= PARÁMETROS INSTITUCIONALES =================
-  actualizarParametro(id: string, nuevoValor: string): void {
-    let paramNombre = '';
-    this._parametros.update((prev) =>
-      prev.map((p) => {
-        if (p.id === id) {
-          paramNombre = p.nombre;
-          return {
-            ...p,
-            valor: nuevoValor,
-            ultimaModificacion: new Date().toISOString().replace('T', ' ').slice(0, 16),
-          };
+  cargarParametros(): Observable<ApiResponse<ParametroInstitucionalItem[]>> {
+    return this.http.get<ApiResponse<ParametroInstitucionalItem[]>>(`${environment.apiUrl}/admin/parametros`).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._parametros.set(res.datos);
         }
-        return p;
       })
     );
-    this.registrarAuditoria({
-      modulo: 'SISTEMA',
-      accion: 'ACTUALIZAR',
-      descripcion: `Se actualizó el parámetro institucional ${paramNombre} a "${nuevoValor}"`,
-      nivel: 'WARNING',
-    });
+  }
+
+  actualizarParametro(id: string, nuevoValor: string): void {
+    this.http.patch<ApiResponse<ParametroInstitucionalItem>>(`${environment.apiUrl}/admin/parametros/${id}`, { valor: nuevoValor }).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._parametros.update((prev) => prev.map((p) => (p.id === id ? res.datos : p)));
+        }
+      })
+    ).subscribe();
   }
 
   // ================= AUDITORÍA =================
-  registrarAuditoria(evento: {
-    modulo: 'ASISTENCIA' | 'NOTAS' | 'MATRICULA' | 'PLANES_ESTUDIO' | 'USUARIOS' | 'SISTEMA';
-    accion: 'CREAR' | 'ACTUALIZAR' | 'ELIMINAR' | 'CIERRE_MASIVO' | 'APROBACION';
-    descripcion: string;
-    nivel: 'INFO' | 'WARNING' | 'CRITICO';
-  }): void {
-    const item: RegistroAuditoriaItem = {
-      id: `mock-aud-${this._auditoria().length + 1}`,
-      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      usuarioId: 'ADMIN-ACTUAL',
-      usuarioNombre: 'Administrador del Sistema',
-      rol: 'ADMINISTRADOR',
-      modulo: evento.modulo,
-      accion: evento.accion,
-      descripcion: evento.descripcion,
-      direccionIp: '10.0.0.1',
-      nivel: evento.nivel,
-    };
-    this._auditoria.update((prev) => [item, ...prev]);
-  }
-
-  // ================= CIERRE MASIVO =================
-  ejecutarCierreMasivo(periodoCodigo: string): CierrePeriodoReporte {
-    const nuevoReporte: CierrePeriodoReporte = {
-      id: `mock-cierre-${this._reportesCierre().length + 1}`,
-      periodoCodigo,
-      fechaEjecucion: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      totalEstudiantesProcesados: 1540,
-      totalMateriasAfectadas: 92,
-      totalAprobadosAsistencia: 1492,
-      totalReprobadosFallas: 48,
-      estado: 'COMPLETADO',
-      ejecutadoPor: 'Administrador del Sistema',
-    };
-    this._reportesCierre.update((prev) => [nuevoReporte, ...prev]);
-    this.registrarAuditoria({
-      modulo: 'ASISTENCIA',
-      accion: 'CIERRE_MASIVO',
-      descripcion: `Ejecución de cierre masivo de asistencia para el período ${periodoCodigo}. ${nuevoReporte.totalEstudiantesProcesados} estudiantes procesados, ${nuevoReporte.totalReprobadosFallas} reprobados por inasistencia.`,
-      nivel: 'CRITICO',
-    });
-    return nuevoReporte;
-  }
-
-  // ================= INSTITUCIONES =================
-  private institucionesList = [
-    {
-      id: 'B1C2D3E4-0000-0000-0000-000000000001',
-      codigo: 'UCO',
-      nombre: 'Universidad Católica de Oriente',
-      nit: '890.984.746-1',
-      ciudad: 'Rionegro',
-      direccion: 'Sector 3 Cra 46 No 48-111',
-      telefono: '6045698686',
-      correo: 'contacto@uco.edu.co',
-      estado: 1,
-    },
-    {
-      id: 'B1C2D3E4-0000-0000-0000-000000000002',
-      codigo: 'UDEA',
-      nombre: 'Universidad de Antioquia',
-      nit: '890.980.040-8',
-      ciudad: 'Medellín',
-      direccion: 'Calle 67 No 53 - 108',
-      telefono: '6042198332',
-      correo: 'informacion@udea.edu.co',
-      estado: 1,
-    },
-  ];
-
-  getInstituciones(): Observable<ApiResponse<any[]>> {
-    if (environment.useMocks) {
-      return of({
-        idTransaccion: 'mock-tx-inst-list',
-        exitoso: true,
-        total: this.institucionesList.length,
-        datos: [...this.institucionesList],
-      }).pipe(delay(250));
-    }
-
-    return this.http.get<ApiResponse<any[]>>(`${environment.apiUrl}/admin/instituciones`).pipe(
-      catchError(() =>
-        of({
-          idTransaccion: 'error-instituciones',
-          exitoso: false,
-          mensajeUsuario: 'No fue posible cargar las instituciones.',
-          datos: [...this.institucionesList],
-        })
-      )
+  cargarAuditoria(): Observable<ApiResponse<RegistroAuditoriaItem[]>> {
+    return this.http.get<ApiResponse<RegistroAuditoriaItem[]>>(`${environment.apiUrl}/admin/auditoria`).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._auditoria.set(res.datos);
+        }
+      })
     );
   }
 
-  crearInstitucion(data: any): Observable<ApiResponse<any>> {
-    if (environment.useMocks) {
-      const nueva = { id: `mock-inst-${this.institucionesList.length + 1}`, ...data, estado: 1 };
-      this.institucionesList.push(nueva);
-      return of({
-        idTransaccion: `mock-tx-inst-create`,
-        exitoso: true,
-        mensajeUsuario: 'Institución registrada con éxito.',
-        datos: nueva,
-      }).pipe(delay(250));
-    }
-
-    return this.http.post<ApiResponse<any>>(`${environment.apiUrl}/admin/instituciones`, data);
+  // ================= CIERRE MASIVO =================
+  ejecutarCierreMasivo(idPeriodoAcademico: string, periodoCodigo: string = ''): Observable<ApiResponse<void>> {
+    return this.http.post<ApiResponse<void>>(`${environment.apiUrl}/admin/cierre-masivo`, {
+      idPeriodoAcademico,
+      periodoCodigo,
+    });
   }
 
-  actualizarInstitucion(id: string, data: any): Observable<ApiResponse<any>> {
-    if (environment.useMocks) {
-      this.institucionesList = this.institucionesList.map((i) => (i.id === id ? { ...i, ...data } : i));
-      return of({
-        idTransaccion: `mock-tx-inst-update`,
-        exitoso: true,
-        mensajeUsuario: 'Institución actualizada correctamente.',
-        datos: { id, ...data },
-      }).pipe(delay(250));
-    }
-
-    return this.http.put<ApiResponse<any>>(`${environment.apiUrl}/admin/instituciones/${id}`, data);
+  // ================= INSTITUCIONES =================
+  getInstituciones(): Observable<ApiResponse<InstitucionItem[]>> {
+    return this.http.get<ApiResponse<InstitucionItem[]>>(`${environment.apiUrl}/admin/instituciones`);
   }
 
-  toggleEstadoInstitucion(id: string): Observable<ApiResponse<any>> {
-    if (environment.useMocks) {
-      this.institucionesList = this.institucionesList.map((i) =>
-        i.id === id ? { ...i, estado: i.estado === 1 ? 0 : 1 } : i
-      );
-      return of({
-        idTransaccion: `mock-tx-inst-toggle`,
-        exitoso: true,
-        mensajeUsuario: 'Estado de institución alternado.',
-        datos: { id },
-      }).pipe(delay(200));
-    }
+  crearInstitucion(data: Partial<InstitucionItem>): Observable<ApiResponse<InstitucionItem>> {
+    return this.http.post<ApiResponse<InstitucionItem>>(`${environment.apiUrl}/admin/instituciones`, data);
+  }
 
-    return this.http.patch<ApiResponse<any>>(`${environment.apiUrl}/admin/instituciones/${id}/toggle-estado`, {});
+  actualizarInstitucion(id: string, data: Partial<InstitucionItem>): Observable<ApiResponse<InstitucionItem>> {
+    return this.http.put<ApiResponse<InstitucionItem>>(`${environment.apiUrl}/admin/instituciones/${id}`, data);
+  }
+
+  toggleEstadoInstitucion(id: string): Observable<ApiResponse<{ id: string }>> {
+    return this.http.patch<ApiResponse<{ id: string }>>(`${environment.apiUrl}/admin/instituciones/${id}/toggle-estado`, {});
   }
 }

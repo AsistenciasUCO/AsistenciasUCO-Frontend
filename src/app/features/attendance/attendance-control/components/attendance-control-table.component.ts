@@ -29,12 +29,13 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
           </svg>
         </div>
 
-        <!-- Filtros Rápidos -->
-        <div class="flex items-center bg-warm-100/80 p-1 rounded-xl gap-1 shrink-0 w-full md:w-auto justify-end">
+        <!-- Filtros Rápidos (Desplazables en móvil sin desbordar) -->
+        <div class="flex items-center bg-warm-100/80 p-1 rounded-xl gap-1 shrink-0 w-full md:w-auto justify-start md:justify-end overflow-x-auto max-w-full">
           <button
             type="button"
             (click)="filterStatus.set('TODOS')"
             [class]="filterBtnClasses('TODOS')"
+            class="whitespace-nowrap shrink-0"
           >
             Todos ({{ students().length }})
           </button>
@@ -42,6 +43,7 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
             type="button"
             (click)="filterStatus.set('AN')"
             [class]="filterBtnClasses('AN')"
+            class="whitespace-nowrap shrink-0"
           >
             Asistencia Normal
           </button>
@@ -49,6 +51,7 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
             type="button"
             (click)="filterStatus.set('SJC')"
             [class]="filterBtnClasses('SJC')"
+            class="whitespace-nowrap shrink-0"
           >
             Sin Justa Causa
           </button>
@@ -56,6 +59,7 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
             type="button"
             (click)="filterStatus.set('EX')"
             [class]="filterBtnClasses('EX')"
+            class="whitespace-nowrap shrink-0"
           >
             Excusa
           </button>
@@ -103,7 +107,10 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
                   (click)="statusChange.emit({ studentId: student.studentId, status: 'AN' })"
                   [class]="mobileStatusBtnClasses(student.status, 'AN')"
                 >
-                  🟢 Asistencia Normal
+                  <svg class="w-3.5 h-3.5 mr-1 inline shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Presente
                 </button>
                 <button
                   type="button"
@@ -111,7 +118,10 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
                   (click)="statusChange.emit({ studentId: student.studentId, status: 'SJC' })"
                   [class]="mobileStatusBtnClasses(student.status, 'SJC')"
                 >
-                  🔴 Sin Justa Causa
+                  <svg class="w-3.5 h-3.5 mr-1 inline shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Ausente
                 </button>
                 <button
                   type="button"
@@ -119,7 +129,10 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
                   (click)="openExcuseModal.emit(student)"
                   [class]="mobileStatusBtnClasses(student.status, 'EX')"
                 >
-                  🔵 Excusa
+                  <svg class="w-3.5 h-3.5 mr-1 inline shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Excusa
                 </button>
               </div>
             </div>

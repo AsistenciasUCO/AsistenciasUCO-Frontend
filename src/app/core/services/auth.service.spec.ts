@@ -248,6 +248,28 @@ describe('AuthService', () => {
       expect(fetchSpy).not.toHaveBeenCalled();
     });
 
+    it('loginWithCredentials maneja error OAuth2 "invalid_grant" devolviendo mensaje amigable institucional', async () => {
+      fetchSpy.and.resolveTo({
+        ok: false,
+        json: () => Promise.resolve({ error: 'invalid_grant', error_description: 'Cualquier texto volátil en inglés o español' }),
+      } as Response);
+
+      await expectAsync(
+        service.loginWithCredentials('docente@uco.edu.co', 'wrong-pass')
+      ).toBeRejectedWithError('Credenciales inválidas. Verifica tu usuario y contraseña institucional.');
+    });
+
+    it('loginWithCredentials maneja error OAuth2 genérico devolviendo mensaje de contingencia', async () => {
+      fetchSpy.and.resolveTo({
+        ok: false,
+        json: () => Promise.resolve({ error: 'server_error' }),
+      } as Response);
+
+      await expectAsync(
+        service.loginWithCredentials('docente@uco.edu.co', 'pass')
+      ).toBeRejectedWithError('Usuario o contraseña incorrectos.');
+    });
+
     it('setMockMode persiste la preferencia en localStorage', () => {
       service.setMockMode(true);
       expect(localStorage.getItem('USE_MOCKS')).toBe('true');

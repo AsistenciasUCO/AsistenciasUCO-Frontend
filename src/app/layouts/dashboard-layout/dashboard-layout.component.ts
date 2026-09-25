@@ -272,28 +272,16 @@ export class DashboardLayoutComponent {
       icon: 'estudiantes',
     },
     {
-      label: 'Mis Horarios',
-      route: '/app/docente/horarios',
-      roles: ['DOCENTE'],
-      icon: 'horarios',
-    },
-    {
-      label: 'Gestión de Grupos',
+      label: 'Mis Grupos',
       route: '/app/docente/grupos',
       roles: ['DOCENTE'],
       icon: 'grupos',
     },
     {
-      label: 'Toma de Asistencia',
-      route: '/app/asistencia',
+      label: 'Mis Horarios',
+      route: '/app/docente/horarios',
       roles: ['DOCENTE'],
-      icon: 'asistencia',
-    },
-    {
-      label: 'Reclamos de Asistencia',
-      route: '/app/docente/reclamos',
-      roles: ['DOCENTE'],
-      icon: 'reclamos',
+      icon: 'horarios',
     },
     {
       label: 'Mis Horarios',

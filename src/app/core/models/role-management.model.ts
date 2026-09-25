@@ -225,6 +225,20 @@ export interface PeriodoAcademicoItem {
 
 // ================= FASE 5: CATÁLOGOS INSTITUCIONALES =================
 
+export interface InstitucionItem {
+  id: string;
+  codigo?: string;
+  nombre: string;
+  nit?: string;
+  ciudad?: string;
+  direccion?: string;
+  telefono?: string;
+  correo?: string;
+  estado?: number;
+  estaActivaInstitucion?: boolean;
+  estaActivaTextoInstitucion?: string;
+}
+
 export interface SedeInstitucionalItem {
   id: string;
   codigo: string;

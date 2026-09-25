@@ -137,8 +137,11 @@ import { ClassSession } from '../../../../core/models/attendance.model';
                   <!-- Estado Académico UCO -->
                   <td class="p-3 text-center bg-warm-50/40">
                     @if (getPorcentajeFaltasEstudiante(est.studentId || est.id) >= 20) {
-                      <span class="px-2.5 py-1 text-[10px] font-bold rounded-full bg-red-100 text-red-800 border border-red-200">
-                        ⚠️ Reprobado (20%)
+                      <span class="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold rounded-full bg-red-100 text-red-800 border border-red-200">
+                        <svg class="w-3 h-3 text-red-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        Reprobado (20%)
                       </span>
                     } @else if (getPorcentajeFaltasEstudiante(est.studentId || est.id) >= 10) {
                       <span class="px-2.5 py-1 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">

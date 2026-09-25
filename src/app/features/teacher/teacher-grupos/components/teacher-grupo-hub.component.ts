@@ -176,6 +176,7 @@ import { TeacherGrupoSabanaComponent } from './teacher-grupo-sabana.component';
             [loading]="loadingSessions()"
             [selectedCourse]="selectedCourse()"
             (programarExtraordinaria)="programarExtraordinaria.emit()"
+            (tomarAsistencia)="tomarAsistenciaSesion.emit($event)"
             (proyectar)="proyectarSesion.emit($event)"
             (verDetalle)="verDetalleSesion.emit($event)"
             (ajustarHorario)="ajustarHorarioSesion.emit($event)"
@@ -230,6 +231,7 @@ export class TeacherGrupoHubComponent {
 
   volver = output<void>();
   irAsistencia = output<Course>();
+  tomarAsistenciaSesion = output<ClassSession>();
   proyectarQr = output<Course>();
   matricular = output<Course>();
   programarExtraordinaria = output<void>();

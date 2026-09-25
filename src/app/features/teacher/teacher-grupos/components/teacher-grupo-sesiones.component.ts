@@ -66,6 +66,18 @@ import { ClassSession } from '../../../../core/models/attendance.model';
               <div class="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
+                  (click)="tomarAsistencia.emit(sesion)"
+                  class="text-xs font-bold text-white bg-primary-800 hover:bg-primary-900 px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5 shadow-xs"
+                  [title]="sesion.status === 'CONCLUIDA' ? 'Ver control de asistencias de esta sesión' : 'Tomar o modificar asistencia de esta sesión'"
+                >
+                  <svg class="w-3.5 h-3.5 text-primary-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {{ sesion.status === 'CONCLUIDA' ? 'Ver Asistencia' : 'Tomar Asistencia' }}
+                </button>
+
+                <button
+                  type="button"
                   (click)="proyectar.emit(sesion)"
                   class="text-xs font-bold text-primary-800 hover:text-primary-950 bg-accent-100 hover:bg-accent-200 border border-accent-300 px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5"
                   title="Proyectar QR/PIN específico de esta sesión"
@@ -137,6 +149,7 @@ export class TeacherGrupoSesionesComponent {
   selectedCourse = input<Course | null>(null);
 
   programarExtraordinaria = output<void>();
+  tomarAsistencia = output<ClassSession>();
   proyectar = output<ClassSession>();
   verDetalle = output<ClassSession>();
   ajustarHorario = output<ClassSession>();

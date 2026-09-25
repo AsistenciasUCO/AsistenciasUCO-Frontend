@@ -1,4 +1,8 @@
 export interface SolicitarRevisionAsistenciaRequest {
-  asistencia: string;
-  motivo: string;
+  sesionId: string;
+  categoria: string;
+  justificacion: string;
+  soporteNombre?: string;
+  soporteUrl?: string;
 }
+
