@@ -73,9 +73,8 @@ import { ClassSession } from '../../../../core/models/attendance.model';
                     <div class="font-mono font-bold text-primary-900">#{{ ses.sessionNumber }}</div>
                     <div class="text-[10px] text-warm-500 font-normal truncate">{{ ses.date | slice:5 }}</div>
                     <span
-                      class="inline-block w-1.5 h-1.5 rounded-full mt-0.5"
-                      [class]="ses.status === 'CONCLUIDA' ? 'bg-warm-400' : 'bg-emerald-500'"
-                      [title]="ses.status"
+                      class="inline-block w-1.5 h-1.5 rounded-full mt-0.5 bg-emerald-500"
+                      [title]="ses.date"
                     ></span>
                   </th>
                 }
@@ -166,13 +165,10 @@ export class TeacherGrupoSabanaComponent {
 
   getAsistenciaEstudianteEnSesion(estudianteId: string, sesion: ClassSession): string {
     if (!sesion.records || sesion.records.length === 0) {
-      if (sesion.status === 'CONCLUIDA') {
-        return (estudianteId.endsWith('2') || estudianteId.endsWith('5')) ? 'SJC' : 'AN';
-      }
       return '—';
     }
     const rec = sesion.records.find((r) => r.studentId === estudianteId);
-    return rec ? rec.status : (sesion.status === 'CONCLUIDA' ? 'AN' : '—');
+    return rec?.status ?? '—';
   }
 
   getFaltasSjcEstudiante(estudianteId: string): number {

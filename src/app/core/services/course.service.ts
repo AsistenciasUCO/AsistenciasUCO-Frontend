@@ -78,9 +78,8 @@ export class CourseService {
               name: horario.nombreMateria,
               section: horario.seccion,
               schedule: Array.from(scheduleBlocks).join(', '),
-              room: horario.aula,
+              // Sin `room`: HorarioDocente no entrega aula (BACKEND_GOLDEN_PATH_CONTRACT §C.1) y no se sintetiza.
               enrolledStudentsCount: horario.totalEstudiantes,
-              docenteName: 'Docente UCO',
               docenteId: horario.idDocente,
               colorCategory: colors[index % colors.length],
             })
@@ -106,7 +105,6 @@ export class CourseService {
         room: nuevo.room || 'Aula Por Asignar',
         enrolledStudentsCount: nuevo.enrolledStudentsCount || 0,
         cupoMaximo: nuevo.cupoMaximo || 35,
-        docenteName: nuevo.docenteName || 'Docente Titular',
         colorCategory: nuevo.colorCategory || 'emerald',
       };
 
@@ -124,7 +122,6 @@ export class CourseService {
       name: nuevo.name,
       section: nuevo.section,
       cupoMaximo: nuevo.cupoMaximo || 35,
-      docenteName: nuevo.docenteName,
       colorCategory: nuevo.colorCategory,
       room: nuevo.room,
       schedule: nuevo.schedule,
@@ -180,6 +177,9 @@ export class CourseService {
       }).pipe(delay(250));
     }
 
-    return this.http.put<ApiResponse<Course>>(`${environment.apiUrl}/grupos/${id}`, cambios);
+    // TARGET (PLAN.md LB-001B.1B, riesgo #3 RESUELTO): Grupo.docente en DB es solo FK UUID;
+    // ActualizarGrupoRequest.java del backend no declara docenteName.
+    const { docenteName, ...resto } = cambios as Partial<Course> & Record<string, unknown>;
+    return this.http.put<ApiResponse<Course>>(`${environment.apiUrl}/grupos/${id}`, resto);
   }
 }

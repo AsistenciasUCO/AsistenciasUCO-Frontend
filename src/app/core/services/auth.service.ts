@@ -1,4 +1,4 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, OnDestroy, signal, computed } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, of } from 'rxjs';
 import { ApiResponse } from '../models/api-response.model';
@@ -9,6 +9,17 @@ import { environment } from '../../../environments/environment';
 // MOCK_STORAGE_KEY: preferencia de rol mock (dato no sensible, se mantiene en localStorage).
 // Los tokens JWT NUNCA se persisten en localStorage (AGENTS.md §3.3).
 const MOCK_STORAGE_KEY = 'gestio_asistencia_mock_role';
+
+/**
+ * Único dato de sesión persistido: el refresh token, en sessionStorage (por
+ * pestaña; sobrevive a F5 y desaparece al cerrar la pestaña). El access token
+ * vive SOLO en memoria; jamás se guardan access token, password ni usuario.
+ *
+ * Compromiso local de SPA (MV001-A01): un XSS podría leer este refresh token.
+ * Deuda futura AUTH-PKCE/BFF HARDENING: migrar a OIDC Authorization Code +
+ * PKCE o a un BFF con cookie httpOnly si entra al alcance productivo.
+ */
+const SESSION_REFRESH_TOKEN_KEY = 'gestio_session_refresh_token';
 
 /** Claves residuales de versiones anteriores que pudieran quedar en el navegador del usuario. */
 const LEGACY_STORAGE_KEYS = [
@@ -95,7 +106,7 @@ function isValidUuid(value: unknown): value is string {
 @Injectable({
   providedIn: 'root',
 })
-export class AuthService {
+export class AuthService implements OnDestroy {
   // ── Signals públicos ──────────────────────────────────────────────────────
   currentUser = signal<User | null>(null);
   token = signal<string | null>(null);
@@ -103,9 +114,11 @@ export class AuthService {
   private mockModeSignal = signal<boolean>(environment.useMocks);
   isMockMode = computed(() => this.mockModeSignal());
 
-  // ── Estado interno de renovación (SOLO en memoria — jamás localStorage) ──
+  // ── Estado interno de renovación ──────────────────────────────────────────
   /**
-   * Refresh token guardado SOLO en memoria.
+   * Refresh token vigente en memoria. Se replica en sessionStorage
+   * (SESSION_REFRESH_TOKEN_KEY) solo para restaurar la sesión tras F5; siempre
+   * se modifica mediante `storeRefreshToken` para mantener ambos sincronizados.
    * NUNCA se persiste en localStorage (AGENTS.md §3.3).
    */
   private refreshTokenInMemory = signal<string | null>(null);
@@ -136,16 +149,48 @@ export class AuthService {
     this.authChannel.onmessage = (event: MessageEvent) => {
       const { type } = (event.data ?? {}) as { type?: string };
       if (type === 'LOGOUT' || type === 'SESSION_EXPIRED') {
-        // Limpiar signals en memoria sin re-emitir el evento (evita bucle).
+        // Limpiar signals en memoria y el refresh token de ESTA pestaña (su
+        // sessionStorage es propio) sin re-emitir el evento (evita bucle).
         this.token.set(null);
         this.currentUser.set(null);
-        this.refreshTokenInMemory.set(null);
+        this.storeRefreshToken(null);
         const currentUrl: string = this.router.url ?? '';
         if (!currentUrl.startsWith('/login')) {
           this.router.navigate(['/login']);
         }
       }
     };
+  }
+
+  ngOnDestroy(): void {
+    this.authChannel.close();
+  }
+
+  /** Refresh token de sesión persistido en sessionStorage (null si no hay o el storage no está disponible). */
+  private readPersistedRefreshToken(): string | null {
+    try {
+      return sessionStorage.getItem(SESSION_REFRESH_TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Fija (o borra, con `null`) el refresh token en memoria y en sessionStorage.
+   * Si sessionStorage no está disponible la sesión sigue funcionando solo en
+   * memoria (sin restauración tras F5).
+   */
+  private storeRefreshToken(token: string | null): void {
+    this.refreshTokenInMemory.set(token);
+    try {
+      if (token) {
+        sessionStorage.setItem(SESSION_REFRESH_TOKEN_KEY, token);
+      } else {
+        sessionStorage.removeItem(SESSION_REFRESH_TOKEN_KEY);
+      }
+    } catch {
+      // Storage bloqueado o lleno: continuar solo con la copia en memoria.
+    }
   }
 
   /** Elimina del navegador toda clave sensible que pudo haber dejado una versión anterior. */
@@ -162,9 +207,11 @@ export class AuthService {
   /**
    * Inicialización de sesión al arrancar la app (APP_INITIALIZER).
    *
-   * En modo real: intenta un silent refresh si el refresh token está en memoria
-   * (disponible si la app navegó internamente sin F5). Tras un F5 los signals
-   * son null y se retorna false — el guard redirige al /login.
+   * En modo real: con access token vigente en memoria no hace nada. Sin él
+   * (típicamente tras F5, que reinicia los signals) intenta restaurar la sesión
+   * con el refresh token de memoria o, si no hay, el de sessionStorage. Si el
+   * refresh falla limpia toda credencial residual y retorna false; no navega:
+   * el guard resuelve la ruta si realmente no hay sesión.
    * En modo mock: restaura el rol guardado en localStorage.
    */
   async initKeycloak(): Promise<boolean> {
@@ -175,9 +222,6 @@ export class AuthService {
       return true;
     }
 
-    // Sin token en memoria (ej. F5), no hay nada que rehidratar.
-    // La autenticación silenciosa real requeriría un iframe/popup OIDC;
-    // por ahora el usuario vuelve al login — comportamiento correcto y seguro.
     const currentToken = this.token();
     if (currentToken) {
       const payload = parseJwt(currentToken);
@@ -187,13 +231,20 @@ export class AuthService {
       }
     }
 
-    // Intentar renovar si hay refresh token en memoria.
-    const refreshToken = this.refreshTokenInMemory();
-    if (refreshToken) {
-      return await this.refreshAccessToken(refreshToken);
+    // Restaurar con el refresh token en memoria o, tras F5, con el de sessionStorage.
+    const refreshToken = this.refreshTokenInMemory() || this.readPersistedRefreshToken();
+    if (!refreshToken) {
+      return false;
     }
 
-    return false;
+    const restored = await this.refreshAccessToken(refreshToken);
+    if (!restored) {
+      this.token.set(null);
+      this.currentUser.set(null);
+      this.storeRefreshToken(null);
+      return false;
+    }
+    return true;
   }
 
 
@@ -272,12 +323,12 @@ export class AuthService {
       throw new Error(this.resolveAuthMessage('AUTH_NO_ROLE_ASSIGNED'));
     }
 
-    // Persistir SOLO en signals de memoria — NUNCA en localStorage (AGENTS.md §3.3).
+    // Access token y usuario SOLO en memoria — NUNCA en localStorage (AGENTS.md §3.3).
+    // El refresh token va a memoria + sessionStorage (restauración tras F5). Si
+    // Keycloak no lo devuelve no se fabrica uno, y se descarta cualquier residual.
     this.token.set(accessToken);
     this.currentUser.set(user);
-    if (refreshToken) {
-      this.refreshTokenInMemory.set(refreshToken);
-    }
+    this.storeRefreshToken(refreshToken ?? null);
 
     await this.fetchProfileFromBackend(accessToken);
 
@@ -287,6 +338,7 @@ export class AuthService {
 
   async refreshAccessToken(refreshTokenStr?: string): Promise<boolean> {
     // Prioridad: parámetro explícito > signal en memoria. NUNCA localStorage.
+    // (La restauración tras F5 la orquesta initKeycloak pasando el de sessionStorage.)
     const refreshToken = refreshTokenStr || this.refreshTokenInMemory();
     if (!refreshToken) return false;
 
@@ -322,10 +374,11 @@ export class AuthService {
       const user = this.mapPayloadToUser(payload);
       if (!user) return false;
 
-      // Actualizar SOLO signals en memoria — sin tocar localStorage.
+      // Access token y usuario en memoria; el refresh token (rotado o el vigente
+      // si Keycloak no rota) también en sessionStorage. Nada en localStorage.
       this.token.set(accessToken);
       this.currentUser.set(user);
-      this.refreshTokenInMemory.set(newRefreshToken);
+      this.storeRefreshToken(newRefreshToken);
 
       this.fetchProfileFromBackend(accessToken);
       return true;
@@ -420,7 +473,7 @@ export class AuthService {
   clearSession(broadcast = false): void {
     this.token.set(null);
     this.currentUser.set(null);
-    this.refreshTokenInMemory.set(null);
+    this.storeRefreshToken(null);
     // Limpiar preferencia de rol mock (único dato no sensible en localStorage).
     localStorage.removeItem(MOCK_STORAGE_KEY);
     // Limpieza defensiva de claves que pudieran haber quedado de versiones anteriores.
@@ -439,7 +492,7 @@ export class AuthService {
   notifySessionExpired(): void {
     this.token.set(null);
     this.currentUser.set(null);
-    this.refreshTokenInMemory.set(null);
+    this.storeRefreshToken(null);
     this.purgeLegacyStorage();
     try {
       this.authChannel.postMessage({ type: 'SESSION_EXPIRED' });

@@ -25,6 +25,10 @@ export const environment = {
   features: {
     sessionsEnabled: true,
     attendanceEnabled: true,
+    // OUT_OF_GOLDEN_PATH (LB-001B.5A): acciones de sesión sin contrato en
+    // BACKEND_GOLDEN_PATH_CONTRACT. Deshabilitadas hasta que exista un contrato propio.
+    sessionCancelEnabled: false,
+    sessionQrEnabled: false,
   },
   keycloak: {
     get url(): string {

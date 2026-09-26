@@ -10,7 +10,6 @@ export const MOCK_COURSES: Course[] = [
     room: 'Aula A-204',
     enrolledStudentsCount: 32,
     cupoMaximo: 35,
-    docenteName: 'Dra. María Elena Rostagno',
     colorCategory: 'emerald',
   },
   {
@@ -22,7 +21,6 @@ export const MOCK_COURSES: Course[] = [
     room: 'Laboratorio L-102',
     enrolledStudentsCount: 28,
     cupoMaximo: 30,
-    docenteName: 'Dra. María Elena Rostagno',
     colorCategory: 'amber',
   },
   {
@@ -34,7 +32,6 @@ export const MOCK_COURSES: Course[] = [
     room: 'Auditorio Principal',
     enrolledStudentsCount: 42,
     cupoMaximo: 45,
-    docenteName: 'Dra. María Elena Rostagno',
     colorCategory: 'blue',
   },
 ];

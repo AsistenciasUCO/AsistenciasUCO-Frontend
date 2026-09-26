@@ -156,7 +156,7 @@ import { ButtonComponent } from '../../../../shared/components/button/button.com
             <input
               type="text"
               [(ngModel)]="form().docenteName"
-              placeholder="Ej. Dra. María Elena Rostagno"
+              placeholder="Nombre del docente responsable"
               class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
             />
           </app-form-field>

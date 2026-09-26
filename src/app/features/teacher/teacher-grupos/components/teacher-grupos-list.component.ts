@@ -92,7 +92,7 @@ import { Course } from '../../../../core/models/course.model';
           type="text"
           [ngModel]="searchQuery()"
           (ngModelChange)="searchQuery.set($event)"
-          placeholder="Buscar grupo por nombre, código de asignatura o aula..."
+          placeholder="Buscar grupo por nombre o código de asignatura..."
           class="w-full pl-10 pr-4 py-2.5 bg-white border border-warm-200 rounded-xl text-sm text-warm-900 placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 shadow-warm-sm transition-all"
         />
         <svg class="w-4 h-4 text-warm-400 absolute left-3.5 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -129,12 +129,11 @@ import { Course } from '../../../../core/models/course.model';
                   <h3 class="font-serif font-bold text-xl text-warm-900 leading-snug">
                     {{ course.name }}
                   </h3>
-                  <p class="text-xs text-warm-500 mt-1">Docente titular: {{ course.docenteName }}</p>
 
                   <!-- Barra de Ocupación -->
                   <div class="mt-3 space-y-1">
                     <div class="flex items-center justify-between text-[11px] text-warm-500">
-                      <span>Ocupación de Aula</span>
+                      <span>Ocupación del grupo</span>
                       <span class="font-semibold text-warm-800">{{ getPorcentajeCupo(course) }}%</span>
                     </div>
                     <div class="w-full h-1.5 bg-warm-100 rounded-full overflow-hidden">
@@ -152,12 +151,6 @@ import { Course } from '../../../../core/models/course.model';
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <span class="font-medium">{{ course.schedule }}</span>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <svg class="w-4 h-4 text-warm-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                    <span>{{ course.room }}</span>
                   </div>
                 </div>
 
@@ -201,17 +194,19 @@ import { Course } from '../../../../core/models/course.model';
                       QR Matrícula
                     </button>
 
-                    <button
-                      type="button"
-                      (click)="proyectarQr.emit(course)"
-                      class="text-xs font-bold text-primary-800 hover:text-primary-950 bg-accent-100 hover:bg-accent-200 border border-accent-300 px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5 shadow-xs"
-                      title="Proyectar código QR y PIN para auto-registro de asistencia a sesión"
-                    >
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                      </svg>
-                      QR Asistencia
-                    </button>
+                    @if (sessionQrEnabled()) {
+                      <button
+                        type="button"
+                        (click)="proyectarQr.emit(course)"
+                        class="text-xs font-bold text-primary-800 hover:text-primary-950 bg-accent-100 hover:bg-accent-200 border border-accent-300 px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5 shadow-xs"
+                        title="Proyectar código QR y PIN para auto-registro de asistencia a sesión"
+                      >
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                        </svg>
+                        QR Asistencia
+                      </button>
+                    }
 
                     <app-button variant="primary" size="sm" (clicked)="tomarAsistencia.emit(course)">
                       <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -232,6 +227,8 @@ import { Course } from '../../../../core/models/course.model';
 export class TeacherGruposListComponent {
   courses = input<Course[]>([]);
   isLoading = input<boolean>(false);
+  // OUT_OF_GOLDEN_PATH: QR de asistencia por sesión sin contrato backend; oculto salvo feature explícita.
+  sessionQrEnabled = input<boolean>(false);
 
   crearGrupo = output<void>();
   irAsistencia = output<void>();
@@ -255,10 +252,7 @@ export class TeacherGruposListComponent {
     const q = this.searchQuery().trim().toLowerCase();
     if (!q) return this.courses();
     return this.courses().filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.code.toLowerCase().includes(q) ||
-        c.room.toLowerCase().includes(q)
+      (c) => c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q)
     );
   });
 

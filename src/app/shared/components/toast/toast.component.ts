@@ -126,7 +126,7 @@ export class ToastComponent {
         this.isExiting.set(false);
         this.startAutoDismissTimer();
       }
-    });
+    }, { allowSignalWrites: true });
   }
 
   private startAutoDismissTimer(): void {

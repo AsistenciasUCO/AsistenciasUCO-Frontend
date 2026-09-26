@@ -50,7 +50,7 @@ import {
             </h2>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-warm-600 pt-2 border-t border-warm-100">
               <div>
-                <span class="text-warm-400 block text-[11px]">Docente Titular</span>
+                <span class="text-warm-400 block text-[11px]">Docente</span>
                 <strong class="text-warm-800">{{ materia()?.docente }}</strong>
               </div>
               <div>

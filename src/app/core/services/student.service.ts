@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, delay, of } from 'rxjs';
+import { Observable, delay, of, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   EstudianteDetalleApiDto,
@@ -8,6 +8,7 @@ import {
 } from '../api/models/estudiante-api-dto.model';
 import { OperationResultResponse } from '../api/models/operation-result-response.model';
 import { RegistrarEstudianteEnGrupoRequest } from '../api/models/registrar-estudiante-en-grupo-request.model';
+import { getPasswordValidationError } from '../validation/request-form-validation.util';
 
 export interface EnrollStudentFormValue {
   grupo: string;
@@ -39,13 +40,22 @@ export class StudentService {
       }).pipe(delay(400));
     }
 
+    const password = dto.password?.trim() ?? '';
+    const passwordError = getPasswordValidationError(
+      password,
+      String(dto.numeroIdentificacion)
+    );
+    if (passwordError) {
+      return throwError(() => new Error(passwordError));
+    }
+
     const request: RegistrarEstudianteEnGrupoRequest = {
       tipoIdentificacionId: dto.tipoDocumento,
       numeroIdentificacion: dto.numeroIdentificacion,
       primerNombre: dto.primerNombre.trim(),
       primerApellido: dto.primerApellido.trim(),
       correo: dto.correoElectronico.trim(),
-      password: dto.password?.trim() ? dto.password.trim() : 'Test1234!',
+      password,
     };
 
     if (dto.segundoNombre?.trim()) {

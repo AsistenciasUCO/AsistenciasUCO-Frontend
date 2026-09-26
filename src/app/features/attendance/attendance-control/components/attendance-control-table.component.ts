@@ -92,6 +92,9 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
                   <div class="min-w-0">
                     <p class="font-semibold text-warm-900 text-xs truncate leading-tight">{{ student.studentName }}</p>
                     <p class="text-[10px] font-mono text-warm-500 mt-0.5">{{ student.studentCode }}</p>
+                    @if (student.status === null) {
+                      <p class="text-[10px] font-semibold text-amber-700 mt-0.5">Sin registrar</p>
+                    }
                   </div>
                 </div>
               </div>
@@ -99,7 +102,7 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
               <div class="grid grid-cols-3 gap-1.5">
                 <button
                   type="button"
-                  [disabled]="!sessionsEnabled() || !attendanceEnabled() || isSessionConcluded()"
+                  [disabled]="controlsDisabled()"
                   (click)="statusChange.emit({ studentId: student.studentId, status: 'AN' })"
                   [class]="mobileStatusBtnClasses(student.status, 'AN')"
                 >
@@ -107,7 +110,7 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
                 </button>
                 <button
                   type="button"
-                  [disabled]="!sessionsEnabled() || !attendanceEnabled() || isSessionConcluded()"
+                  [disabled]="controlsDisabled()"
                   (click)="statusChange.emit({ studentId: student.studentId, status: 'SJC' })"
                   [class]="mobileStatusBtnClasses(student.status, 'SJC')"
                 >
@@ -115,7 +118,7 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
                 </button>
                 <button
                   type="button"
-                  [disabled]="!sessionsEnabled() || !attendanceEnabled() || isSessionConcluded()"
+                  [disabled]="controlsDisabled()"
                   (click)="openExcuseModal.emit(student)"
                   [class]="mobileStatusBtnClasses(student.status, 'EX')"
                 >
@@ -132,10 +135,10 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
               size="md"
               [fullWidth]="true"
               [loading]="isSaving()"
-              [disabled]="!sessionsEnabled() || !attendanceEnabled() || isSessionConcluded()"
+              [disabled]="controlsDisabled()"
               (clicked)="saveAttendance.emit()"
             >
-              Guardar y Consolidar Asistencia
+              Guardar Asistencia
             </app-button>
           </div>
         </div>
@@ -165,6 +168,9 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
                             <p class="font-semibold text-warm-900 text-xs flex items-center gap-1.5">
                               {{ student.studentName }}
                             </p>
+                            @if (student.status === null) {
+                              <p class="text-[10px] font-semibold text-amber-700 mt-0.5">Sin registrar</p>
+                            }
                           </div>
                         </div>
                       </td>
@@ -177,7 +183,7 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
                         <div class="flex items-center justify-center gap-1.5 bg-warm-100/80 p-0.5 rounded-xl border border-warm-200/80 max-w-fit mx-auto shadow-xs">
                           <button
                             type="button"
-                            [disabled]="!sessionsEnabled() || !attendanceEnabled() || isSessionConcluded()"
+                            [disabled]="controlsDisabled()"
                             (click)="statusChange.emit({ studentId: student.studentId, status: 'AN' })"
                             [class]="segmentedChipClasses(student.status, 'AN')"
                           >
@@ -185,7 +191,7 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
                           </button>
                           <button
                             type="button"
-                            [disabled]="!sessionsEnabled() || !attendanceEnabled() || isSessionConcluded()"
+                            [disabled]="controlsDisabled()"
                             (click)="statusChange.emit({ studentId: student.studentId, status: 'SJC' })"
                             [class]="segmentedChipClasses(student.status, 'SJC')"
                           >
@@ -193,7 +199,7 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
                           </button>
                           <button
                             type="button"
-                            [disabled]="!sessionsEnabled() || !attendanceEnabled() || isSessionConcluded()"
+                            [disabled]="controlsDisabled()"
                             (click)="openExcuseModal.emit(student)"
                             [class]="segmentedChipClasses(student.status, 'EX')"
                           >
@@ -214,10 +220,10 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
                 variant="primary"
                 size="md"
                 [loading]="isSaving()"
-                [disabled]="!sessionsEnabled() || !attendanceEnabled() || isSessionConcluded()"
+                [disabled]="controlsDisabled()"
                 (clicked)="saveAttendance.emit()"
               >
-                Guardar y Consolidar Asistencia
+                Guardar Asistencia
               </app-button>
             </div>
           </app-card>
@@ -232,7 +238,12 @@ export class AttendanceControlTableComponent {
   isSaving = input<boolean>(false);
   sessionsEnabled = input<boolean>(true);
   attendanceEnabled = input<boolean>(true);
-  isSessionConcluded = input<boolean>(false);
+
+  // Único gate de los controles: features + guardado en curso. La sesión no tiene estado en el
+  // frontend (BACKEND_GOLDEN_PATH_CONTRACT §C.2); ante una operación inválida decide backend/DB.
+  controlsDisabled = computed(
+    () => !this.sessionsEnabled() || !this.attendanceEnabled() || this.isSaving()
+  );
 
   statusChange = output<{ studentId: string; status: AttendanceStatus }>();
   openExcuseModal = output<StudentAttendance>();
@@ -271,7 +282,7 @@ export class AttendanceControlTableComponent {
     return `bg-white p-3 rounded-2xl border ${isFocused ? 'border-primary-500 ring-2 ring-primary-500/20' : 'border-warm-200'} shadow-warm-xs space-y-2.5 transition-all`;
   }
 
-  mobileStatusBtnClasses(current: AttendanceStatus, target: AttendanceStatus): string {
+  mobileStatusBtnClasses(current: AttendanceStatus | null, target: AttendanceStatus): string {
     const isSelected = current === target;
     if (target === 'AN') {
       return isSelected
@@ -293,7 +304,7 @@ export class AttendanceControlTableComponent {
     return `${isFocused ? 'bg-primary-50/40' : 'hover:bg-warm-50/60'} transition-colors`;
   }
 
-  segmentedChipClasses(current: AttendanceStatus, target: AttendanceStatus): string {
+  segmentedChipClasses(current: AttendanceStatus | null, target: AttendanceStatus): string {
     const isSelected = current === target;
     if (target === 'AN') {
       return isSelected
@@ -312,7 +323,7 @@ export class AttendanceControlTableComponent {
 
   @HostListener('window:keydown', ['$event'])
   handleKeyboardEvent(event: KeyboardEvent): void {
-    if (!this.sessionsEnabled() || !this.attendanceEnabled() || this.isSessionConcluded()) {
+    if (this.controlsDisabled()) {
       return;
     }
 
@@ -335,12 +346,18 @@ export class AttendanceControlTableComponent {
       this.activeFocusedIndex.set((idx - 1 + currentList.length) % currentList.length);
     } else if (event.key === 'ArrowRight') {
       event.preventDefault();
-      const currentPos = statusOrder.indexOf(currentStudent.status);
+      const currentPos =
+        currentStudent.status === null
+          ? -1
+          : statusOrder.indexOf(currentStudent.status);
       const nextStatus = statusOrder[(currentPos + 1) % statusOrder.length];
       this.statusChange.emit({ studentId: currentStudent.studentId, status: nextStatus });
     } else if (event.key === 'ArrowLeft') {
       event.preventDefault();
-      const currentPos = statusOrder.indexOf(currentStudent.status);
+      const currentPos =
+        currentStudent.status === null
+          ? 0
+          : statusOrder.indexOf(currentStudent.status);
       const prevStatus = statusOrder[(currentPos - 1 + statusOrder.length) % statusOrder.length];
       this.statusChange.emit({ studentId: currentStudent.studentId, status: prevStatus });
     } else if (event.key === '1') {

@@ -1,7 +1,8 @@
 export interface ProximaClaseInfo {
   materia: string;
   codigo: string;
-  aula: string;
+  /** Ausente para el docente: HorarioDocente no entrega aula (no se sintetiza). */
+  aula?: string;
   subtitulo: string;
   dia: string;
   horaInicio: string;
@@ -19,7 +20,7 @@ export interface ClaseHorarioItem {
   dia: string;
   horaInicio: string;
   horaFin: string;
-  aula: string;
+  aula?: string;
   subtitulo: string;
 }
 

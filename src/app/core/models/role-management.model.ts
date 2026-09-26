@@ -76,7 +76,8 @@ export interface HorarioDocenteItem {
   dia: DiaSemana;
   horaInicio: string;
   horaFin: string;
-  aula: string;
+  /** OUT_OF_GOLDEN_PATH: HorarioDocenteDTO no entrega aula (BACKEND_GOLDEN_PATH_CONTRACT §C.1); solo lo trae el mock. */
+  aula?: string;
   totalEstudiantes: number;
   colorCategory: 'emerald' | 'amber' | 'blue' | 'purple';
 }

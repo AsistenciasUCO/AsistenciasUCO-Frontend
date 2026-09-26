@@ -220,7 +220,7 @@ export class RegisterComponent implements OnInit {
   primerApellido = '';
   segundoApellido = '';
   email = '';
-  password = 'Test1234!';
+  password = '';
 
   isLoading = signal<boolean>(false);
   showToast = signal<boolean>(false);
@@ -253,7 +253,7 @@ export class RegisterComponent implements OnInit {
     const identificationResult = parseIdentificationNumber(
       this.numeroIdentificacion
     );
-    const effectivePassword = this.password.trim() || 'Test1234!';
+    const effectivePassword = this.password.trim();
     const passwordError = getPasswordValidationError(
       effectivePassword,
       this.numeroIdentificacion

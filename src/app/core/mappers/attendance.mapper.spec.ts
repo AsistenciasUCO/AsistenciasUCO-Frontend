@@ -57,12 +57,12 @@ describe('AttendanceMapper', () => {
     expect(mapped.status).toBe('EX');
   });
 
-  it('usa AN solo cuando no existe asistencia', () => {
+  it('representa como sin registrar la ausencia de una fila de asistencia', () => {
     const [mapped] = AttendanceMapper.fromGroupStudentsAndAttendances(
       [student],
       []
     );
-    expect(mapped.status).toBe('AN');
+    expect(mapped.status).toBeNull();
   });
 
   it('rechaza un estado fuera del contrato sin reconstruirlo desde presente', () => {
@@ -74,5 +74,23 @@ describe('AttendanceMapper', () => {
     expect(() =>
       AttendanceMapper.fromGroupStudentsAndAttendances([student], [invalid])
     ).toThrowError(/Estado de asistencia no soportado/);
+  });
+
+  for (const alias of ['A', 'F', 'J', 'T', 'an', 'PRESENTE', '', 'CPI']) {
+    it(`falla cerrado ante el alias/estado no público '${alias}'`, () => {
+      const invalid = { ...attendance('EX', false), estado: alias } as unknown as AsistenciaConsultadaApiDto;
+      expect(() =>
+        AttendanceMapper.fromGroupStudentsAndAttendances([student], [invalid])
+      ).toThrowError(/Estado de asistencia no soportado/);
+    });
+  }
+
+  it('la ausencia de fila nunca se convierte en AN aunque haya otras filas', () => {
+    const other = { ...student, id: 'm2', idEstudiante: 'estudiante-2', documento: '999999' };
+    const mapped = AttendanceMapper.fromGroupStudentsAndAttendances(
+      [student, other],
+      [attendance('AN')]
+    );
+    expect(mapped.map((m) => m.status)).toEqual(['AN', null]);
   });
 });

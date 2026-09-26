@@ -50,13 +50,28 @@ interface AttendanceSessionUpdatedRealtimePayload {
 
 El transporte conserva el refresh de token, el backoff `1s, 2s, 5s, 10s, 30s`, el `403` terminal y la cancelación con `AbortController`.
 
-El sync observa `connectionState$` con `pairwise()`:
+El sync observa `connectionState$` con una máquina de estado (`scan`), no con `pairwise()`: recuerda que se observó `RECONNECTING` y, en el **primer** `CONNECTED` posterior, emite exactamente un refetch de la sesión visible y limpia la marca. Los `CONNECTING` (o `RECONNECTING` repetidos) intermedios no la pierden:
 
 ```text
-RECONNECTING -> CONNECTED -> refetch de la sesión visible
+RECONNECTING -> CONNECTED                                  -> 1 refetch
+RECONNECTING -> CONNECTING -> CONNECTED                    -> 1 refetch
+RECONNECTING -> CONNECTING -> RECONNECTING -> CONNECTING -> CONNECTED -> 1 refetch
+DISCONNECTED -> CONNECTING -> CONNECTED (conexión inicial) -> 0 refetch
 ```
 
-La conexión inicial `CONNECTING -> CONNECTED` no dispara un refetch adicional. No se requiere replay SSE: después de una reconexión siempre se consulta la fuente de verdad.
+Esto cubre `offline -> online`: `onOnline` reinicia el backoff a 0 (reintento inmediato) sin marcar la reconexión como conexión inicial, porque el transporte separa `backoffAttempt` (temporización) de `isReconnecting` (semántica: mientras dure, los intentos se anuncian `RECONNECTING`, no `CONNECTING`). Defecto MV001-R01: antes el reintento se anunciaba `CONNECTING` y el par `RECONNECTING -> CONNECTED` nunca ocurría.
+
+### Stream zombie y liveness (MV001-R02)
+
+MV001-R01 cubre el caso en que el transporte detecta formalmente `RECONNECTING`. MV001-R02 cubre el stream SSE congelado dentro de `fetchEventSource()` (offline real desde DevTools) que nunca abandona `CONNECTED`:
+
+- **HEARTBEAT LIVENESS = 25 s (backend).** `@microsoft/fetch-event-source` 2.0.1 invoca `onmessage` también para mensajes sin `data`; el transporte llama `markStreamActivity()` en `onopen`, en **cualquier** `onmessage` (incluido el heartbeat) y en eventos de negocio, y solo después descarta el mensaje sin `data` (el heartbeat nunca llega a `events$`).
+- **STALE WATCHDOG frontend:** `SSE_STALE_TIMEOUT_MS = 40 000`. Estando `CONNECTED`, 40 s sin actividad SSE → `forceReconnectCurrentScope('stale-stream')`. Timer atado a `groupId + generation`; se limpia en `stop()`, `start()`, `offline`, reconnect forzado y fin de stream.
+- **`online` fuerza recovery:** `forceReconnectCurrentScope` (privado, distinto de `start()` idempotente) conserva el grupo, emite `RECONNECTING`, backoff a 0, invalida la generation, aborta el `AbortController` anterior y abre una nueva; el loop viejo muere por generation mismatch. Guard `recoveryAttemptPending`: eventos `online` seguidos no abren más de un stream.
+- **RECONNECT → HTTP reconciliation:** el primer `CONNECTED` posterior emite exactamente un refresh HTTP (`GET estudiantes` + `GET asistencias`). No hay polling de negocio: el watchdog solo mide liveness del transporte.
+- Depuración: `console.debug('[Realtime] …')` solo si `!environment.production`.
+
+No se requiere replay SSE ni `Last-Event-ID`: después de una reconexión siempre se consulta la fuente de verdad por HTTP.
 
 ## Persistencia batch
 

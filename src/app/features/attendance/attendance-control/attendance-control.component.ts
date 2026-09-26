@@ -31,7 +31,6 @@ import { AttendanceControlHeaderComponent } from './components/attendance-contro
 import { AttendanceControlTableComponent } from './components/attendance-control-table.component';
 import { AttendanceEnrollmentModalComponent } from './components/attendance-enrollment-modal.component';
 import { AttendanceNewSessionModalComponent } from './components/attendance-new-session-modal.component';
-import { AttendanceExcuseModalComponent } from './components/attendance-excuse-modal.component';
 
 type StudentEnrollmentField =
   | 'tipoIdentificacionId'
@@ -54,7 +53,6 @@ type StudentEnrollmentField =
     AttendanceControlTableComponent,
     AttendanceEnrollmentModalComponent,
     AttendanceNewSessionModalComponent,
-    AttendanceExcuseModalComponent,
   ],
   template: `
     <div class="space-y-4 animate-fade-in max-w-7xl mx-auto pb-12 relative">
@@ -62,7 +60,7 @@ type StudentEnrollmentField =
       <app-attendance-control-header
         [sessionsEnabled]="sessionsEnabled"
         [attendanceEnabled]="attendanceEnabled"
-        [isSessionConcluded]="isSessionConcluded()"
+        [isSaving]="isSaving()"
         [currentCourse]="currentCourse()"
         [currentSession]="currentSession()"
         [courseOptions]="courseOptions()"
@@ -86,7 +84,6 @@ type StudentEnrollmentField =
         [isSaving]="isSaving()"
         [sessionsEnabled]="sessionsEnabled"
         [attendanceEnabled]="attendanceEnabled"
-        [isSessionConcluded]="isSessionConcluded()"
         (statusChange)="onStudentStatusChange($event)"
         (openExcuseModal)="openExcuseModal($event)"
         (saveAttendance)="saveAttendance()"
@@ -109,14 +106,6 @@ type StudentEnrollmentField =
         [isCreating]="isCreatingSession()"
         (submitted)="onCreateSessionSubmit($event)"
         (closed)="isNewSessionModalOpen.set(false)"
-      />
-
-      <!-- 5. Modal de Registro de Causa de Excusa -->
-      <app-attendance-excuse-modal
-        [isOpen]="isExcuseModalOpen()"
-        [student]="pendingExcuseStudent()"
-        (confirmed)="confirmarExcusaConDatos($event)"
-        (closed)="isExcuseModalOpen.set(false)"
       />
 
       <!-- Feedback Toast -->
@@ -149,6 +138,12 @@ export class AttendanceControlComponent {
   selectedSessionId = signal<string>('');
 
   isLoadingSession = signal<boolean>(false);
+  /**
+   * Estudiantes cuyo estado el usuario seleccionó/modificó en esta vista y
+   * aún no se ha guardado. Solo ellos viajan en el lote (batch parcial): lo
+   * ya persistido y lo "Sin registrar" no se envían.
+   */
+  private pendingStudentIds = new Set<string>();
   isSaving = signal<boolean>(false);
 
   isNewSessionModalOpen = signal<boolean>(false);
@@ -158,9 +153,6 @@ export class AttendanceControlComponent {
   isEnrolling = signal<boolean>(false);
   studentFieldErrors = signal<Partial<Record<StudentEnrollmentField, string>>>({});
   docTypes = signal<TipoIdentificacionApiDto[]>([]);
-
-  isExcuseModalOpen = signal<boolean>(false);
-  pendingExcuseStudent = signal<StudentAttendance | null>(null);
 
   showToast = signal<boolean>(false);
   toastMessage = signal<string>('');
@@ -221,6 +213,19 @@ export class AttendanceControlComponent {
         }
       });
 
+    this.attendanceRealtimeSync
+      .connectionAlerts()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((state) => {
+        this.toastType.set('error');
+        this.toastMessage.set(
+          state === 'UNAUTHORIZED'
+            ? 'La sesión para actualizaciones en vivo expiró. Inicia sesión nuevamente.'
+            : 'Se perdió la conexión de actualizaciones en vivo. Los datos HTTP siguen siendo la fuente oficial.'
+        );
+        this.showToast.set(true);
+      });
+
     this.destroyRef.onDestroy(() => this.attendanceRealtimeSync.disconnect());
   }
 
@@ -240,8 +245,6 @@ export class AttendanceControlComponent {
     this.sessions().find((s) => s.id === this.selectedSessionId())
   );
 
-  isSessionConcluded = computed(() => this.currentSession()?.status === 'CONCLUIDA');
-
   students = computed(() => this.currentSession()?.records || []);
 
   onStudentStatusChange(event: { studentId: string; status: AttendanceStatus }): void {
@@ -249,21 +252,7 @@ export class AttendanceControlComponent {
   }
 
   openExcuseModal(student: StudentAttendance): void {
-    if (this.isSessionConcluded()) return;
-    this.pendingExcuseStudent.set(student);
-    this.isExcuseModalOpen.set(true);
-  }
-
-  confirmarExcusaConDatos(datos: { causa: string; observacion: string }): void {
-    const student = this.pendingExcuseStudent();
-    if (!student) return;
-
     this.setStatus(student.studentId, 'EX');
-    this.isExcuseModalOpen.set(false);
-    this.pendingExcuseStudent.set(null);
-    this.toastType.set('info');
-    this.toastMessage.set(`Excusa aplicada: ${datos.causa}`);
-    this.showToast.set(true);
   }
 
   openNewSessionModal(): void {
@@ -278,12 +267,9 @@ export class AttendanceControlComponent {
     this.sessionService
       .createSession(course.id, {
         title: data.title,
-        topic: data.topic || 'Desarrollo curricular y control de asistencia',
         date: data.date,
         startTime: data.startTime,
         endTime: data.endTime,
-        room: data.room || course.room || 'Aula A-101',
-        tipo: data.tipo,
       })
       .pipe(finalize(() => this.isCreatingSession.set(false)))
       .subscribe({
@@ -328,7 +314,7 @@ export class AttendanceControlComponent {
 
   onRegisterStudentSubmit(data: any): void {
     const identificationResult = parseIdentificationNumber(data.numeroIdentificacion);
-    const effectivePassword = data.password?.trim() || 'Test1234!';
+    const effectivePassword = data.password?.trim() ?? '';
     const passwordError = getPasswordValidationError(effectivePassword, data.numeroIdentificacion);
     const fieldErrors: Partial<Record<StudentEnrollmentField, string>> = {};
 
@@ -436,6 +422,7 @@ export class AttendanceControlComponent {
   }
 
   onCourseSelect(courseId: string): void {
+    this.pendingStudentIds.clear();
     this.selectedCourseId.set(courseId);
     this.selectedSessionId.set('');
     if (courseId) {
@@ -448,10 +435,7 @@ export class AttendanceControlComponent {
         this.sessions.set(sessions);
 
         if (sessions.length > 0) {
-          const defaultSession =
-            sessions.find((s) => s.status === 'EN_CURSO') ||
-            sessions.find((s) => s.status === 'PROGRAMADA') ||
-            sessions[0];
+          const defaultSession = sessions[0];
 
           this.selectedSessionId.set(defaultSession.id);
           this.cargarEstudiantesYSesion(courseId, defaultSession.id);
@@ -459,11 +443,15 @@ export class AttendanceControlComponent {
       },
       error: () => {
         this.sessions.set([]);
+        this.toastType.set('error');
+        this.toastMessage.set('No fue posible cargar las sesiones del grupo.');
+        this.showToast.set(true);
       },
     });
   }
 
   onSessionSelect(sessionId: string): void {
+    this.pendingStudentIds.clear();
     this.selectedSessionId.set(sessionId);
     const courseId = this.selectedCourseId();
     if (courseId && sessionId) {
@@ -473,6 +461,12 @@ export class AttendanceControlComponent {
 
   private cargarEstudiantesYSesion(courseId: string, sessionId: string): void {
     this.isLoadingSession.set(true);
+    const pendingLocalStatus = new Map<string, AttendanceStatus>();
+    for (const record of this.currentSession()?.records ?? []) {
+      if (this.pendingStudentIds.has(record.studentId) && record.status !== null) {
+        pendingLocalStatus.set(record.studentId, record.status);
+      }
+    }
 
     forkJoin({
       students: this.groupService.getStudentsByGroup(courseId),
@@ -481,7 +475,7 @@ export class AttendanceControlComponent {
       .pipe(
         map(({ students, attendances }) =>
           AttendanceMapper.fromGroupStudentsAndAttendances(
-            students.datos,
+            students.datos.filter((student) => student.codigoEstado === 'A'),
             attendances.datos
           )
         ),
@@ -489,8 +483,17 @@ export class AttendanceControlComponent {
       )
       .subscribe({
         next: (mappedRecords) => {
+          // HTTP es la fuente de verdad, pero lo que el usuario marcó y aún
+          // no guardó se conserva ante un refresco (p. ej. disparado por SSE).
+          const reconciled = mappedRecords.map((record) => {
+            const local = pendingLocalStatus.get(record.studentId);
+            return local ? { ...record, status: local } : record;
+          });
+          for (const id of Array.from(this.pendingStudentIds)) {
+            if (!pendingLocalStatus.has(id)) this.pendingStudentIds.delete(id);
+          }
           this.sessions.update((prev) =>
-            prev.map((s) => (s.id === sessionId ? { ...s, records: mappedRecords } : s))
+            prev.map((s) => (s.id === sessionId ? { ...s, records: reconciled } : s))
           );
         },
         error: (err: unknown) => {
@@ -502,8 +505,7 @@ export class AttendanceControlComponent {
   }
 
   setStatus(studentId: string, status: AttendanceStatus): void {
-    if (this.isSessionConcluded()) return;
-
+    this.pendingStudentIds.add(studentId);
     this.sessions.update((prev) =>
       prev.map((session) => {
         if (session.id !== this.selectedSessionId()) return session;
@@ -519,16 +521,17 @@ export class AttendanceControlComponent {
   }
 
   markAllPresent(): void {
-    if (this.isSessionConcluded()) return;
     this.bulkSetStatus('AN');
   }
 
   markAllAbsent(): void {
-    if (this.isSessionConcluded()) return;
     this.bulkSetStatus('SJC');
   }
 
   private bulkSetStatus(status: AttendanceStatus): void {
+    for (const record of this.students()) {
+      this.pendingStudentIds.add(record.studentId);
+    }
     this.sessions.update((prev) =>
       prev.map((session) => {
         if (session.id !== this.selectedSessionId()) return session;
@@ -544,12 +547,20 @@ export class AttendanceControlComponent {
     const sessionId = this.selectedSessionId();
     const records = this.students();
 
-    if (!sessionId || records.length === 0 || this.isSessionConcluded()) return;
+    if (!sessionId || records.length === 0) return;
+
+    const explicitRecords = records.filter(
+      (
+        record
+      ): record is StudentAttendance & { status: AttendanceStatus } =>
+        record.status !== null && this.pendingStudentIds.has(record.studentId)
+    );
+    if (explicitRecords.length === 0) return;
 
     this.isSaving.set(true);
     const request: RegistrarAsistenciasSesionRequest = {
       sesionId: sessionId,
-      registros: records.map((record) => ({
+      registros: explicitRecords.map((record) => ({
         estudianteId: record.studentId,
         estado: record.status,
       })),
@@ -561,8 +572,9 @@ export class AttendanceControlComponent {
       .subscribe({
         next: (response) => {
           if (response.exitoso) {
+            this.pendingStudentIds.clear();
             this.toastType.set('success');
-            this.toastMessage.set(response.mensaje || 'Asistencia consolidada correctamente.');
+            this.toastMessage.set(response.mensaje || 'Asistencia guardada correctamente.');
             this.showToast.set(true);
             const courseId = this.selectedCourseId();
             if (courseId) {

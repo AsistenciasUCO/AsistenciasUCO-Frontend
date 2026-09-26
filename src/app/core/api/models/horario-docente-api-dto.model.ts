@@ -8,6 +8,5 @@ export interface HorarioDocenteApiDto {
   dia: string;
   horaInicio: string;
   horaFin: string;
-  aula: string;
   totalEstudiantes: number;
 }

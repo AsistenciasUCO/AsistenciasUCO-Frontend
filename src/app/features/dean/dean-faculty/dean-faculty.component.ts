@@ -162,7 +162,6 @@ type SubVistaDecano = 'LISTA' | 'DETALLE_GRUPO';
                           <div class="text-xs text-warm-500 font-mono">{{ c.code }} • {{ c.section }}</div>
                         </td>
                         <td class="px-5 py-4">
-                          <div class="font-semibold text-warm-900 text-xs">{{ c.docenteName || 'Docente UCO' }}</div>
                           <div class="text-[10px] text-warm-500">Cátedra Institucional</div>
                         </td>
                         <td class="px-5 py-4">
@@ -410,11 +409,7 @@ type SubVistaDecano = 'LISTA' | 'DETALLE_GRUPO';
               <span class="text-xs font-bold text-warm-600">{{ selectedCourse()?.section }}</span>
             </div>
             <h2 class="font-serif font-bold text-2xl text-warm-900">{{ selectedCourse()?.name }}</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-warm-600 pt-2 border-t border-warm-100">
-              <div>
-                <span class="text-warm-400 block text-[11px]">Docente Titular</span>
-                <strong class="text-warm-800">{{ selectedCourse()?.docenteName }}</strong>
-              </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-warm-600 pt-2 border-t border-warm-100">
               <div>
                 <span class="text-warm-400 block text-[11px]">Horario Regular</span>
                 <strong class="text-warm-800">{{ selectedCourse()?.schedule }}</strong>
@@ -457,19 +452,13 @@ type SubVistaDecano = 'LISTA' | 'DETALLE_GRUPO';
                 <div class="space-y-1 flex-1 min-w-0">
                   <div class="flex flex-wrap items-center gap-2">
                     <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded-md bg-warm-100 text-warm-800">#{{ s.sessionNumber }}</span>
-                    <app-badge variant="neutral" size="sm">{{ s.tipo || 'REGULAR' }}</app-badge>
                     <span class="text-xs font-medium text-warm-600">{{ s.date }}</span>
                     <span class="text-warm-300">•</span>
                     <span class="text-xs font-mono font-bold text-warm-800">{{ s.startTime }} - {{ s.endTime }}</span>
                     <span class="text-warm-300">•</span>
-                    <span class="text-xs text-warm-600 bg-warm-100/60 px-2 py-0.5 rounded-md">Aula: {{ s.room || selectedCourse()?.room }}</span>
+                    <span class="text-xs text-warm-600 bg-warm-100/60 px-2 py-0.5 rounded-md">Aula: {{ selectedCourse()?.room }}</span>
                   </div>
                   <h4 class="font-bold text-sm text-warm-900">{{ s.title }}</h4>
-                  <p class="text-xs text-warm-500">{{ s.topic }}</p>
-                </div>
-
-                <div>
-                  <app-badge [variant]="s.status === 'CONCLUIDA' ? 'success' : 'info'">{{ s.status }}</app-badge>
                 </div>
               </div>
             }
@@ -643,7 +632,6 @@ export class DeanFacultyComponent implements OnInit {
       (c: Course) =>
         c.name.toLowerCase().includes(q) ||
         c.code.toLowerCase().includes(q) ||
-        (c.docenteName && c.docenteName.toLowerCase().includes(q)) ||
         (c.room && c.room.toLowerCase().includes(q))
     );
   });

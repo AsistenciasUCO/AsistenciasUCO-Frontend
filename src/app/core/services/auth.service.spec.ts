@@ -17,6 +17,29 @@ function makeJwt(payload: Record<string, unknown>): string {
 
 const VALID_UUID = 'a1b2c3d4-e5f6-4789-9abc-1234567890ab';
 
+/** Única clave de sessionStorage permitida: refresh token de sesión (compromiso local SPA). */
+const SESSION_REFRESH_KEY = 'gestio_session_refresh_token';
+
+/** Serializa todo el contenido de un Storage para aserciones de "no contiene X". */
+function dumpStorage(storage: Storage): string {
+  const entries: Record<string, string | null> = {};
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i)!;
+    entries[key] = storage.getItem(key);
+  }
+  return JSON.stringify(entries);
+}
+
+async function waitUntil(predicate: () => boolean, timeoutMs = 1000): Promise<void> {
+  const start = Date.now();
+  while (!predicate()) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error('waitUntil: timeout');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
 function basePayload(overrides: Record<string, unknown> = {}) {
   const nowSeconds = Math.floor(Date.now() / 1000);
   return {
@@ -41,6 +64,7 @@ describe('AuthService', () => {
 
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     routerSpy = jasmine.createSpyObj<Router>('Router', ['navigate']);
 
     TestBed.configureTestingModule({
@@ -54,6 +78,7 @@ describe('AuthService', () => {
 
   afterEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   function mockTokenResponse(payload: Record<string, unknown>, refreshToken = 'refresh-1') {
@@ -294,6 +319,443 @@ describe('AuthService', () => {
       expect(localStorage.getItem('gestio_access_token')).toBeNull();
       expect(localStorage.getItem('gestio_refresh_token')).toBeNull();
       expect(localStorage.getItem('gestio_current_user')).toBeNull();
+    });
+  });
+
+  describe('sesión restaurable tras F5 (MV001-A01)', () => {
+    function tokenEndpointCalls(): [string, RequestInit][] {
+      return (fetchSpy.calls.allArgs() as [string, RequestInit][]).filter(([url]) =>
+        String(url).includes('/protocol/openid-connect/token')
+      );
+    }
+
+    /** Simula F5: Angular se reconstruye (signals nuevos) pero sessionStorage sobrevive. */
+    function simulateReload(): AuthService {
+      TestBed.resetTestingModule();
+      routerSpy = jasmine.createSpyObj<Router>('Router', ['navigate']);
+      TestBed.configureTestingModule({
+        providers: [{ provide: Router, useValue: routerSpy }],
+      });
+      const reloaded = TestBed.inject(AuthService);
+      reloaded.setMockMode(false);
+      return reloaded;
+    }
+
+    describe('login', () => {
+      it('A. guarda el refresh token en sessionStorage y nunca el access token', async () => {
+        mockTokenResponse(basePayload(), 'refresh-login');
+
+        await service.loginWithCredentials('docente@uco.edu.co', 'secret-pass');
+
+        const accessToken = service.token()!;
+        expect(accessToken).toBeTruthy();
+        expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBe('refresh-login');
+        expect(sessionStorage.length).toBe(1);
+        expect(dumpStorage(sessionStorage)).not.toContain(accessToken);
+        expect(dumpStorage(localStorage)).not.toContain(accessToken);
+        expect(dumpStorage(localStorage)).not.toContain('refresh-login');
+      });
+
+      it('no persiste password ni usuario actual en ningún storage', async () => {
+        mockTokenResponse(basePayload(), 'refresh-login');
+
+        await service.loginWithCredentials('docente@uco.edu.co', 'secret-pass');
+
+        for (const storage of [sessionStorage, localStorage]) {
+          expect(dumpStorage(storage)).not.toContain('secret-pass');
+          expect(dumpStorage(storage)).not.toContain('Ana');
+          expect(dumpStorage(storage)).not.toContain(VALID_UUID);
+        }
+      });
+
+      it('si Keycloak no devuelve refresh token, no fabrica uno', async () => {
+        fetchSpy.and.resolveTo({
+          ok: true,
+          json: () => Promise.resolve({ access_token: makeJwt(basePayload()) }),
+        } as Response);
+
+        await service.loginWithCredentials('docente@uco.edu.co', 'pass');
+
+        expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBeNull();
+      });
+
+      it('un login sin refresh token descarta el refresh token residual de otra sesión', async () => {
+        sessionStorage.setItem(SESSION_REFRESH_KEY, 'refresh-de-otro-usuario');
+        fetchSpy.and.resolveTo({
+          ok: true,
+          json: () => Promise.resolve({ access_token: makeJwt(basePayload()) }),
+        } as Response);
+
+        await service.loginWithCredentials('docente@uco.edu.co', 'pass');
+
+        expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBeNull();
+      });
+    });
+
+    describe('initKeycloak tras F5', () => {
+      it('B. restaura la sesión con el refresh token de sessionStorage', async () => {
+        mockTokenResponse(basePayload(), 'refresh-1');
+        await service.loginWithCredentials('docente@uco.edu.co', 'pass');
+
+        const reloaded = simulateReload();
+        expect(reloaded.token()).toBeNull();
+        expect(reloaded.currentUser()).toBeNull();
+
+        fetchSpy.calls.reset();
+        mockTokenResponse(basePayload(), 'refresh-1');
+        const restored = await reloaded.initKeycloak();
+
+        expect(restored).toBeTrue();
+        expect(reloaded.isAuthenticated()).toBeTrue();
+        expect(reloaded.token()).toBeTruthy();
+        expect(reloaded.currentUser()?.role).toBe('DOCENTE');
+        expect(reloaded.currentUser()?.id).toBe(VALID_UUID);
+
+        const calls = tokenEndpointCalls();
+        expect(calls.length).toBe(1);
+        const body = String(calls[0][1].body);
+        expect(body).toContain('grant_type=refresh_token');
+        expect(body).toContain('refresh_token=refresh-1');
+      });
+
+      it('no navega manualmente: deja que el guard resuelva la ruta', async () => {
+        sessionStorage.setItem(SESSION_REFRESH_KEY, 'refresh-1');
+        const reloaded = simulateReload();
+        mockTokenResponse(basePayload(), 'refresh-1');
+
+        await reloaded.initKeycloak();
+
+        expect(routerSpy.navigate).not.toHaveBeenCalled();
+      });
+
+      it('con access token vigente en memoria no llama al refresh', async () => {
+        mockTokenResponse(basePayload(), 'refresh-1');
+        await service.loginWithCredentials('docente@uco.edu.co', 'pass');
+        fetchSpy.calls.reset();
+
+        const result = await service.initKeycloak();
+
+        expect(result).toBeTrue();
+        expect(tokenEndpointCalls().length).toBe(0);
+      });
+
+      it('C. refresh token inválido: devuelve false, limpia sessionStorage y memoria', async () => {
+        sessionStorage.setItem(SESSION_REFRESH_KEY, 'refresh-revocado');
+        const reloaded = simulateReload();
+        fetchSpy.and.resolveTo({
+          ok: false,
+          status: 400,
+          json: () => Promise.resolve({ error: 'invalid_grant' }),
+        } as Response);
+
+        const restored = await reloaded.initKeycloak();
+
+        expect(restored).toBeFalse();
+        expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBeNull();
+        expect(reloaded.token()).toBeNull();
+        expect(reloaded.currentUser()).toBeNull();
+        fetchSpy.calls.reset();
+        expect(await reloaded.refreshAccessToken()).toBeFalse();
+        expect(fetchSpy).not.toHaveBeenCalled();
+      });
+
+      it('un fallo de red al restaurar devuelve false y no deja credenciales residuales', async () => {
+        sessionStorage.setItem(SESSION_REFRESH_KEY, 'refresh-1');
+        const reloaded = simulateReload();
+        fetchSpy.and.rejectWith(new TypeError('Failed to fetch'));
+
+        const restored = await reloaded.initKeycloak();
+
+        expect(restored).toBeFalse();
+        expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBeNull();
+      });
+
+      it('un refresh cuyo JWT no trae rol institucional válido falla y limpia', async () => {
+        sessionStorage.setItem(SESSION_REFRESH_KEY, 'refresh-1');
+        const reloaded = simulateReload();
+        mockTokenResponse(
+          basePayload({ resource_access: { 'asistencias-api': { roles: [] } } }),
+          'refresh-2'
+        );
+
+        const restored = await reloaded.initKeycloak();
+
+        expect(restored).toBeFalse();
+        expect(reloaded.isAuthenticated()).toBeFalse();
+        expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBeNull();
+      });
+
+      it('sin access token ni refresh token devuelve false sin llamar a Keycloak', async () => {
+        const result = await service.initKeycloak();
+
+        expect(result).toBeFalse();
+        expect(fetchSpy).not.toHaveBeenCalled();
+      });
+
+      it('nunca restaura un access token desde sessionStorage', async () => {
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        sessionStorage.setItem('gestio_access_token', makeJwt(basePayload({ exp: nowSeconds + 3600 })));
+        const reloaded = simulateReload();
+
+        const restored = await reloaded.initKeycloak();
+
+        expect(restored).toBeFalse();
+        expect(reloaded.isAuthenticated()).toBeFalse();
+      });
+
+      it('con sessionStorage no disponible (getItem lanza) devuelve false sin romper el arranque', async () => {
+        const original = Storage.prototype.getItem;
+        spyOn(Storage.prototype, 'getItem').and.callFake(function (this: Storage, key: string) {
+          if (this === sessionStorage) {
+            throw new DOMException('denied', 'SecurityError');
+          }
+          return original.call(this, key);
+        });
+
+        await expectAsync(service.initKeycloak()).toBeResolvedTo(false);
+      });
+    });
+
+    describe('rotación del refresh token', () => {
+      it('D. un refresh token rotado sustituye al anterior en sessionStorage', async () => {
+        mockTokenResponse(basePayload(), 'refresh-1');
+        await service.loginWithCredentials('docente@uco.edu.co', 'pass');
+
+        mockTokenResponse(basePayload(), 'refresh-2');
+        const result = await service.refreshAccessToken();
+
+        expect(result).toBeTrue();
+        expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBe('refresh-2');
+      });
+
+      it('el siguiente refresh usa el refresh token rotado', async () => {
+        mockTokenResponse(basePayload(), 'refresh-1');
+        await service.loginWithCredentials('docente@uco.edu.co', 'pass');
+        mockTokenResponse(basePayload(), 'refresh-2');
+        await service.refreshAccessToken();
+        fetchSpy.calls.reset();
+        mockTokenResponse(basePayload(), 'refresh-3');
+
+        await service.refreshAccessToken();
+
+        expect(String(tokenEndpointCalls()[0][1].body)).toContain('refresh_token=refresh-2');
+        expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBe('refresh-3');
+      });
+
+      it('si Keycloak no rota, conserva el refresh token vigente en sessionStorage', async () => {
+        mockTokenResponse(basePayload(), 'refresh-1');
+        await service.loginWithCredentials('docente@uco.edu.co', 'pass');
+        fetchSpy.and.resolveTo({
+          ok: true,
+          json: () => Promise.resolve({ access_token: makeJwt(basePayload()) }),
+        } as Response);
+
+        const result = await service.refreshAccessToken();
+
+        expect(result).toBeTrue();
+        expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBe('refresh-1');
+      });
+
+      it('la restauración tras F5 también persiste el refresh token rotado', async () => {
+        sessionStorage.setItem(SESSION_REFRESH_KEY, 'refresh-1');
+        const reloaded = simulateReload();
+        mockTokenResponse(basePayload(), 'refresh-2');
+
+        await reloaded.initKeycloak();
+
+        expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBe('refresh-2');
+      });
+
+      it('un refresh explícito exitoso persiste el token devuelto', async () => {
+        mockTokenResponse(basePayload(), 'refresh-new');
+
+        await service.refreshAccessToken('refresh-old');
+
+        expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBe('refresh-new');
+      });
+
+      it('un refresh fallido no altera el refresh token persistido', async () => {
+        mockTokenResponse(basePayload(), 'refresh-1');
+        await service.loginWithCredentials('docente@uco.edu.co', 'pass');
+        fetchSpy.and.resolveTo({ ok: false, json: () => Promise.resolve({}) } as Response);
+
+        const result = await service.refreshAccessToken();
+
+        expect(result).toBeFalse();
+        expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBe('refresh-1');
+      });
+    });
+
+    describe('limpieza de credenciales', () => {
+      async function loginReal(): Promise<void> {
+        mockTokenResponse(basePayload(), 'refresh-1');
+        await service.loginWithCredentials('docente@uco.edu.co', 'pass');
+        expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBe('refresh-1');
+      }
+
+      async function expectNoRefreshTokenLeft(): Promise<void> {
+        expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBeNull();
+        fetchSpy.calls.reset();
+        expect(await service.refreshAccessToken()).toBeFalse();
+        expect(fetchSpy).not.toHaveBeenCalled();
+      }
+
+      it('E. logout limpia sessionStorage y memoria', async () => {
+        await loginReal();
+
+        await service.logout();
+
+        expect(service.isAuthenticated()).toBeFalse();
+        await expectNoRefreshTokenLeft();
+      });
+
+      it('F. notifySessionExpired limpia sessionStorage y memoria', async () => {
+        await loginReal();
+
+        service.notifySessionExpired();
+
+        expect(service.isAuthenticated()).toBeFalse();
+        await expectNoRefreshTokenLeft();
+      });
+
+      it('G. clearSession limpia sessionStorage y memoria', async () => {
+        await loginReal();
+
+        service.clearSession();
+
+        await expectNoRefreshTokenLeft();
+      });
+
+      it('G2. clearSession con broadcast limpia sessionStorage y memoria', async () => {
+        await loginReal();
+
+        service.clearSession(true);
+
+        await expectNoRefreshTokenLeft();
+      });
+
+      for (const type of ['LOGOUT', 'SESSION_EXPIRED']) {
+        it(`la pestaña receptora de ${type} queda sin refresh token persistido`, async () => {
+          await loginReal();
+          const otherTab = new BroadcastChannel('uco_auth_bus');
+
+          otherTab.postMessage({ type });
+          await waitUntil(() => service.token() === null);
+          otherTab.close();
+
+          expect(service.currentUser()).toBeNull();
+          await expectNoRefreshTokenLeft();
+        });
+      }
+
+      it('un mensaje de broadcast ajeno no cierra la sesión ni borra el refresh token', async () => {
+        await loginReal();
+        const otherTab = new BroadcastChannel('uco_auth_bus');
+
+        otherTab.postMessage({ type: 'OTRO' });
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        otherTab.close();
+
+        expect(service.isAuthenticated()).toBeTrue();
+        expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBe('refresh-1');
+      });
+
+      it('con sessionStorage no disponible el login funciona en memoria y el cierre no lanza', async () => {
+        const original = Storage.prototype.setItem;
+        spyOn(Storage.prototype, 'setItem').and.callFake(function (this: Storage, k: string, v: string) {
+          if (this === sessionStorage) {
+            throw new DOMException('quota', 'QuotaExceededError');
+          }
+          return original.call(this, k, v);
+        });
+        const originalRemove = Storage.prototype.removeItem;
+        spyOn(Storage.prototype, 'removeItem').and.callFake(function (this: Storage, k: string) {
+          if (this === sessionStorage) {
+            throw new DOMException('denied', 'SecurityError');
+          }
+          return originalRemove.call(this, k);
+        });
+        mockTokenResponse(basePayload(), 'refresh-1');
+
+        await service.loginWithCredentials('docente@uco.edu.co', 'pass');
+        expect(service.isAuthenticated()).toBeTrue();
+
+        expect(() => service.clearSession()).not.toThrow();
+        expect(service.isAuthenticated()).toBeFalse();
+      });
+    });
+
+    describe('H. JWT fuera de localStorage', () => {
+      it('ni login, ni refresh, ni restauración dejan JWT ni refresh token en localStorage', async () => {
+        mockTokenResponse(basePayload(), 'refresh-1');
+        await service.loginWithCredentials('docente@uco.edu.co', 'pass');
+        mockTokenResponse(basePayload(), 'refresh-2');
+        await service.refreshAccessToken();
+        const reloaded = simulateReload();
+        mockTokenResponse(basePayload(), 'refresh-3');
+        await reloaded.initKeycloak();
+
+        expect(localStorage.getItem('gestio_access_token')).toBeNull();
+        expect(localStorage.getItem('gestio_refresh_token')).toBeNull();
+        expect(localStorage.getItem('gestio_current_user')).toBeNull();
+        expect(localStorage.getItem(SESSION_REFRESH_KEY)).toBeNull();
+        expect(dumpStorage(localStorage)).not.toContain('refresh-');
+        expect(dumpStorage(localStorage)).not.toContain(reloaded.token()!);
+        expect(dumpStorage(sessionStorage)).not.toContain(reloaded.token()!);
+      });
+
+      it('las claves residuales legacy se siguen purgando al arrancar', () => {
+        localStorage.setItem('gestio_access_token', 'legacy');
+        localStorage.setItem('gestio_refresh_token', 'legacy');
+        const reloaded = simulateReload();
+
+        expect(reloaded).toBeTruthy();
+        expect(localStorage.getItem('gestio_access_token')).toBeNull();
+        expect(localStorage.getItem('gestio_refresh_token')).toBeNull();
+      });
+    });
+
+    describe('TD-049: GET /usuarios/perfil 501 (OUT_OF_GOLDEN_PATH, NON_BLOCKING)', () => {
+      function profileUnavailable(): void {
+        fetchSpy.and.callFake(async (input: RequestInfo | URL) => {
+          if (String(input).includes('/protocol/openid-connect/token')) {
+            return {
+              ok: true,
+              json: () =>
+                Promise.resolve({ access_token: makeJwt(basePayload()), refresh_token: 'refresh-1' }),
+            } as Response;
+          }
+          return {
+            ok: false,
+            status: 501,
+            json: () => Promise.resolve({ code: 'FEATURE_UNAVAILABLE' }),
+          } as Response;
+        });
+      }
+
+      it('el login no se interrumpe y la identidad sale de los claims del JWT', async () => {
+        profileUnavailable();
+
+        const user = await service.loginWithCredentials('docente@uco.edu.co', 'pass');
+
+        expect(user.role).toBe('DOCENTE');
+        expect(user.name).toBe('Ana Gómez');
+        expect(service.isAuthenticated()).toBeTrue();
+        expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBe('refresh-1');
+      });
+
+      it('la restauración tras F5 no depende del perfil', async () => {
+        sessionStorage.setItem(SESSION_REFRESH_KEY, 'refresh-1');
+        const reloaded = simulateReload();
+        profileUnavailable();
+
+        const restored = await reloaded.initKeycloak();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(restored).toBeTrue();
+        expect(reloaded.isAuthenticated()).toBeTrue();
+        expect(reloaded.currentUser()?.role).toBe('DOCENTE');
+      });
     });
   });
 

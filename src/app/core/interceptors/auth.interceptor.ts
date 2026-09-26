@@ -1,6 +1,16 @@
 import { HttpInterceptorFn, HttpRequest, HttpHandlerFn, HttpEvent } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { BehaviorSubject, Observable, from, switchMap, filter, take, catchError, throwError } from 'rxjs';
+import {
+  Observable,
+  catchError,
+  defer,
+  finalize,
+  from,
+  of,
+  shareReplay,
+  switchMap,
+  throwError,
+} from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../services/auth.service';
 
@@ -9,8 +19,7 @@ import { AuthService } from '../services/auth.service';
 // Estas variables viven fuera de la función (módulo-scope) para que sean
 // compartidas entre todas las invocaciones del interceptor funcional.
 // ─────────────────────────────────────────────────────────────────────────────
-let isRefreshing = false;
-const refreshTokenSubject = new BehaviorSubject<string | null>(null);
+let refreshInFlight$: Observable<string> | null = null;
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
@@ -68,41 +77,37 @@ function handle401(
   next: HttpHandlerFn,
   authService: AuthService
 ): Observable<HttpEvent<unknown>> {
-  if (!isRefreshing) {
-    isRefreshing = true;
-    refreshTokenSubject.next(null); // Bloquear la cola mientras renovamos
-
-    return from(authService.refreshAccessToken()).pipe(
+  if (!refreshInFlight$) {
+    refreshInFlight$ = defer(() => from(authService.refreshAccessToken())).pipe(
+      catchError(() => of(false)),
       switchMap((refreshed) => {
-        isRefreshing = false;
-        if (refreshed) {
-          const newToken = authService.token();
-          refreshTokenSubject.next(newToken);
-          if (!newToken) {
-            authService.notifySessionExpired();
-            return throwError(() => new Error('Token renovado pero no disponible'));
-          }
-          return next(attachToken(req, newToken));
-        } else {
-          refreshTokenSubject.next(null);
+        const newToken = refreshed ? authService.token() : null;
+        if (!newToken) {
           authService.notifySessionExpired();
-          return throwError(() => new Error('No se pudo renovar el token de sesión'));
+          return throwError(
+            () => new Error('No se pudo renovar el token de sesión')
+          );
         }
+        return of(newToken);
       }),
-      catchError((err) => {
-        isRefreshing = false;
-        refreshTokenSubject.next(null);
-        authService.notifySessionExpired();
-        return throwError(() => err);
-      })
+      finalize(() => {
+        refreshInFlight$ = null;
+      }),
+      shareReplay({ bufferSize: 1, refCount: false })
     );
   }
 
-  // Otra petición ya está renovando: encolar y esperar el nuevo token.
-  return refreshTokenSubject.pipe(
-    filter((token) => token !== null),
-    take(1),
-    switchMap((token) => next(attachToken(req, token!)))
+  return refreshInFlight$.pipe(
+    switchMap((token) =>
+      next(attachToken(req, token)).pipe(
+        catchError((error) => {
+          if (error?.status === 401) {
+            authService.notifySessionExpired();
+          }
+          return throwError(() => error);
+        })
+      )
+    )
   );
 }
 

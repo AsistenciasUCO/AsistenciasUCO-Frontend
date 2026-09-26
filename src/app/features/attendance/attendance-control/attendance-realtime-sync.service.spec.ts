@@ -128,4 +128,125 @@ describe('AttendanceRealtimeSyncService', () => {
 
     expect(received.length).toBe(0);
   });
+
+  describe('recuperación tras reconexión (MV001-R01)', () => {
+    function emitStates(...states: RealtimeConnectionState[]): void {
+      states.forEach((state) => connectionState$.next(state));
+    }
+
+    function collect(): unknown[] {
+      const received: unknown[] = [];
+      service.watch(() => 'g1', () => 's1').subscribe((value) => received.push(value));
+      return received;
+    }
+
+    it('A. CONNECTED -> RECONNECTING -> CONNECTING -> CONNECTED produce 1 refresh', () => {
+      const received = collect();
+
+      emitStates('CONNECTED', 'RECONNECTING', 'CONNECTING', 'CONNECTED');
+
+      expect(received.length).toBe(1);
+    });
+
+    it('B. RECONNECTING -> CONNECTING -> RECONNECTING -> CONNECTING -> CONNECTED produce 1 refresh', () => {
+      const received = collect();
+
+      emitStates(
+        'CONNECTED',
+        'RECONNECTING',
+        'CONNECTING',
+        'RECONNECTING',
+        'CONNECTING',
+        'CONNECTED'
+      );
+
+      expect(received.length).toBe(1);
+    });
+
+    it('C. DISCONNECTED -> CONNECTING -> CONNECTED (conexión inicial) produce 0 refresh', () => {
+      const received = collect();
+
+      emitStates('DISCONNECTED', 'CONNECTING', 'CONNECTED');
+
+      expect(received.length).toBe(0);
+    });
+
+    it('D. tras el refresh de reconexión, un evento de negocio sigue refrescando', fakeAsync(() => {
+      const received = collect();
+
+      emitStates('CONNECTED', 'RECONNECTING', 'CONNECTING', 'CONNECTED');
+      expect(received.length).toBe(1);
+
+      emit('g1', 's1');
+      tick(300);
+
+      expect(received.length).toBe(2);
+    }));
+
+    it('no duplica el refresh si CONNECTED se repite dentro de la misma reconexión', () => {
+      const received = collect();
+
+      emitStates('CONNECTED', 'RECONNECTING', 'CONNECTING', 'CONNECTED', 'CONNECTED');
+
+      expect(received.length).toBe(1);
+    });
+
+    it('cada reconexión distinta produce exactamente un refresh', () => {
+      const received = collect();
+
+      emitStates('CONNECTED', 'RECONNECTING', 'CONNECTING', 'CONNECTED');
+      emitStates('RECONNECTING', 'RECONNECTING', 'CONNECTED');
+
+      expect(received.length).toBe(2);
+    });
+
+    it('la conexión inicial no refresca aunque haya varios CONNECTING previos', () => {
+      const received = collect();
+
+      emitStates('CONNECTING', 'CONNECTING', 'CONNECTED');
+
+      expect(received.length).toBe(0);
+    });
+
+    it('el refresh de reconexión emite aunque no haya grupo ni sesión seleccionados aún', () => {
+      // El filtro grupo/sesión aplica solo a eventos de negocio; el consumidor
+      // ya ignora la emisión si no hay curso/sesión visibles.
+      const received: unknown[] = [];
+      service.watch(() => '', () => '').subscribe((value) => received.push(value));
+
+      emitStates('RECONNECTING', 'CONNECTING', 'CONNECTED');
+
+      expect(received.length).toBe(1);
+    });
+  });
+
+  it('expone UNAUTHORIZED y ERROR una sola vez por estado terminal', () => {
+    const received: RealtimeConnectionState[] = [];
+    (service as any)
+      .connectionAlerts()
+      .subscribe((state: RealtimeConnectionState) => received.push(state));
+
+    connectionState$.next('ERROR');
+    connectionState$.next('ERROR');
+    connectionState$.next('RECONNECTING');
+    connectionState$.next('ERROR');
+    connectionState$.next('UNAUTHORIZED');
+    connectionState$.next('UNAUTHORIZED');
+
+    expect(received).toEqual(['ERROR', 'UNAUTHORIZED']);
+  });
+
+  it('no convierte estados normales de conexión o reconexión en alertas', () => {
+    const received: RealtimeConnectionState[] = [];
+    (service as any)
+      .connectionAlerts()
+      .subscribe((state: RealtimeConnectionState) => received.push(state));
+
+    connectionState$.next('CONNECTING');
+    connectionState$.next('CONNECTED');
+    connectionState$.next('RECONNECTING');
+    connectionState$.next('DISCONNECTED');
+
+    expect(received).toEqual([]);
+  });
 });

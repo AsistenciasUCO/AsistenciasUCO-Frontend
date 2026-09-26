@@ -23,20 +23,11 @@ import { ClassSession } from '../../../../../core/models/attendance.model';
               <span class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-warm-200 text-warm-800">
                 Sesión #{{ sesion()?.sessionNumber }}
               </span>
-              <span
-                class="text-[11px] font-bold px-2.5 py-0.5 rounded-full"
-                [class]="sesion()?.status === 'CONCLUIDA' ? 'bg-warm-200 text-warm-700' : 'bg-emerald-100 text-emerald-800'"
-              >
-                {{ sesion()?.status }}
-              </span>
             </div>
             <h4 class="font-bold text-base text-warm-900">{{ sesion()?.title }}</h4>
-            <p class="text-xs text-warm-600">{{ sesion()?.topic }}</p>
             <div class="grid grid-cols-2 gap-2 pt-2 border-t border-warm-200/60 text-xs text-warm-700">
               <div><strong>Fecha:</strong> {{ sesion()?.date }}</div>
               <div><strong>Horario:</strong> {{ sesion()?.startTime }} - {{ sesion()?.endTime }}</div>
-              <div><strong>Aula:</strong> {{ sesion()?.room || room() }}</div>
-              <div><strong>Tipo:</strong> {{ sesion()?.tipo || 'REGULAR' }}</div>
             </div>
           </div>
 
@@ -46,12 +37,11 @@ import { ClassSession } from '../../../../../core/models/attendance.model';
               <h5 class="text-xs font-bold uppercase tracking-wider text-warm-700">
                 Registro de Asistencias ({{ (sesion()?.records || []).length }} estudiantes)
               </h5>
-              <span class="text-[11px] text-warm-500">Historial Inmutable</span>
             </div>
 
             @if ((sesion()?.records || []).length === 0) {
               <p class="text-xs text-warm-500 text-center py-4 bg-warm-50/50 rounded-xl">
-                Sin registros individuales consolidados para esta sesión.
+                Sin registros individuales para esta sesión.
               </p>
             } @else {
               <div class="max-h-56 overflow-y-auto space-y-1.5 border border-warm-200 rounded-xl p-2 bg-warm-50/30">
@@ -63,9 +53,9 @@ import { ClassSession } from '../../../../../core/models/attendance.model';
                     </div>
                     <span
                       class="px-2 py-0.5 font-bold rounded-full text-[10px]"
-                      [class]="rec.status === 'AN' ? 'bg-emerald-100 text-emerald-800' : (rec.status === 'EX' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800')"
+                      [class]="statusBadgeClasses(rec.status)"
                     >
-                      {{ rec.status === 'AN' ? 'Presente' : (rec.status === 'EX' ? 'Excusa' : 'Falta SJC') }}
+                      {{ statusLabel(rec.status) }}
                     </span>
                   </div>
                 }
@@ -86,6 +76,31 @@ import { ClassSession } from '../../../../../core/models/attendance.model';
 export class TeacherSesionDetalleModalComponent {
   isOpen = input.required<boolean>();
   sesion = input<ClassSession | null>(null);
-  room = input<string>('');
   closed = output<void>();
+
+  statusLabel(status: ClassSession['records'][number]['status']): string {
+    switch (status) {
+      case 'AN':
+        return 'Presente';
+      case 'SJC':
+        return 'Falta SJC';
+      case 'EX':
+        return 'Excusa';
+      default:
+        return 'Sin registrar';
+    }
+  }
+
+  statusBadgeClasses(status: ClassSession['records'][number]['status']): string {
+    switch (status) {
+      case 'AN':
+        return 'bg-emerald-100 text-emerald-800';
+      case 'SJC':
+        return 'bg-red-100 text-red-800';
+      case 'EX':
+        return 'bg-amber-100 text-amber-800';
+      default:
+        return 'bg-warm-100 text-warm-700';
+    }
+  }
 }

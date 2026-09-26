@@ -5,7 +5,8 @@ export interface StudentAttendance {
   studentName: string;
   studentCode: string;
   avatarUrl?: string;
-  status: AttendanceStatus;
+  /** `null` representa que el docente todavía no ha registrado asistencia. */
+  status: AttendanceStatus | null;
   arrivalTime?: string;
 }
 
@@ -14,12 +15,8 @@ export interface ClassSession {
   courseId: string;
   sessionNumber: number;
   title: string;
-  topic: string;
   date: string; // ISO format (YYYY-MM-DD)
   startTime: string;
   endTime: string;
-  room?: string;
-  tipo?: 'REGULAR' | 'EXTRAORDINARIA' | 'REPOSICION';
-  status: 'PROGRAMADA' | 'EN_CURSO' | 'CONCLUIDA';
   records: StudentAttendance[];
 }

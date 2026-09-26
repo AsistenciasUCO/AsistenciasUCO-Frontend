@@ -494,7 +494,7 @@ type VistaCoordinador = 'LISTA' | 'REGISTRO';
         [isOpen]="isPickerModalOpen()"
         title="Vincular Docente al Programa"
         subtitle="Selecciona un docente ya registrado en la institución para vincularlo al programa sin digitar sus datos de nuevo."
-        roleBadge="Claustro Docente UCO"
+        roleBadge="Claustro docente"
         (userSelected)="onDocenteSeleccionadoDelDirectorio($event)"
         (requestNew)="onSolicitarRegistroNuevo()"
         (cancelled)="isPickerModalOpen.set(false)"
@@ -594,15 +594,13 @@ export class CoordinatorDocentesComponent implements OnInit {
 
   verFichaDocente(docente: DocenteItem): void {
     this.docenteSeleccionado.set(docente);
-    // Filtrar los cursos que correspondan al docente o asignar los cursos activos del programa
-    const nombreCompleto = `${docente.nombres} ${docente.apellidos}`.toLowerCase();
-    const cursosFiltrados = this.allCourses().filter((c) => {
-      const titular = (c.docenteName || '').toLowerCase();
-      return titular.includes(docente.nombres.toLowerCase()) || titular.includes(docente.apellidos.toLowerCase()) || titular.includes('maria') || titular.includes('docente');
-    });
-
-    // Si no encuentra por coincidencia exacta de nombre, mostrar los cursos institucionales para dar visibilidad
-    this.cursosDocente.set(cursosFiltrados.length > 0 ? cursosFiltrados : this.allCourses().slice(0, 2));
+    // TARGET (PLAN.md LB-001B.1B, AS-IS #19): se retira la coincidencia por texto libre
+    // sobre Course.docenteName (CONTRACT_DRIFT, incluía fallbacks 'maria'/'docente' que
+    // emparejaban casi cualquier curso). Sin un contrato real para relacionar Grupo→Docente
+    // wireado en este work item (ver PLAN.md riesgo 3b, diferido a tarea de integración
+    // separada), no se sintetiza un reemplazo: solo se relacionan cursos por docenteId real.
+    const cursosFiltrados = this.allCourses().filter((c) => c.docenteId === docente.id);
+    this.cursosDocente.set(cursosFiltrados);
   }
 
   cerrarFichaDocente(): void {

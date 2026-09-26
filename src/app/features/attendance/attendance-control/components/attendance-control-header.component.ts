@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, input, output } from '@angular/core';
+import { Component, ChangeDetectionStrategy, computed, input, output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { BadgeComponent } from '../../../../shared/components/badge/badge.component';
 import { ButtonComponent } from '../../../../shared/components/button/button.component';
@@ -26,10 +26,6 @@ import { ClassSession } from '../../../../core/models/attendance.model';
             <div class="flex items-center gap-2 mb-0.5">
               @if (!sessionsEnabled() || !attendanceEnabled()) {
                 <app-badge variant="neutral" size="sm">Sesiones deshabilitadas</app-badge>
-              } @else if (isSessionConcluded()) {
-                <app-badge variant="neutral" size="sm">🔒 Asistencia Consolidada</app-badge>
-              } @else {
-                <app-badge variant="success" size="sm">🟢 Clase Activa</app-badge>
               }
               <span class="text-xs font-bold text-warm-500 uppercase tracking-widest">
                 {{ currentCourse()?.code }} • {{ currentCourse()?.section }}
@@ -44,7 +40,7 @@ import { ClassSession } from '../../../../core/models/attendance.model';
             <app-button
               variant="accent"
               size="sm"
-              [disabled]="!sessionsEnabled() || !attendanceEnabled() || isSessionConcluded()"
+              [disabled]="bulkDisabled()"
               (clicked)="markAllPresent.emit()"
             >
               <svg class="w-4 h-4 mr-1 text-warm-950 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -56,7 +52,7 @@ import { ClassSession } from '../../../../core/models/attendance.model';
             <app-button
               variant="danger"
               size="sm"
-              [disabled]="!sessionsEnabled() || !attendanceEnabled() || isSessionConcluded()"
+              [disabled]="bulkDisabled()"
               (clicked)="markAllAbsent.emit()"
             >
               <svg class="w-4 h-4 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -113,23 +109,6 @@ import { ClassSession } from '../../../../core/models/attendance.model';
         </div>
       </header>
 
-      @if (isSessionConcluded()) {
-        <div class="p-4 bg-warm-100/90 border border-warm-300 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-warm-700 shadow-warm-xs">
-          <div class="flex items-center gap-2.5">
-            <div class="w-8 h-8 rounded-xl bg-warm-200 text-warm-800 flex items-center justify-center font-bold text-sm shrink-0">
-              🔒
-            </div>
-            <div>
-              <p class="font-bold text-warm-900">Sesión Finalizada y Consolidada (Modo Solo Lectura)</p>
-              <p class="text-warm-600">Esta clase ya ha concluido su ciclo académico. La asistencia histórica está protegida contra modificaciones.</p>
-            </div>
-          </div>
-          <span class="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-warm-200 text-warm-800 shrink-0">
-            Registro Cerrado
-          </span>
-        </div>
-      }
-
       @if (sessions().length === 0 && selectedCourseId() && !isLoadingSession()) {
         <div class="bg-white p-8 rounded-2xl border border-dashed border-warm-300 text-center space-y-3 shadow-warm-xs">
           <div class="w-12 h-12 rounded-full bg-primary-50 text-primary-700 flex items-center justify-center mx-auto">
@@ -155,7 +134,7 @@ import { ClassSession } from '../../../../core/models/attendance.model';
 export class AttendanceControlHeaderComponent {
   sessionsEnabled = input<boolean>(true);
   attendanceEnabled = input<boolean>(true);
-  isSessionConcluded = input<boolean>(false);
+  isSaving = input<boolean>(false);
   currentCourse = input<Course | null | undefined>(null);
   currentSession = input<ClassSession | null | undefined>(null);
   courseOptions = input<SelectOption[]>([]);
@@ -164,6 +143,15 @@ export class AttendanceControlHeaderComponent {
   selectedSessionId = input<string>('');
   sessions = input<ClassSession[]>([]);
   isLoadingSession = input<boolean>(false);
+
+  // Marcado masivo: features + guardado en curso + existencia de sesión. Sin estado sintético de sesión.
+  bulkDisabled = computed(
+    () =>
+      !this.sessionsEnabled() ||
+      !this.attendanceEnabled() ||
+      this.isSaving() ||
+      !this.currentSession()
+  );
 
   markAllPresent = output<void>();
   markAllAbsent = output<void>();

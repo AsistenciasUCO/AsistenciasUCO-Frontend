@@ -5,8 +5,17 @@ import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 import { ApiListResponse } from '../api/models/api-list-response.model';
 import { ApiMessageResponse } from '../api/models/api-message-response.model';
+import { ApiVoidDataResponse } from '../api/models/api-data-response.model';
 import { SesionConsultadaApiDto } from '../api/models/sesion-consultada-api-dto.model';
 import { ClassSession } from '../models/attendance.model';
+import { getSessionNameError } from '../validation/session-name.util';
+
+export interface UpdateSessionInput {
+  title: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+}
 
 @Injectable({
   providedIn: 'root',
@@ -21,11 +30,7 @@ export class SessionService {
         date: '2026-08-25',
         startTime: '08:00',
         endTime: '10:00',
-        room: 'Aula A-204',
-        tipo: 'REGULAR',
         title: 'Introducción al Cálculo Multivariado',
-        topic: 'Conceptos fundamentales de funciones de varias variables y límites',
-        status: 'CONCLUIDA',
         records: [],
       },
       {
@@ -35,11 +40,7 @@ export class SessionService {
         date: '2026-08-27',
         startTime: '08:00',
         endTime: '10:00',
-        room: 'Aula A-204',
-        tipo: 'REGULAR',
         title: 'Derivadas Parciales y Gradiente',
-        topic: 'Regla de la cadena y aplicaciones del gradiente en campos escalares',
-        status: 'CONCLUIDA',
         records: [],
       },
       {
@@ -49,11 +50,7 @@ export class SessionService {
         date: '2026-09-01',
         startTime: '08:00',
         endTime: '10:00',
-        room: 'Aula A-204',
-        tipo: 'REGULAR',
         title: 'Optimización y Multiplicadores de Lagrange',
-        topic: 'Extremos condicionados con restricciones',
-        status: 'PROGRAMADA',
         records: [],
       },
       {
@@ -63,11 +60,7 @@ export class SessionService {
         date: '2026-09-05',
         startTime: '14:00',
         endTime: '16:00',
-        room: 'Laboratorio L-102',
-        tipo: 'EXTRAORDINARIA',
         title: 'Taller Extraordinario de Nivelación',
-        topic: 'Resolución de problemas previos al primer examen parcial',
-        status: 'PROGRAMADA',
         records: [],
       },
     ],
@@ -79,11 +72,7 @@ export class SessionService {
         date: '2026-08-26',
         startTime: '10:30',
         endTime: '12:30',
-        room: 'Laboratorio L-102',
-        tipo: 'REGULAR',
         title: 'Dualidad Onda-Partícula',
-        topic: 'Experimento de Young y efecto fotoeléctrico',
-        status: 'CONCLUIDA',
         records: [],
       },
       {
@@ -93,11 +82,7 @@ export class SessionService {
         date: '2026-09-02',
         startTime: '10:30',
         endTime: '12:30',
-        room: 'Laboratorio L-102',
-        tipo: 'REGULAR',
         title: 'Ecuación de Schrödinger en una Dimensión',
-        topic: 'Pozos de potencial infinito y cuantización de energía',
-        status: 'PROGRAMADA',
         records: [],
       },
     ],
@@ -111,22 +96,20 @@ export class SessionService {
     if (environment.useMocks) {
       const map = this.sessionsByGroupSignal();
       const existing = map[grupoId];
-      const list = existing || [
-        {
-          id: `ses-${grupoId}-1`,
-          courseId: grupoId,
-          sessionNumber: 1,
-          date: new Date().toISOString().split('T')[0],
-          startTime: '08:00',
-          endTime: '10:00',
-          room: 'Aula Asignada',
-          tipo: 'REGULAR',
-          title: 'Sesión Inaugural del Curso',
-          topic: 'Presentación del programa académico y concertación de evaluación',
-          status: 'PROGRAMADA',
-          records: [],
-        },
-      ];
+      const list =
+        existing ||
+        ([
+          {
+            id: `ses-${grupoId}-1`,
+            courseId: grupoId,
+            sessionNumber: 1,
+            date: new Date().toISOString().split('T')[0],
+            startTime: '08:00',
+            endTime: '10:00',
+            title: 'Sesión Inaugural del Curso',
+            records: [],
+          },
+        ]);
 
       return of({
         idTransaccion: `mock-tx-ses-${grupoId}`,
@@ -142,18 +125,21 @@ export class SessionService {
       )
       .pipe(
         map((response) => {
-          const sessions: ClassSession[] = response.datos.map((session) => ({
-            id: session.sesion,
-            courseId: session.grupo,
-            sessionNumber: session.numero,
-            title: session.nombre,
-            topic: session.nombre,
-            date: session.fechaHoraInicio,
-            startTime: session.fechaHoraInicio,
-            endTime: session.fechaHoraFin,
-            status: 'PROGRAMADA',
-            records: [],
-          }));
+          const sessions: ClassSession[] = response.datos.map((session) => {
+            const start = this.splitLocalDateTime(session.fechaHoraInicio);
+            const end = this.splitLocalDateTime(session.fechaHoraFin);
+
+            return {
+              id: session.sesion,
+              courseId: session.grupo,
+              sessionNumber: session.numero,
+              title: session.nombre,
+              date: start.date,
+              startTime: start.time,
+              endTime: end.time,
+              records: [],
+            };
+          });
 
           return {
             exitoso: response.exitoso,
@@ -164,18 +150,30 @@ export class SessionService {
       );
   }
 
+  private splitLocalDateTime(value: string): { date: string; time: string } {
+    const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?$/.exec(
+      value
+    );
+    if (!match) {
+      throw new Error(`Formato LocalDateTime no soportado: ${value}`);
+    }
+    return { date: match[1], time: match[2] };
+  }
+
   createSession(
     grupoId: string,
     data: {
       title: string;
-      topic: string;
       date: string;
       startTime: string;
       endTime: string;
-      room?: string;
-      tipo?: 'REGULAR' | 'EXTRAORDINARIA' | 'REPOSICION';
     }
   ): Observable<ApiMessageResponse> {
+    const nombreError = getSessionNameError(data.title);
+    if (nombreError) {
+      return throwError(() => new Error(nombreError));
+    }
+
     if (environment.useMocks) {
       const currentList = this.sessionsByGroupSignal()[grupoId] || [];
       const sessionNumber = currentList.length + 1;
@@ -184,13 +182,9 @@ export class SessionService {
         courseId: grupoId,
         sessionNumber,
         title: data.title,
-        topic: data.topic,
         date: data.date,
         startTime: data.startTime,
         endTime: data.endTime,
-        room: data.room || 'Aula Asignada',
-        tipo: data.tipo || 'EXTRAORDINARIA',
-        status: 'PROGRAMADA',
         records: [],
       };
 
@@ -199,63 +193,73 @@ export class SessionService {
         [grupoId]: [...(map[grupoId] || []), newSession],
       }));
 
-      const tipoStr = (newSession.tipo || 'EXTRAORDINARIA').toLowerCase();
       return of({
         exitoso: true,
-        mensaje: `Sesión ${tipoStr} #${sessionNumber} programada correctamente.`,
+        mensaje: `Sesión #${sessionNumber} programada correctamente.`,
       }).pipe(delay(250));
     }
 
     return this.http.post<ApiMessageResponse>(`${environment.apiUrl}/sesiones`, {
         grupo: grupoId,
-        nombre: data.title,
-        descripcion: data.topic,
+        nombre: data.title.trim(),
         fechaHoraInicio: `${data.date}T${data.startTime}:00`,
         fechaHoraFin: `${data.date}T${data.endTime}:00`,
-        aula: data.room,
-        tipo: data.tipo,
       });
   }
 
+  /**
+   * PATCH /sesiones/{sesionId} → `ApiDataResponse<Void>` (`{ exitoso: true, datos: null }`,
+   * BACKEND_GOLDEN_PATH_CONTRACT §C.8). El backend no devuelve la sesión: quien consume
+   * debe recargar por GET /sesiones/grupo/{grupoId}. No se fabrica idTransaccion ni mensajeUsuario.
+   */
   updateSession(
     grupoId: string,
     sesionId: string,
-    cambios: Partial<ClassSession>
-  ): Observable<ApiResponse<ClassSession>> {
+    cambios: UpdateSessionInput
+  ): Observable<ApiVoidDataResponse> {
+    const nombreError = getSessionNameError(cambios.title);
+    if (nombreError) {
+      return throwError(() => new Error(nombreError));
+    }
+
     if (environment.useMocks) {
-      let updated: ClassSession | null = null;
       this.sessionsByGroupSignal.update((map) => {
         const list = map[grupoId] || [];
-        const modified = list.map((s) => {
-          if (s.id === sesionId) {
-            updated = { ...s, ...cambios };
-            return updated;
-          }
-          return s;
-        });
+        const modified = list.map((s) =>
+          s.id === sesionId
+            ? {
+                ...s,
+                title: cambios.title,
+                date: cambios.date,
+                startTime: cambios.startTime,
+                endTime: cambios.endTime,
+              }
+            : s
+        );
         return { ...map, [grupoId]: modified };
       });
 
-      return of({
-        idTransaccion: `mock-tx-update-ses-${sesionId}`,
-        exitoso: true,
-        mensajeUsuario: 'Horario y aula de la sesión actualizados exitosamente.',
-        datos: updated as unknown as ClassSession,
-      }).pipe(delay(250));
+      return of<ApiVoidDataResponse>({ exitoso: true, datos: null }).pipe(delay(250));
     }
 
-    return this.http
-      .put<ApiResponse<ClassSession>>(`${environment.apiUrl}/sesiones/${sesionId}`, cambios)
-      .pipe(
-        map((res) => ({
-          idTransaccion: res.idTransaccion || 'tx-ses-update-001',
-          exitoso: res.exitoso,
-          mensajeUsuario: res.mensajeUsuario || 'Sesión actualizada.',
-          datos: res.datos,
-        }))
-      );
+    const body = {
+      nombre: cambios.title.trim(),
+      fechaHoraInicio: `${cambios.date}T${cambios.startTime}:00`,
+      fechaHoraFin: `${cambios.date}T${cambios.endTime}:00`,
+    };
+
+    return this.http.patch<ApiVoidDataResponse>(
+      `${environment.apiUrl}/sesiones/${sesionId}`,
+      body
+    );
   }
 
+  // OUT_OF_GOLDEN_PATH (LB-001B.5A): closeSession, cancelarSesion, getQrToken y
+  // registrarAutoAsistencia no pertenecen a BACKEND_GOLDEN_PATH_CONTRACT. Permanecen como
+  // legado interno; ningún flujo del Golden Path los invoca (las acciones de UI están
+  // deshabilitadas por `environment.features`) hasta que exista un contrato propio.
+
+  /** @deprecated OUT_OF_GOLDEN_PATH — sin contrato congelado (cierre legacy, DB SES_003 → 501). Sin consumidores en UI. */
   closeSession(sesionId: string): Observable<ApiResponse<void>> {
     return this.http
       .post<ApiResponse<void>>(`${environment.apiUrl}/sesiones/cierres`, {
@@ -271,20 +275,9 @@ export class SessionService {
       );
   }
 
+  /** @deprecated OUT_OF_GOLDEN_PATH — sin contrato congelado. Acción de UI deshabilitada (`features.sessionCancelEnabled`). */
   cancelarSesion(sesionId: string, motivo: string): Observable<ApiResponse<any>> {
     if (environment.useMocks) {
-      this.sessionsByGroupSignal.update((current) => {
-        const next: Record<string, ClassSession[]> = { ...current };
-        for (const [courseId, list] of Object.entries(next)) {
-          next[courseId] = list.map((s) =>
-            s.id === sesionId
-              ? { ...s, status: 'CONCLUIDA' as const, topic: `[CANCELADA] ${motivo} - ${s.topic}` }
-              : s
-          );
-        }
-        return next;
-      });
-
       return of({
         idTransaccion: `mock-tx-cancelar-${sesionId}`,
         exitoso: true,
@@ -313,6 +306,7 @@ export class SessionService {
       );
   }
 
+  /** @deprecated OUT_OF_GOLDEN_PATH — sin contrato congelado. Acción de UI deshabilitada (`features.sessionQrEnabled`). */
   getQrToken(sesionId: string): Observable<ApiResponse<{
     sesionId: string;
     grupoId: string;
@@ -338,6 +332,7 @@ export class SessionService {
     );
   }
 
+  /** @deprecated OUT_OF_GOLDEN_PATH — vertical estudiante (auto-registro QR); sin contrato congelado. */
   registrarAutoAsistencia(payload: { token?: string; codigoAcceso?: string }): Observable<ApiResponse<unknown>> {
     return this.http.post<ApiResponse<unknown>>(`${environment.apiUrl}/estudiante/asistencia-qr`, payload).pipe(
       map((res) => ({

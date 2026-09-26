@@ -230,10 +230,6 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
             @if (selectedCourse(); as curso) {
               <div class="p-3 bg-warm-50 border border-warm-200 rounded-xl flex items-center gap-4 text-xs shrink-0">
                 <div>
-                  <span class="text-warm-500 block">Docente Titular</span>
-                  <strong class="text-warm-900">{{ curso.docenteName }}</strong>
-                </div>
-                <div>
                   <span class="text-warm-500 block">Capacidad de Cupos</span>
                   <strong class="text-primary-800">{{ enrolledStudents().length }} / {{ curso.cupoMaximo || 35 }}</strong>
                 </div>

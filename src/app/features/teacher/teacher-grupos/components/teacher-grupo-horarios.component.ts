@@ -10,21 +10,15 @@ import { Course } from '../../../../core/models/course.model';
   template: `
     <div class="bg-white rounded-b-2xl border-x border-b border-warm-200 shadow-warm-sm p-6 space-y-6">
       <div>
-        <h3 class="font-serif font-bold text-lg text-warm-900">Distribución Horaria y Espacio Asignado</h3>
-        <p class="text-xs text-warm-500">Parámetros operativos de la franja lectiva semanal y capacidad física.</p>
+        <h3 class="font-serif font-bold text-lg text-warm-900">Distribución Horaria</h3>
+        <p class="text-xs text-warm-500">Parámetros operativos de la franja lectiva semanal y ocupación del grupo.</p>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div class="p-5 rounded-2xl bg-warm-50 border border-warm-200/80 space-y-2">
           <span class="text-xs font-bold uppercase tracking-wider text-warm-500">Franja Semanal</span>
           <p class="text-xl font-bold text-warm-900">{{ curso()?.schedule }}</p>
           <p class="text-xs text-warm-600">Modalidad Presencial Obligatoria</p>
-        </div>
-
-        <div class="p-5 rounded-2xl bg-warm-50 border border-warm-200/80 space-y-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-warm-500">Espacio Físico / Aula</span>
-          <p class="text-xl font-bold text-primary-800">{{ curso()?.room }}</p>
-          <p class="text-xs text-warm-600">Sede Principal Rionegro • Campus Central</p>
         </div>
 
         <div class="p-5 rounded-2xl bg-warm-50 border border-warm-200/80 space-y-2">
@@ -41,7 +35,7 @@ import { Course } from '../../../../core/models/course.model';
         <div>
           <p class="font-bold">Política Institucional de Horarios</p>
           <p class="mt-0.5 text-blue-800">
-            Cualquier ajuste permanente en el bloque horario semanal o cambio de aula asignada requiere coordinación con la Dirección de Programa para evitar cruces con otros semestres.
+            Cualquier ajuste permanente en el bloque horario semanal requiere coordinación con la Dirección de Programa para evitar cruces con otros semestres.
           </p>
         </div>
       </div>

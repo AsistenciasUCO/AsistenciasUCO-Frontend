@@ -61,7 +61,7 @@ import { TeacherGrupoSabanaComponent } from './teacher-grupo-sabana.component';
             </div>
             <h2 class="font-serif font-bold text-2xl text-warm-900">{{ selectedCourse()?.name }}</h2>
             <p class="text-xs text-warm-600">
-              Horario Regular: <strong class="text-warm-900">{{ selectedCourse()?.schedule }}</strong> • Aula: <strong class="text-warm-900">{{ selectedCourse()?.room }}</strong> • Docente: <strong class="text-warm-900">{{ selectedCourse()?.docenteName }}</strong>
+              Horario Regular: <strong class="text-warm-900">{{ selectedCourse()?.schedule }}</strong>
             </p>
           </div>
 
@@ -78,16 +78,18 @@ import { TeacherGrupoSabanaComponent } from './teacher-grupo-sabana.component';
               QR / PIN Matrícula
             </button>
 
-            <button
-              type="button"
-              (click)="proyectarQr.emit(selectedCourse()!)"
-              class="text-xs font-bold text-primary-900 hover:text-primary-950 bg-accent-200 hover:bg-accent-300 border border-accent-400 px-3.5 py-2 rounded-xl transition-colors inline-flex items-center gap-1.5 shadow-xs"
-            >
-              <svg class="w-4 h-4 text-primary-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-              </svg>
-              Proyectar Auto-Registro
-            </button>
+            @if (sessionQrEnabled()) {
+              <button
+                type="button"
+                (click)="proyectarQr.emit(selectedCourse()!)"
+                class="text-xs font-bold text-primary-900 hover:text-primary-950 bg-accent-200 hover:bg-accent-300 border border-accent-400 px-3.5 py-2 rounded-xl transition-colors inline-flex items-center gap-1.5 shadow-xs"
+              >
+                <svg class="w-4 h-4 text-primary-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                </svg>
+                Proyectar Auto-Registro
+              </button>
+            }
 
             <button
               type="button"
@@ -126,7 +128,7 @@ import { TeacherGrupoSabanaComponent } from './teacher-grupo-sabana.component';
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            Horario & Aula
+            Horario
           </button>
 
           <button
@@ -174,7 +176,8 @@ import { TeacherGrupoSabanaComponent } from './teacher-grupo-sabana.component';
           <app-teacher-grupo-sesiones
             [sessions]="sessions()"
             [loading]="loadingSessions()"
-            [selectedCourse]="selectedCourse()"
+            [qrEnabled]="sessionQrEnabled()"
+            [cancelEnabled]="sessionCancelEnabled()"
             (programarExtraordinaria)="programarExtraordinaria.emit()"
             (proyectar)="proyectarSesion.emit($event)"
             (verDetalle)="verDetalleSesion.emit($event)"
@@ -225,6 +228,9 @@ export class TeacherGrupoHubComponent {
   cargandoEstudiantes = input<boolean>(false);
   reclamos = input<any[]>([]);
   cargandoReclamos = input<boolean>(false);
+  // OUT_OF_GOLDEN_PATH: acciones de sesión sin contrato backend; ocultas salvo feature explícita.
+  sessionQrEnabled = input<boolean>(false);
+  sessionCancelEnabled = input<boolean>(false);
 
   subPestanaHub = model<'SESIONES' | 'HORARIOS' | 'ESTUDIANTES' | 'RECLAMOS' | 'SABANA'>('SESIONES');
 

@@ -20,6 +20,8 @@ import { TeacherProyeccionQrModalComponent } from './components/modals/teacher-p
 import { TeacherMatriculaModalComponent } from './components/modals/teacher-matricula-modal.component';
 import { TeacherSesionCancelarModalComponent } from './components/modals/teacher-sesion-cancelar-modal.component';
 import { TeacherSesionDetalleModalComponent } from './components/modals/teacher-sesion-detalle-modal.component';
+import { getSessionNameError } from '../../../core/validation/session-name.util';
+import { environment } from '../../../../environments/environment';
 
 type VistaGrupos = 'LISTA' | 'FORM_GRUPO' | 'HUB_GRUPO' | 'FORM_SESION';
 
@@ -45,6 +47,7 @@ type VistaGrupos = 'LISTA' | 'FORM_GRUPO' | 'HUB_GRUPO' | 'FORM_SESION';
         <app-teacher-grupos-list
           [courses]="courses()"
           [isLoading]="isLoading()"
+          [sessionQrEnabled]="sessionQrEnabled"
           (crearGrupo)="abrirCrearGrupo()"
           (irAsistencia)="irATomaAsistencia()"
           (editarGrupo)="abrirEditarGrupo($event)"
@@ -77,6 +80,8 @@ type VistaGrupos = 'LISTA' | 'FORM_GRUPO' | 'HUB_GRUPO' | 'FORM_SESION';
           [cargandoEstudiantes]="cargandoEstudiantes()"
           [reclamos]="reclamosGrupo()"
           [cargandoReclamos]="cargandoReclamos()"
+          [sessionQrEnabled]="sessionQrEnabled"
+          [sessionCancelEnabled]="sessionCancelEnabled"
           [(subPestanaHub)]="subPestanaHub"
           (volver)="volverALista()"
           (irAsistencia)="tomarAsistenciaGrupo($event)"
@@ -131,7 +136,6 @@ type VistaGrupos = 'LISTA' | 'FORM_GRUPO' | 'HUB_GRUPO' | 'FORM_SESION';
       <app-teacher-sesion-detalle-modal
         [isOpen]="modalDetalleSesionVisible()"
         [sesion]="sesionDetalle()"
-        [room]="selectedCourse()?.room || ''"
         (closed)="cerrarDetalleSesionModal()"
       />
     </div>
@@ -144,6 +148,10 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
   private claimService = inject(AttendanceClaimService);
   private router = inject(Router);
   private toast = inject(ToastService);
+
+  // OUT_OF_GOLDEN_PATH (LB-001B.5A): sin contrato backend → deshabilitadas por feature explícita.
+  readonly sessionQrEnabled = environment.features.sessionQrEnabled;
+  readonly sessionCancelEnabled = environment.features.sessionCancelEnabled;
 
   vistaActual = signal<VistaGrupos>('LISTA');
   courses = signal<Course[]>([]);
@@ -203,12 +211,9 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
 
   sesionForm = {
     title: '',
-    topic: '',
     date: '',
     startTime: '08:00',
     endTime: '10:00',
-    room: '',
-    tipo: 'EXTRAORDINARIA',
     sessionNumber: 1,
   };
 
@@ -266,7 +271,7 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
       room: 'Aula A-101',
       schedule: 'Lunes y Miércoles 08:00 - 10:00',
       cupoMaximo: 35,
-      docenteName: 'Dra. María Elena Rostagno',
+      docenteName: '',
       asignaturaId: '',
       diasSeleccionados: ['Lunes', 'Miércoles'],
       horaInicio: '08:00',
@@ -284,7 +289,7 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
       code: course.code,
       section: course.section,
       name: course.name,
-      room: course.room,
+      room: course.room ?? '',
       schedule: course.schedule,
       cupoMaximo: course.cupoMaximo || 35,
       docenteName: course.docenteName || '',
@@ -316,7 +321,6 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
           schedule: this.grupoForm.schedule.trim(),
           room: this.grupoForm.room.trim(),
           cupoMaximo: Number(this.grupoForm.cupoMaximo) || 35,
-          docenteName: this.grupoForm.docenteName.trim(),
         })
         .subscribe({
           next: (res) => {
@@ -341,7 +345,6 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
           schedule: this.grupoForm.schedule.trim(),
           room: this.grupoForm.room.trim(),
           cupoMaximo: Number(this.grupoForm.cupoMaximo) || 35,
-          docenteName: this.grupoForm.docenteName.trim(),
         })
         .subscribe({
           next: (res) => {
@@ -421,13 +424,10 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
     this.modoFormSesion = 'CREAR';
     this.selectedSessionId = null;
     this.sesionForm = {
-      tipo: 'EXTRAORDINARIA',
       title: 'Sesión Extraordinaria de Refuerzo',
-      topic: 'Nivelación y resolución de dudas temáticas',
       date: new Date().toISOString().split('T')[0],
       startTime: '14:00',
       endTime: '16:00',
-      room: course?.room || 'Aula A-204',
       sessionNumber: this.sessions().length + 1,
     };
     this.vistaActual.set('FORM_SESION');
@@ -437,13 +437,10 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
     this.modoFormSesion = 'EDITAR';
     this.selectedSessionId = sesion.id;
     this.sesionForm = {
-      tipo: sesion.tipo || 'REGULAR',
       title: sesion.title,
-      topic: sesion.topic,
       date: sesion.date,
       startTime: sesion.startTime,
       endTime: sesion.endTime,
-      room: sesion.room || this.selectedCourse()?.room || 'Aula A-204',
       sessionNumber: sesion.sessionNumber,
     };
     this.vistaActual.set('FORM_SESION');
@@ -459,8 +456,9 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
     const course = this.selectedCourse();
     if (!course) return;
 
-    if (!this.sesionForm.title.trim()) {
-      this.toast.warning('El campo Título de la Sesión es obligatorio.');
+    const nombreError = getSessionNameError(this.sesionForm.title);
+    if (nombreError) {
+      this.toast.warning(nombreError);
       return;
     }
     if (!this.sesionForm.date) {
@@ -480,12 +478,9 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
       this.sessionService
         .createSession(course.id, {
           title: this.sesionForm.title.trim(),
-          topic: this.sesionForm.topic.trim(),
           date: this.sesionForm.date,
           startTime: this.sesionForm.startTime,
           endTime: this.sesionForm.endTime,
-          room: this.sesionForm.room.trim(),
-          tipo: this.sesionForm.tipo as 'REGULAR' | 'EXTRAORDINARIA' | 'REPOSICION',
         })
         .subscribe({
           next: (res) => {
@@ -501,17 +496,15 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
       this.sessionService
         .updateSession(course.id, this.selectedSessionId, {
           title: this.sesionForm.title.trim(),
-          topic: this.sesionForm.topic.trim(),
           date: this.sesionForm.date,
           startTime: this.sesionForm.startTime,
           endTime: this.sesionForm.endTime,
-          room: this.sesionForm.room.trim(),
-          tipo: this.sesionForm.tipo as 'REGULAR' | 'EXTRAORDINARIA' | 'REPOSICION',
         })
         .subscribe({
           next: (res) => {
+            // PUT devuelve ApiDataResponse<Void>: solo `exitoso`; el listado se recarga por HTTP.
             if (res.exitoso) {
-              this.toast.success(res.mensajeUsuario || 'Sesión actualizada.');
+              this.toast.success('Sesión actualizada.');
               this.cargarSesiones(course.id);
               this.volverASesiones();
             }
@@ -522,6 +515,7 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
   }
 
   abrirModalCancelarSesion(sesion: ClassSession): void {
+    if (!this.sessionCancelEnabled) return;
     this.sesionACancelar.set(sesion);
     this.modalCancelarVisible.set(true);
   }
@@ -534,7 +528,7 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
   confirmarCancelarSesionConMotivo(motivo: string): void {
     const sesion = this.sesionACancelar();
     const course = this.selectedCourse();
-    if (!sesion || !motivo.trim()) return;
+    if (!this.sessionCancelEnabled || !sesion || !motivo.trim()) return;
 
     this.sessionService.cancelarSesion(sesion.id, motivo.trim()).subscribe({
       next: (res) => {
@@ -563,6 +557,7 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
   }
 
   abrirModalProyeccionParaGrupo(course: Course): void {
+    if (!this.sessionQrEnabled) return;
     this.selectedCourse.set(course);
     this.modalProyeccionVisible.set(true);
 
@@ -570,7 +565,7 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
       next: (res) => {
         const sesiones = res.datos || [];
         this.sessions.set(sesiones);
-        const activa = sesiones.find((s: ClassSession) => s.status === 'EN_CURSO') || sesiones[0];
+        const activa = sesiones[0];
         if (activa) {
           this.cambiarSesionActiva(activa.id);
         }
@@ -579,6 +574,7 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
   }
 
   proyectarSesionEspecifica(sesion: ClassSession): void {
+    if (!this.sessionQrEnabled) return;
     this.modalProyeccionVisible.set(true);
     this.cambiarSesionActiva(sesion.id);
   }
@@ -595,7 +591,7 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
 
   refrescarQrManual(): void {
     const sesionId = this.sesionActivaId();
-    if (!sesionId) return;
+    if (!this.sessionQrEnabled || !sesionId) return;
 
     this.sessionService.getQrToken(sesionId).subscribe({
       next: (res) => {
@@ -650,23 +646,9 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
     this.sesionDetalle.set(sesion);
     this.modalDetalleSesionVisible.set(true);
 
-    const course = this.selectedCourse();
-    if (course && (!sesion.records || sesion.records.length === 0)) {
-      this.studentService.getStudentsByGroup(course.id).subscribe({
-        next: (res: any) => {
-          const students = res?.items || res?.datos || (Array.isArray(res) ? res : []);
-          if (sesion.status === 'CONCLUIDA' && students.length > 0) {
-            const records = students.map((st: any) => ({
-              studentId: st.studentId || st.id,
-              studentName: st.studentName || `${st.nombres} ${st.apellidos}`,
-              studentCode: String(st.studentCode || st.numeroIdentificacion || '000'),
-              status: (st.studentId || st.id).endsWith('2') ? 'SJC' : 'AN' as any,
-            }));
-            this.sesionDetalle.update((s) => (s ? { ...s, records } : s));
-          }
-        },
-      });
-    }
+    // NOTA (PLAN.md LB-001B.1B, hallazgo #22): ya no se sintetiza AN/SJC por paridad del ID
+    // del estudiante cuando no hay records reales — si el backend no entregó registros de
+    // asistencia, la ausencia de registro se mantiene, sin inventar un reemplazo (DR-002).
   }
 
   cerrarDetalleSesionModal(): void {

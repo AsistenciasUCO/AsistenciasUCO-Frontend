@@ -332,7 +332,6 @@ export class OverviewComponent implements OnInit {
             dia: h.dia,
             horaInicio: h.horaInicio,
             horaFin: h.horaFin,
-            aula: h.aula || 'Aula Principal',
             subtitulo: h.seccion || 'Grupo Docente',
           });
         }
@@ -346,7 +345,6 @@ export class OverviewComponent implements OnInit {
               dia: p.dia,
               horaInicio: p.horaInicio,
               horaFin: p.horaFin,
-              aula: c.room || 'Aula Principal',
               subtitulo: c.section || 'Sección',
             });
           }

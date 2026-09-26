@@ -58,7 +58,7 @@ export const routes: Routes = [
       {
         path: 'asistencia',
         canActivate: [roleGuard],
-        data: { roles: ['DOCENTE', 'DECANO', 'ADMINISTRADOR', 'ADMIN'] },
+        data: { roles: ['DOCENTE'] },
         loadComponent: () =>
           import(
             './features/attendance/attendance-control/attendance-control.component'

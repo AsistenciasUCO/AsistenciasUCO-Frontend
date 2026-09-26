@@ -3,6 +3,11 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { FormFieldComponent } from '../../../../shared/components/form-field/form-field.component';
 import { ButtonComponent } from '../../../../shared/components/button/button.component';
+import {
+  SESSION_NAME_LENGTH_MESSAGE,
+  SESSION_NAME_MAX_LENGTH,
+  getSessionNameError,
+} from '../../../../core/validation/session-name.util';
 
 @Component({
   selector: 'app-teacher-sesion-form',
@@ -24,53 +29,33 @@ import { ButtonComponent } from '../../../../shared/components/button/button.com
         </button>
 
         <span class="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full">
-          {{ modo() === 'CREAR' ? 'Programación Extraordinaria' : 'Modificación de Bloque Horario' }}
+          {{ modo() === 'CREAR' ? 'Programar sesión' : 'Modificar sesión' }}
         </span>
       </div>
 
       <div class="bg-white p-6 sm:p-8 rounded-2xl border border-warm-200 shadow-warm-sm max-w-2xl mx-auto space-y-6">
         <div>
           <h2 class="font-serif font-bold text-2xl text-warm-900">
-            {{ modo() === 'CREAR' ? 'Programar Sesión Extraordinaria o Reposición' : 'Modificar Horario y Aula de la Sesión' }}
+            {{ modo() === 'CREAR' ? 'Programar Sesión' : 'Modificar Sesión' }}
           </h2>
           <p class="text-sm text-warm-600 mt-1">
-            Establece la fecha, horario de inicio y fin, aula y temática para este bloque de clase.
+            Establece el título, la fecha y el horario de este bloque de clase.
           </p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div class="sm:col-span-2">
-            <app-form-field label="Tipo de Sesión" [required]="true">
-              <select
-                [(ngModel)]="form().tipo"
-                class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm text-warm-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              >
-                <option value="EXTRAORDINARIA">Sesión Extraordinaria</option>
-                <option value="REPOSICION">Sesión de Reposición</option>
-                <option value="REGULAR">Sesión Regular Ordinaria</option>
-              </select>
-            </app-form-field>
-          </div>
-
-          <div class="sm:col-span-2">
             <app-form-field label="Título de la Sesión" [required]="true">
               <input
                 type="text"
+                maxlength="50"
                 [(ngModel)]="form().title"
                 placeholder="Ej. Taller Extraordinario de Nivelación Previa al Examen"
                 class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
               />
-            </app-form-field>
-          </div>
-
-          <div class="sm:col-span-2">
-            <app-form-field label="Temática / Descripción" [required]="true">
-              <textarea
-                [(ngModel)]="form().topic"
-                rows="3"
-                placeholder="Describe los temas a abordar en este bloque..."
-                class="w-full p-3 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              ></textarea>
+              @if (nombreDemasiadoLargo()) {
+                <p class="mt-1 text-xs text-red-600" role="alert">{{ nombreLengthMessage }}</p>
+              }
             </app-form-field>
           </div>
 
@@ -78,15 +63,6 @@ import { ButtonComponent } from '../../../../shared/components/button/button.com
             <input
               type="date"
               [(ngModel)]="form().date"
-              class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-            />
-          </app-form-field>
-
-          <app-form-field label="Aula Asignada" [required]="true">
-            <input
-              type="text"
-              [(ngModel)]="form().room"
-              placeholder="Ej. Aula A-204"
               class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
             />
           </app-form-field>
@@ -115,7 +91,7 @@ import { ButtonComponent } from '../../../../shared/components/button/button.com
           <app-button
             variant="primary"
             size="md"
-            [disabled]="!form().title?.trim() || !form().date"
+            [disabled]="nombreInvalido() || !form().date"
             (clicked)="guardar.emit()"
           >
             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -133,14 +109,21 @@ export class TeacherSesionFormComponent {
   codigoCurso = input<string>('');
   form = model<any>({
     title: '',
-    topic: '',
     date: '',
     startTime: '08:00',
     endTime: '10:00',
-    room: '',
-    tipo: 'EXTRAORDINARIA',
     sessionNumber: 1,
   });
+
+  readonly nombreLengthMessage = SESSION_NAME_LENGTH_MESSAGE;
+
+  nombreInvalido(): boolean {
+    return getSessionNameError(this.form().title) !== null;
+  }
+
+  nombreDemasiadoLargo(): boolean {
+    return (this.form().title ?? '').trim().length > SESSION_NAME_MAX_LENGTH;
+  }
 
   cancelar = output<void>();
   guardar = output<void>();

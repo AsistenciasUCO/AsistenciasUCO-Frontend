@@ -1,6 +1,17 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, auditTime, filter, map, merge, pairwise } from 'rxjs';
+import {
+  Observable,
+  auditTime,
+  distinctUntilChanged,
+  filter,
+  map,
+  merge,
+  scan,
+  tap,
+} from 'rxjs';
+import { environment } from '../../../../environments/environment';
 import { RealtimeService } from '../../../core/realtime/realtime.service';
+import { RealtimeConnectionState } from '../../../core/realtime/model/realtime-connection-state.model';
 import {
   AttendanceSessionUpdatedRealtimePayload,
   REALTIME_EVENT_TYPE,
@@ -10,6 +21,36 @@ import {
 /** Ventana de coalescencia para no disparar una recarga por cada evento de
  * una ráfaga (ej. registro masivo consecutivo sobre el mismo grupo/sesión). */
 export const ATTENDANCE_REALTIME_COALESCE_MS = 250;
+
+interface ReconnectRecoveryState {
+  /** Se observó `RECONNECTING` y aún no ha vuelto `CONNECTED`. */
+  readonly recovering: boolean;
+  /** Este estado es el primer `CONNECTED` tras una reconexión. */
+  readonly refresh: boolean;
+}
+
+/**
+ * Máquina de estado de recuperación tras reconexión. Recuerda que se observó
+ * `RECONNECTING` y mantiene esa marca aunque aparezcan `CONNECTING` u otros
+ * `RECONNECTING` intermedios; el primer `CONNECTED` posterior pide exactamente
+ * un refresh HTTP y limpia la marca. Una conexión inicial
+ * (`DISCONNECTED → CONNECTING → CONNECTED`) nunca pasó por `RECONNECTING`, así
+ * que no refresca. No se depende de que `RECONNECTING` y `CONNECTED` sean
+ * consecutivos: el transporte real puede emitir `RECONNECTING → CONNECTING →
+ * CONNECTED` (MV001-R01).
+ */
+function reconnectRecoveryStep(
+  acc: ReconnectRecoveryState,
+  state: RealtimeConnectionState
+): ReconnectRecoveryState {
+  if (state === 'RECONNECTING') {
+    return { recovering: true, refresh: false };
+  }
+  if (state === 'CONNECTED') {
+    return { recovering: false, refresh: acc.recovering };
+  }
+  return { recovering: acc.recovering, refresh: false };
+}
 
 /**
  * Filtra `ASISTENCIAS_SESION_ACTUALIZADAS` a los eventos que pertenecen al
@@ -28,6 +69,16 @@ export class AttendanceRealtimeSyncService {
 
   disconnect(): void {
     this.realtimeService.stop();
+  }
+
+  connectionAlerts(): Observable<RealtimeConnectionState> {
+    return this.realtimeService.connectionState$.pipe(
+      filter(
+        (state): state is RealtimeConnectionState =>
+          state === 'UNAUTHORIZED' || state === 'ERROR'
+      ),
+      distinctUntilChanged()
+    );
   }
 
   watch(
@@ -52,12 +103,15 @@ export class AttendanceRealtimeSyncService {
         auditTime(ATTENDANCE_REALTIME_COALESCE_MS)
       );
 
+    // La marca de reconexión es por suscripción: cada `watch()` mantiene la suya.
     const reconnected$ = this.realtimeService.connectionState$.pipe(
-      pairwise(),
-      filter(
-        ([previous, current]) =>
-          previous === 'RECONNECTING' && current === 'CONNECTED'
-      ),
+      scan(reconnectRecoveryStep, { recovering: false, refresh: false }),
+      filter((recovery) => recovery.refresh),
+      tap(() => {
+        if (!environment.production) {
+          console.debug('[Realtime] RECOVERY_HTTP_REFRESH');
+        }
+      }),
       map(() => undefined)
     );
 

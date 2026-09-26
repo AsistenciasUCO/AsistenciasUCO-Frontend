@@ -1,0 +1,144 @@
+import { HttpErrorResponse } from '@angular/common/http';
+import {
+  getApiCorrelationId,
+  getApiErrorCode,
+  getApiErrorMessage,
+  getApiErrorResponse,
+  getApiFieldError,
+  getApiFieldErrors,
+} from './api-error.util';
+
+describe('api error utilities', () => {
+  const fieldError = {
+    field: 'correo',
+    code: 'INVALID',
+    message: 'El correo no es válido',
+  };
+
+  const validBody = {
+    timestamp: '2026-09-22T10:15:30',
+    status: 400,
+    error: 'Bad Request',
+    code: 'VALIDATION_ERROR',
+    message: 'Error de validacion en la solicitud.',
+    path: '/api/usuarios',
+    correlationId: 'corr-1',
+    details: [fieldError],
+  };
+
+  function httpError(status: number, error: unknown): HttpErrorResponse {
+    return new HttpErrorResponse({ status, error });
+  }
+
+  it('reconoce el contrato completo y expone detalles y correlación', () => {
+    const error = httpError(400, validBody);
+
+    expect(getApiErrorResponse(error)).toEqual(validBody);
+    expect(getApiFieldErrors(error)).toEqual([fieldError]);
+    expect(getApiFieldError(error, 'correo')).toBe(fieldError.message);
+    expect(getApiFieldError(error, 'nombre')).toBeUndefined();
+    expect(getApiCorrelationId(error)).toBe('corr-1');
+    expect(getApiErrorMessage(error)).toBe(
+      "Error en datos del formulario: Campo 'correo': El correo no es válido."
+    );
+  });
+
+  it('descarta cuerpos y detalles que no cumplen el contrato', () => {
+    const mixedDetails = httpError(400, {
+      ...validBody,
+      details: [fieldError, { field: 'nombre', code: 2, message: 'inválido' }],
+    });
+
+    expect(getApiErrorResponse(mixedDetails)).toBeNull();
+    expect(getApiFieldErrors(mixedDetails)).toEqual([fieldError]);
+    expect(getApiErrorResponse(new Error('local'))).toBeNull();
+    expect(getApiFieldErrors({})).toEqual([]);
+    expect(getApiCorrelationId(httpError(400, { ...validBody, correlationId: 7 })))
+      .toBeUndefined();
+  });
+
+  it('decide el mensaje por ApiErrorResponse.code, nunca por el texto de message', () => {
+    const envelope = (code: string, message: string, status = 400) =>
+      httpError(status, { ...validBody, status, code, message, details: undefined });
+
+    const forbidden = getApiErrorMessage(envelope('FORBIDDEN', 'texto arbitrario A', 403));
+    const forbiddenOtherText = getApiErrorMessage(envelope('FORBIDDEN', 'otro texto B', 403));
+    expect(forbidden).toBe(forbiddenOtherText);
+    expect(forbidden).toContain('permisos');
+
+    const expected: Record<string, string> = {
+      UNAUTHORIZED: 'sesión',
+      FORBIDDEN: 'permisos',
+      VALIDATION_ERROR: 'no son válidos',
+      INVALID_REQUEST: 'no pudo ser interpretada',
+      RESOURCE_NOT_FOUND: 'no fue encontrado',
+      CONFLICT: 'conflicto',
+      FEATURE_UNAVAILABLE: 'no está disponible',
+      INTERNAL_ERROR: 'servidor',
+    };
+    for (const [code, fragment] of Object.entries(expected)) {
+      // El texto humano del backend es engañoso a propósito: no debe influir.
+      const message = getApiErrorMessage(envelope(code, 'Recurso no encontrado / permisos / conflicto'));
+      expect(message).withContext(code).toContain(fragment);
+    }
+  });
+
+  it('el código manda aunque el status HTTP no coincida', () => {
+    expect(getApiErrorCode(httpError(500, { ...validBody, status: 500, code: 'RESOURCE_NOT_FOUND', details: undefined })))
+      .toBe('RESOURCE_NOT_FOUND');
+  });
+
+  it('códigos de catálogo ERR_* muestran el mensaje del envelope', () => {
+    const error = httpError(400, {
+      ...validBody,
+      code: 'ERR_NOMBRE_SESION_LONGITUD_INVALIDA',
+      message: 'El nombre de la sesion debe tener entre 1 y 50 caracteres.',
+      details: undefined,
+    });
+    expect(getApiErrorMessage(error)).toBe(
+      'El nombre de la sesion debe tener entre 1 y 50 caracteres.'
+    );
+  });
+
+  it('DBCODE y códigos internos no se muestran ni se interpretan', () => {
+    const error = httpError(500, {
+      ...validBody,
+      status: 500,
+      code: 'ERR_DB_UNCLASSIFIED',
+      message: 'DBCODE=SEC_002|detalle interno',
+      details: undefined,
+    });
+    expect(getApiErrorMessage(error)).not.toContain('DBCODE');
+    expect(getApiErrorMessage(error)).not.toContain('SEC_002');
+    expect(getApiErrorCode(error)).toBe('INTERNAL_ERROR');
+  });
+
+  it('sin envelope (401/403 de la cadena de seguridad, TD-021) deriva el código del status', () => {
+    const cases: Array<[number, string]> = [
+      [0, 'NETWORK_ERROR'],
+      [400, 'INVALID_REQUEST'],
+      [401, 'UNAUTHORIZED'],
+      [403, 'FORBIDDEN'],
+      [404, 'RESOURCE_NOT_FOUND'],
+      [409, 'CONFLICT'],
+      [501, 'FEATURE_UNAVAILABLE'],
+      [503, 'INTERNAL_ERROR'],
+    ];
+    for (const [status, code] of cases) {
+      expect(getApiErrorCode(httpError(status, null))).withContext(String(status)).toBe(code);
+    }
+    expect(getApiErrorCode('fallo local')).toBe('UNKNOWN');
+  });
+
+  it('expone la correlación para soporte', () => {
+    expect(getApiCorrelationId(httpError(500, { ...validBody, status: 500, code: 'INTERNAL_ERROR', details: undefined })))
+      .toBe('corr-1');
+  });
+
+  it('usa el mensaje general para errores desconocidos', () => {
+    expect(getApiErrorMessage(httpError(418, null)))
+      .toBe('No fue posible completar la operación. Intente nuevamente.');
+    expect(getApiErrorMessage('fallo local'))
+      .toBe('No fue posible completar la operación. Intente nuevamente.');
+  });
+});

@@ -26,7 +26,7 @@ import { ToastService } from '../../../shared/components/toast/toast.component';
             Mi Horario Académico
           </h1>
           <p class="text-sm text-warm-600 mt-1">
-            Distribución semanal de tus clases presenciales, aulas asignadas y cupos de estudiantes.
+            Distribución semanal de tus clases presenciales y estudiantes por grupo.
           </p>
         </div>
 
@@ -81,12 +81,6 @@ import { ToastService } from '../../../shared/components/toast/toast.component';
                       <p class="text-[10px] text-warm-500 mt-0.5">{{ clase.seccion }}</p>
 
                       <div class="mt-2 pt-2 border-t border-black/5 text-[11px] space-y-0.5">
-                        <div class="flex items-center gap-1.5 font-medium">
-                          <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                          </svg>
-                          <span class="truncate">{{ clase.aula }}</span>
-                        </div>
                         <div class="flex items-center gap-1.5 opacity-85">
                           <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />

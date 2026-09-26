@@ -55,7 +55,7 @@ import { ProximaClaseInfo } from '../utils/proxima-clase.util';
                 {{ pc.tiempoRestanteTexto }}
               </p>
               <p class="text-xs font-semibold text-primary-800 truncate mt-0.5" [title]="pc.materia">{{ pc.materia }}</p>
-              <span class="text-[11px] text-warm-500 font-medium block truncate mt-0.5">{{ pc.aula }} • {{ pc.tiempoDetalleBadge }}</span>
+              <span class="text-[11px] text-warm-500 font-medium block truncate mt-0.5">{{ pc.tiempoDetalleBadge }}</span>
             </div>
           } @else {
             <div>
@@ -124,9 +124,7 @@ import { ProximaClaseInfo } from '../utils/proxima-clase.util';
                 {{ pc.materia }}
               </h3>
               <p class="text-xs text-warm-600 flex flex-wrap items-center gap-2 mt-0.5">
-                <span class="font-semibold text-warm-800">Aula: {{ pc.aula }}</span>
-                <span>•</span>
-                <span>{{ pc.subtitulo }}</span>
+                <span class="font-semibold text-warm-800">{{ pc.subtitulo }}</span>
                 <span>•</span>
                 <span class="text-primary-700 font-medium">{{ pc.tiempoDetalleBadge }}</span>
               </p>
@@ -175,13 +173,6 @@ import { ProximaClaseInfo } from '../utils/proxima-clase.util';
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <span class="font-medium text-warm-800">{{ course.schedule }}</span>
-                  </div>
-
-                  <div class="flex items-center gap-2">
-                    <svg class="w-4 h-4 text-primary-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                    <span class="font-medium text-warm-800">{{ course.room }}</span>
                   </div>
 
                   <div class="flex items-center justify-between pt-3 border-t border-warm-100">
