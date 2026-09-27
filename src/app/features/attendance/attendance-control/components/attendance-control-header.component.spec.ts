@@ -36,6 +36,7 @@ describe('AttendanceControlHeaderComponent', () => {
     fixture.componentRef.setInput('selectedCourseId', 'g1');
     fixture.componentRef.setInput('sessions', [session]);
     fixture.componentRef.setInput('currentSession', session);
+    fixture.componentRef.setInput('isDetailMode', true);
     fixture.detectChanges();
   });
 

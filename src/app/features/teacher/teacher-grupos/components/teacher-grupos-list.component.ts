@@ -110,12 +110,18 @@ import { Course } from '../../../../core/models/course.model';
       } @else {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
           @for (course of filteredCourses(); track course.id) {
-            <app-card [hoverable]="true" padding="md">
+            <app-card
+              [hoverable]="true"
+              padding="md"
+              (click)="seleccionarGrupo.emit(course)"
+              class="cursor-pointer transition-all hover:border-primary-300 group block"
+              title="Haz clic para ver el detalle y sesiones de este grupo"
+            >
               <div class="flex flex-col h-full justify-between gap-4">
                 <div>
                   <div class="flex items-start justify-between gap-3 mb-2">
                     <div class="flex items-center gap-2">
-                      <span class="text-xs font-mono font-bold px-2.5 py-1 rounded-md bg-warm-100 text-warm-800">
+                      <span class="text-xs font-mono font-bold px-2.5 py-1 rounded-md bg-warm-100 text-warm-800 group-hover:bg-primary-50 group-hover:text-primary-800 transition-colors">
                         {{ course.code }}
                       </span>
                       <app-badge variant="neutral">{{ course.section }}</app-badge>
@@ -126,70 +132,29 @@ import { Course } from '../../../../core/models/course.model';
                     </span>
                   </div>
 
-                  <h3 class="font-serif font-bold text-xl text-warm-900 leading-snug">
+                  <h3 class="font-serif font-bold text-xl text-warm-900 group-hover:text-primary-950 transition-colors leading-snug">
                     {{ course.name }}
                   </h3>
-
-                  <!-- Barra de Ocupación -->
-                  <div class="mt-3 space-y-1">
-                    <div class="flex items-center justify-between text-[11px] text-warm-500">
-                      <span>Ocupación del grupo</span>
-                      <span class="font-semibold text-warm-800">{{ getPorcentajeCupo(course) }}%</span>
-                    </div>
-                    <div class="w-full h-1.5 bg-warm-100 rounded-full overflow-hidden">
-                      <div
-                        class="h-full bg-primary-600 rounded-full transition-all duration-300"
-                        [style.width.%]="getPorcentajeCupo(course)"
-                      ></div>
-                    </div>
-                  </div>
                 </div>
 
-                <!-- Información del Grupo y Acciones Directas -->
-                <div class="p-3 rounded-xl bg-warm-50 border border-warm-100 text-xs space-y-2 text-warm-700">
-                  <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-2">
-                      <svg class="w-4 h-4 text-warm-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span class="font-medium">{{ course.schedule }}</span>
-                    </div>
+                <!-- Información del Horario -->
+                <div class="p-3 rounded-xl bg-warm-50 border border-warm-100 text-xs text-warm-700 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-warm-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span class="font-medium">{{ course.schedule }}</span>
                   </div>
-
-                  <div class="flex items-center justify-between">
-                    <button
-                      type="button"
-                      (click)="matricular.emit(course)"
-                      class="text-[11px] font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-lg transition-colors inline-flex items-center gap-1 shadow-2xs"
-                      title="Código QR y PIN para matrícula de estudiantes al grupo"
-                    >
-                      <svg class="w-3.5 h-3.5 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                      </svg>
-                      QR Matrícula
-                    </button>
-
-                    @if (sessionQrEnabled()) {
-                      <button
-                        type="button"
-                        (click)="proyectarQr.emit(course)"
-                        class="text-xs font-bold text-primary-800 hover:text-primary-950 bg-accent-100 hover:bg-accent-200 border border-accent-300 px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5 shadow-xs"
-                        title="Proyectar código QR y PIN para auto-registro de asistencia a sesión"
-                      >
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                        </svg>
-                        QR Asistencia
-                      </button>
-                    }
-                  </div>
+                  <span class="text-[11px] font-semibold text-primary-700 group-hover:underline">
+                    Ver Grupo →
+                  </span>
                 </div>
 
-                <!-- Botones de Acción -->
-                <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-warm-100">
+                <!-- Botones de Acción Mínimos -->
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-warm-100">
                   <button
                     type="button"
-                    (click)="editarGrupo.emit(course)"
+                    (click)="$event.stopPropagation(); editarGrupo.emit(course)"
                     class="text-xs font-semibold text-warm-600 hover:text-warm-900 px-2.5 py-1.5 rounded-lg hover:bg-warm-100 transition-colors inline-flex items-center gap-1"
                     title="Modificar datos del grupo"
                   >
@@ -198,13 +163,6 @@ import { Course } from '../../../../core/models/course.model';
                     </svg>
                     Editar Grupo
                   </button>
-
-                  <app-button variant="primary" size="sm" (clicked)="tomarAsistencia.emit(course)">
-                    <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Control de Asistencia
-                  </app-button>
                 </div>
               </div>
             </app-card>
@@ -223,6 +181,7 @@ export class TeacherGruposListComponent {
   crearGrupo = output<void>();
   irAsistencia = output<void>();
   editarGrupo = output<Course>();
+  seleccionarGrupo = output<Course>();
   matricular = output<Course>();
   proyectarQr = output<Course>();
   tomarAsistencia = output<Course>();

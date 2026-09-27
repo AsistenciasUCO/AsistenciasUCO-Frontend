@@ -37,6 +37,7 @@ import { AttendanceProjectionModalComponent } from './components/attendance-proj
 import { GroupSessionsOverviewComponent } from './components/group-sessions-overview.component';
 import { GroupInfoModalComponent } from './components/group-info-modal.component';
 import { GroupClaimsModalComponent } from './components/group-claims-modal.component';
+import { TeacherMatriculaModalComponent } from '../../teacher/teacher-grupos/components/modals/teacher-matricula-modal.component';
 import { AttendanceClaimService } from '../../../core/services/attendance-claim.service';
 import { SolicitudRevisionItem } from '../../../core/models/role-management.model';
 import { EstudianteGrupoApiDto } from '../../../core/api/models/estudiante-grupo-api-dto.model';
@@ -66,6 +67,7 @@ type StudentEnrollmentField =
     GroupSessionsOverviewComponent,
     GroupInfoModalComponent,
     GroupClaimsModalComponent,
+    TeacherMatriculaModalComponent,
   ],
   template: `
     <div class="space-y-4 animate-fade-in max-w-7xl mx-auto pb-12 relative">
@@ -106,6 +108,7 @@ type StudentEnrollmentField =
           (openProjectionSesion)="abrirProyeccionDeSesion($event)"
           (openNewSession)="openNewSessionModal()"
           (openEnrollment)="openStudentRegistration()"
+          (openMatriculaQr)="isMatriculaQrModalOpen.set(true)"
           (exportExcel)="descargarPlanillaExcel()"
           (verAlumnos)="abrirInfoGrupo()"
           (verReclamos)="abrirReclamosGrupo()"
@@ -134,6 +137,13 @@ type StudentEnrollmentField =
         [fieldErrors]="studentFieldErrors()"
         (submitted)="onRegisterStudentSubmit($event)"
         (closed)="isRegisterModalOpen.set(false)"
+      />
+
+      <!-- 4.1. Modal de QR / PIN de Matrícula al Grupo -->
+      <app-teacher-matricula-modal
+        [isOpen]="isMatriculaQrModalOpen()"
+        [curso]="currentCourse() || null"
+        (closed)="isMatriculaQrModalOpen.set(false)"
       />
 
       <!-- 5. Modal de Creación de Sesión -->
@@ -216,6 +226,7 @@ export class AttendanceControlComponent {
   isCreatingSession = signal<boolean>(false);
 
   isRegisterModalOpen = signal<boolean>(false);
+  isMatriculaQrModalOpen = signal<boolean>(false);
   isEnrolling = signal<boolean>(false);
   studentFieldErrors = signal<Partial<Record<StudentEnrollmentField, string>>>({});
   docTypes = signal<TipoIdentificacionApiDto[]>([]);
@@ -783,7 +794,12 @@ export class AttendanceControlComponent {
       ): record is StudentAttendance & { status: AttendanceStatus } =>
         record.status !== null && this.pendingStudentIds.has(record.studentId)
     );
-    if (explicitRecords.length === 0) return;
+    if (explicitRecords.length === 0) {
+      this.toastType.set('info');
+      this.toastMessage.set('No hay modificaciones pendientes por guardar en esta sesión.');
+      this.showToast.set(true);
+      return;
+    }
 
     this.isSaving.set(true);
     const request: RegistrarAsistenciasSesionRequest = {

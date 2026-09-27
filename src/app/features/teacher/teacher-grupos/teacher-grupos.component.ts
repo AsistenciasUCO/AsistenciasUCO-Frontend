@@ -51,6 +51,7 @@ type VistaGrupos = 'LISTA' | 'FORM_GRUPO' | 'HUB_GRUPO' | 'FORM_SESION';
           (crearGrupo)="abrirCrearGrupo()"
           (irAsistencia)="irATomaAsistencia()"
           (editarGrupo)="abrirEditarGrupo($event)"
+          (seleccionarGrupo)="tomarAsistenciaGrupo($event)"
           (matricular)="abrirModalMatriculaGrupo($event)"
           (tomarAsistencia)="tomarAsistenciaGrupo($event)"
         />

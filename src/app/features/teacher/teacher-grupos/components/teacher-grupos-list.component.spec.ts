@@ -63,14 +63,16 @@ describe('TeacherGruposListComponent', () => {
     expect(fixture.componentInstance.filteredCourses().length).toBe(1);
   });
 
-  it('oculta "QR Asistencia" por defecto y lo muestra solo con feature explícita', () => {
+  it('emite seleccionarGrupo al hacer clic en la tarjeta del grupo', () => {
+    spyOn(fixture.componentInstance.seleccionarGrupo, 'emit');
     fixture.componentRef.setInput('courses', [course]);
     fixture.componentRef.setInput('isLoading', false);
     fixture.detectChanges();
-    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('QR Asistencia');
 
-    fixture.componentRef.setInput('sessionQrEnabled', true);
-    fixture.detectChanges();
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('QR Asistencia');
+    const card = fixture.nativeElement.querySelector('app-card');
+    card.dispatchEvent(new Event('click'));
+
+    expect(fixture.componentInstance.seleccionarGrupo.emit).toHaveBeenCalledWith(course);
   });
 });
+

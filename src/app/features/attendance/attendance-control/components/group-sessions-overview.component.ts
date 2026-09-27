@@ -148,6 +148,30 @@ import { ClassSession } from '../../../../core/models/attendance.model';
           <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
+              (click)="openMatriculaQr.emit()"
+              class="text-xs font-semibold text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-xl transition-colors inline-flex items-center gap-1.5 shadow-2xs"
+              title="Ver código PIN y QR para que los estudiantes se matriculen al grupo"
+            >
+              <svg class="w-4 h-4 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+              </svg>
+              <span>QR / PIN Matrícula</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="openEnrollment.emit()"
+              class="text-xs font-semibold text-warm-700 hover:text-warm-900 bg-warm-50 hover:bg-warm-100 border border-warm-200 px-3 py-1.5 rounded-xl transition-colors inline-flex items-center gap-1.5 shadow-2xs"
+              title="Registrar y matricular manualmente un nuevo alumno en este grupo"
+            >
+              <svg class="w-4 h-4 text-warm-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+              </svg>
+              <span>+ Matricular</span>
+            </button>
+
+            <button
+              type="button"
               (click)="verAlumnos.emit()"
               class="text-xs font-semibold text-warm-700 hover:text-warm-900 bg-warm-50 hover:bg-warm-100 border border-warm-200 px-3 py-1.5 rounded-xl transition-colors inline-flex items-center gap-1.5 shadow-2xs"
               title="Ver información del grupo y lista de alumnos matriculados"
@@ -176,28 +200,6 @@ import { ClassSession } from '../../../../core/models/attendance.model';
             </button>
 
             <span class="hidden sm:inline-block h-4 w-px bg-warm-200 mx-0.5"></span>
-
-            <app-button
-              variant="secondary"
-              size="sm"
-              (clicked)="exportExcel.emit()"
-            >
-              <svg class="w-4 h-4 mr-1 text-emerald-800 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Planilla Excel
-            </app-button>
-
-            <app-button
-              variant="secondary"
-              size="sm"
-              (clicked)="openEnrollment.emit()"
-            >
-              <svg class="w-4 h-4 mr-1 text-primary-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-              </svg>
-              Matricular
-            </app-button>
 
             <app-button
               variant="primary"
@@ -268,18 +270,6 @@ import { ClassSession } from '../../../../core/models/attendance.model';
                       <span class="text-warm-500 font-normal"> / {{ s.records ? s.records.length : 0 }}</span>
                     </td>
                     <td class="px-5 py-4 text-right space-x-1.5 whitespace-nowrap">
-                      <button
-                        type="button"
-                        (click)="$event.stopPropagation(); openProjectionSesion.emit(s.id)"
-                        class="text-xs font-semibold text-primary-800 hover:text-primary-950 bg-accent-100 hover:bg-accent-200 border border-accent-300 px-2.5 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1"
-                        title="Proyectar QR / PIN para esta sesión"
-                      >
-                        <svg class="w-3.5 h-3.5 text-primary-800 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                        </svg>
-                        <span>QR</span>
-                      </button>
-
                       <app-button
                         variant="accent"
                         size="sm"
@@ -307,6 +297,7 @@ export class GroupSessionsOverviewComponent {
   openProjectionSesion = output<string>();
   openNewSession = output<void>();
   openEnrollment = output<void>();
+  openMatriculaQr = output<void>();
   exportExcel = output<void>();
   verAlumnos = output<void>();
   verReclamos = output<void>();

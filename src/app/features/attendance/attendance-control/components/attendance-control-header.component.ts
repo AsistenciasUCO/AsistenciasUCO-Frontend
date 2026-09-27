@@ -24,31 +24,31 @@ import { ClassSession } from '../../../../core/models/attendance.model';
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-warm-100 pb-3.5">
           <div>
             <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
-              <!-- Botón Volver a la Lista de Todos los Grupos -->
-              <button
-                type="button"
-                (click)="backToGroups.emit()"
-                class="inline-flex items-center gap-1.5 text-xs font-bold text-warm-700 hover:text-warm-950 bg-warm-100 hover:bg-warm-200 px-2.5 py-1 rounded-lg border border-warm-200 transition-colors shadow-2xs"
-                title="Volver a la vista general de todos los grupos"
-              >
-                <svg class="w-3.5 h-3.5 text-warm-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                <span>Ver Todos los Grupos</span>
-              </button>
-              <span class="text-xs text-warm-300">•</span>
-
               @if (showBackButton()) {
                 <button
                   type="button"
                   (click)="backToOverview.emit()"
-                  class="inline-flex items-center gap-1.5 text-xs font-bold text-primary-700 hover:text-primary-900 bg-primary-50 hover:bg-primary-100 px-2.5 py-1 rounded-lg border border-primary-200 transition-colors"
-                  title="Volver al panel y cronograma de sesiones de este grupo"
+                  class="inline-flex items-center gap-1.5 text-xs font-bold text-primary-700 hover:text-primary-900 bg-primary-50 hover:bg-primary-100 px-2.5 py-1 rounded-lg border border-primary-200 transition-colors shadow-2xs"
+                  title="Volver a la información y cronograma de sesiones de este grupo"
                 >
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  <svg class="w-3.5 h-3.5 text-primary-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                   </svg>
-                  <span>Cronograma del Grupo</span>
+                  <span>Volver al Grupo</span>
+                </button>
+                <span class="text-xs text-warm-300">•</span>
+              } @else {
+                <!-- Botón Volver a la Lista de Todos los Grupos (Solo en vista Overview) -->
+                <button
+                  type="button"
+                  (click)="backToGroups.emit()"
+                  class="inline-flex items-center gap-1.5 text-xs font-bold text-warm-700 hover:text-warm-950 bg-warm-100 hover:bg-warm-200 px-2.5 py-1 rounded-lg border border-warm-200 transition-colors shadow-2xs"
+                  title="Volver a la vista general de todos los grupos"
+                >
+                  <svg class="w-3.5 h-3.5 text-warm-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  <span>Ver Todos los Grupos</span>
                 </button>
                 <span class="text-xs text-warm-300">•</span>
               }
@@ -65,13 +65,14 @@ import { ClassSession } from '../../../../core/models/attendance.model';
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <!-- Botones contextuales de la sesión activa (gobernados por bulkDisabled) -->
-            <app-button
-              variant="accent"
-              size="sm"
-              [disabled]="bulkDisabled()"
-              (clicked)="markAllPresent.emit()"
-            >
+            <!-- Botones contextuales de la sesión activa: Visibles SOLO en modo DETALLE -->
+            @if (isDetailMode()) {
+              <app-button
+                variant="accent"
+                size="sm"
+                [disabled]="bulkDisabled()"
+                (clicked)="markAllPresent.emit()"
+              >
                 <svg class="w-4 h-4 mr-1 text-warm-950 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                 </svg>
@@ -101,30 +102,7 @@ import { ClassSession } from '../../../../core/models/attendance.model';
                 </svg>
                 Proyectar QR
               </app-button>
-
-            <!-- Botones GLOBALES del Grupo (visibles en ambos modos) -->
-            <app-button
-              variant="secondary"
-              size="sm"
-              [disabled]="!selectedCourseId()"
-              (clicked)="exportExcel.emit()"
-            >
-              <svg class="w-4 h-4 mr-1 text-emerald-800 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Excel
-            </app-button>
-
-            <app-button
-              variant="secondary"
-              size="sm"
-              (clicked)="openEnrollment.emit()"
-            >
-              <svg class="w-4 h-4 mr-1 text-primary-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-              </svg>
-              Matricular
-            </app-button>
+            }
           </div>
         </div>
 
@@ -141,7 +119,7 @@ import { ClassSession } from '../../../../core/models/attendance.model';
 
           <!-- Selector de Sesión: Visible SOLO en modo DETALLE para saltos rápidos entre clases -->
           @if (isDetailMode()) {
-            <div class="md:col-span-4">
+            <div class="md:col-span-6">
               <app-form-select
                 [options]="sessionOptions()"
                 [value]="selectedSessionId()"
@@ -151,20 +129,22 @@ import { ClassSession } from '../../../../core/models/attendance.model';
             </div>
           }
 
-          <!-- Botón Nueva Sesión -->
-          <div [class]="isDetailMode() ? 'md:col-span-2' : 'md:col-span-3'" class="flex justify-end">
-            <app-button
-              variant="primary"
-              size="sm"
-              [disabled]="!selectedCourseId()"
-              (clicked)="openNewSession.emit()"
-            >
-              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-              </svg>
-              + Sesión
-            </app-button>
-          </div>
+          <!-- Botón Nueva Sesión: Visible SOLO en modo OVERVIEW (en detalle de sesión no se crean sesiones) -->
+          @if (!isDetailMode()) {
+            <div class="md:col-span-3 flex justify-end">
+              <app-button
+                variant="primary"
+                size="sm"
+                [disabled]="!selectedCourseId()"
+                (clicked)="openNewSession.emit()"
+              >
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                + Sesión
+              </app-button>
+            </div>
+          }
         </div>
       </header>
 
