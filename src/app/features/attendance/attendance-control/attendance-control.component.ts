@@ -654,17 +654,31 @@ export class AttendanceControlComponent {
       this.cargarReclamosDocente();
     }
 
-    this.sessionService.getSessionsByGroup(courseId).subscribe({
-      next: (res) => {
-        const sessions = res.datos || [];
-        this.sessions.set(sessions);
+    forkJoin({
+      sessionsRes: this.sessionService.getSessionsByGroup(courseId),
+      studentsRes: this.groupService.getStudentsByGroup(courseId),
+      attendancesRes: this.attendanceService.getAttendancesByGroup(courseId),
+    }).subscribe({
+      next: ({ sessionsRes, studentsRes, attendancesRes }) => {
+        const rawSessions = sessionsRes.datos || [];
+        const activeStudents = (studentsRes.datos || []).filter((s) => s.codigoEstado === 'A');
+        const attendances = attendancesRes.datos || [];
 
-        if (sessions.length > 0) {
+        // Mapear records por sesión para alimentar el conteo de asistentes y KPIs del cronograma
+        const populatedSessions = rawSessions.map((session) => {
+          const sessionAttendances = attendances.filter((a) => a.sesion === session.id);
+          const records = AttendanceMapper.fromGroupStudentsAndAttendances(activeStudents, sessionAttendances);
+          return { ...session, records };
+        });
+
+        this.sessions.set(populatedSessions);
+
+        if (populatedSessions.length > 0) {
           const matchingSession = initialSessionId
-            ? sessions.find((s) => s.id === initialSessionId)
+            ? populatedSessions.find((s) => s.id === initialSessionId)
             : null;
 
-          const defaultSession = matchingSession || sessions[0];
+          const defaultSession = matchingSession || populatedSessions[0];
 
           this.selectedSessionId.set(defaultSession.id);
           this.cargarEstudiantesYSesion(courseId, defaultSession.id);
@@ -673,7 +687,7 @@ export class AttendanceControlComponent {
       error: () => {
         this.sessions.set([]);
         this.toastType.set('error');
-        this.toastMessage.set('No fue posible cargar las sesiones del grupo.');
+        this.toastMessage.set('No fue posible cargar las sesiones y asistencias del grupo.');
         this.showToast.set(true);
       },
     });
