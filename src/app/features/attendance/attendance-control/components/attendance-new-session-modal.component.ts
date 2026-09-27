@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, input, output, signal } from '@angular/core';
+import { Component, ChangeDetectionStrategy, input, output, signal, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ModalComponent } from '../../../../shared/components/modal/modal.component';
@@ -23,9 +23,15 @@ import {
       (closed)="closed.emit()"
     >
       <form (submit)="onSubmit($event)" class="space-y-4">
-        <p class="text-xs text-warm-600">
-          Crea una nueva sesión para {{ course()?.name }} ({{ course()?.code }}).
-        </p>
+        @if (course(); as c) {
+          <p class="text-xs text-warm-600">
+            Crea una nueva sesión para <span class="font-semibold text-warm-800">{{ c.name }}</span> ({{ c.code }} - Grupo {{ c.section }}).
+          </p>
+        } @else {
+          <p class="text-xs text-warm-600">
+            Crea una nueva sesión de clase en el cronograma académico del grupo.
+          </p>
+        }
 
         <app-form-field label="Título de la Sesión" [required]="true">
           <input
@@ -93,6 +99,7 @@ import {
             type="submit"
             [loading]="isCreating()"
             [disabled]="isCreating() || nombreInvalido() || !date()"
+            (clicked)="onSubmit($event)"
           >
             Crear Sesión
           </app-button>
@@ -129,8 +136,21 @@ export class AttendanceNewSessionModalComponent {
   }>();
   closed = output<void>();
 
+  constructor() {
+    effect(() => {
+      if (this.isOpen()) {
+        this.title.set('');
+        this.date.set(new Date().toISOString().split('T')[0]);
+        this.startTime.set('08:00');
+        this.endTime.set('10:00');
+      }
+    });
+  }
+
   onSubmit(e: Event): void {
-    e.preventDefault();
+    if (e) {
+      e.preventDefault();
+    }
     if (this.nombreInvalido() || !this.date()) return;
     this.submitted.emit({
       date: this.date(),

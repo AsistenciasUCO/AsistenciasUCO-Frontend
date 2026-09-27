@@ -206,7 +206,7 @@ export class AttendanceControlComponent {
   readonly sessionsEnabled = environment.features.sessionsEnabled;
   readonly attendanceEnabled = environment.features.attendanceEnabled;
 
-  courses: Course[] = [];
+  courses = signal<Course[]>([]);
   sessions = signal<ClassSession[]>([]);
 
   vistaActual = signal<'OVERVIEW' | 'DETALLE'>('OVERVIEW');
@@ -376,7 +376,7 @@ export class AttendanceControlComponent {
       .subscribe({
         next: (res) => {
           const courses = res.datos;
-          this.courses = courses;
+          this.courses.set(courses);
           this.courseOptions.set(
             courses.map((course) => ({
               value: course.id,
@@ -392,7 +392,7 @@ export class AttendanceControlComponent {
           }
         },
         error: (err) => {
-          this.courses = [];
+          this.courses.set([]);
           this.courseOptions.set([]);
           this.toastType.set('error');
           this.toastMessage.set(
@@ -441,7 +441,7 @@ export class AttendanceControlComponent {
   });
 
   currentCourse = computed(() =>
-    this.courses.find((c) => c.id === this.selectedCourseId())
+    this.courses().find((c) => c.id === this.selectedCourseId())
   );
 
   currentSession = computed(() =>
@@ -464,7 +464,12 @@ export class AttendanceControlComponent {
 
   onCreateSessionSubmit(data: any): void {
     const course = this.currentCourse();
-    if (!course) return;
+    if (!course) {
+      this.toastType.set('error');
+      this.toastMessage.set('No hay un grupo seleccionado para programar la sesión.');
+      this.showToast.set(true);
+      return;
+    }
 
     this.isCreatingSession.set(true);
     this.sessionService
@@ -483,11 +488,24 @@ export class AttendanceControlComponent {
             this.showToast.set(true);
             this.isNewSessionModalOpen.set(false);
 
-            this.sessionService.getSessionsByGroup(course.id).subscribe({
-              next: (sRes) => {
-                const updatedSessions = sRes.datos || [];
-                this.sessions.set(updatedSessions);
-                const createdSession = updatedSessions.find(
+            forkJoin({
+              sessionsRes: this.sessionService.getSessionsByGroup(course.id),
+              studentsRes: this.groupService.getStudentsByGroup(course.id),
+              attendancesRes: this.attendanceService.getAttendancesByGroup(course.id),
+            }).subscribe({
+              next: ({ sessionsRes, studentsRes, attendancesRes }) => {
+                const rawSessions = sessionsRes.datos || [];
+                const activeStudents = (studentsRes.datos || []).filter((s) => s.codigoEstado === 'A');
+                const attendances = attendancesRes.datos || [];
+
+                const populatedSessions = rawSessions.map((session) => {
+                  const sessionAttendances = attendances.filter((a) => a.sesion === session.id);
+                  const records = AttendanceMapper.fromGroupStudentsAndAttendances(activeStudents, sessionAttendances);
+                  return { ...session, records };
+                });
+
+                this.sessions.set(populatedSessions);
+                const createdSession = populatedSessions.find(
                   (s) => s.title === data.title && s.date === data.date
                 );
                 if (createdSession) {
