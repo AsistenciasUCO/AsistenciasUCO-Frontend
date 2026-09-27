@@ -7,6 +7,7 @@ import { GroupService } from '../../../core/services/group.service';
 import { StudentService } from '../../../core/services/student.service';
 import { AttendanceService } from '../../../core/services/attendance.service';
 import { CatalogService } from '../../../core/services/catalog.service';
+import { AttendanceClaimService } from '../../../core/services/attendance-claim.service';
 import { AttendanceRealtimeSyncService } from './attendance-realtime-sync.service';
 import { EstudianteGrupoApiDto } from '../../../core/api/models/estudiante-grupo-api-dto.model';
 import { AsistenciaConsultadaApiDto } from '../../../core/api/models/asistencia-consultada-api-dto.model';
@@ -19,6 +20,7 @@ describe('AttendanceControlComponent contract corrections', () => {
   let studentService: jasmine.SpyObj<StudentService>;
   let attendanceService: jasmine.SpyObj<AttendanceService>;
   let catalogService: jasmine.SpyObj<CatalogService>;
+  let attendanceClaimService: jasmine.SpyObj<AttendanceClaimService>;
   let realtimeAlerts$: Subject<RealtimeConnectionState>;
   let realtimeSync: jasmine.SpyObj<AttendanceRealtimeSyncService> & {
     connectionAlerts: jasmine.Spy<() => Observable<RealtimeConnectionState>>;
@@ -80,6 +82,13 @@ describe('AttendanceControlComponent contract corrections', () => {
     catalogService = jasmine.createSpyObj<CatalogService>('CatalogService', [
       'getIdentityDocumentTypes',
     ]);
+    attendanceClaimService = jasmine.createSpyObj<AttendanceClaimService>(
+      'AttendanceClaimService',
+      ['getReclamosDocente', 'resolverReclamo']
+    );
+    attendanceClaimService.getReclamosDocente.and.returnValue(
+      of({ exitoso: true, datos: [] })
+    );
     realtimeAlerts$ = new Subject<RealtimeConnectionState>();
     realtimeSync = jasmine.createSpyObj<AttendanceRealtimeSyncService>(
       'AttendanceRealtimeSyncService',
@@ -140,6 +149,7 @@ describe('AttendanceControlComponent contract corrections', () => {
         { provide: StudentService, useValue: studentService },
         { provide: AttendanceService, useValue: attendanceService },
         { provide: CatalogService, useValue: catalogService },
+        { provide: AttendanceClaimService, useValue: attendanceClaimService },
         { provide: AttendanceRealtimeSyncService, useValue: realtimeSync },
       ],
     });

@@ -1,6 +1,6 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of, delay, catchError, map } from 'rxjs';
+import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 import {
@@ -8,34 +8,14 @@ import {
   SolicitudRevisionItem,
   HorarioDocenteItem,
 } from '../models/role-management.model';
-import {
-  MOCK_SESIONES_MATERIAS,
-  MOCK_SOLICITUDES_REVISION,
-  MOCK_HORARIOS_DOCENTE,
-} from '../mocks/role-management.mock';
+
 @Injectable({
   providedIn: 'root',
 })
 export class AttendanceClaimService {
-  private solicitudes = signal<SolicitudRevisionItem[]>([...MOCK_SOLICITUDES_REVISION]);
-  private sesionesPorMateria = signal<Record<string, SesionMateriaDetalle[]>>({
-    ...MOCK_SESIONES_MATERIAS,
-  });
+  constructor(private http: HttpClient) {}
 
   subirSoporte(file: File): Observable<ApiResponse<{ nombre: string; nombreGuardado: string; url: string; tamanio: number }>> {
-    if (environment.useMocks) {
-      return of({
-        idTransaccion: 'mock-upload-' + Date.now(),
-        exitoso: true,
-        datos: {
-          nombre: file.name,
-          nombreGuardado: 'mock_' + file.name,
-          url: '/api/v1/archivos/mock_' + file.name,
-          tamanio: file.size,
-        },
-      });
-    }
-
     const formData = new FormData();
     formData.append('archivo', file);
     return this.http.post<ApiResponse<{ nombre: string; nombreGuardado: string; url: string; tamanio: number }>>(
@@ -43,105 +23,28 @@ export class AttendanceClaimService {
       formData
     );
   }
-  private horariosDocente = signal<HorarioDocenteItem[]>([...MOCK_HORARIOS_DOCENTE]);
-
-  constructor(private http: HttpClient) {}
 
   getReclamosDocente(docenteId?: string): Observable<ApiResponse<SolicitudRevisionItem[]>> {
-    if (environment.useMocks) {
-      return of({
-        idTransaccion: 'mock-tx-claims-list',
-        exitoso: true,
-        total: this.solicitudes().length,
-        datos: [...this.solicitudes()],
-      }).pipe(delay(300));
-    }
-
-    return this.http
-      .get<ApiResponse<SolicitudRevisionItem[]>>(`${environment.apiUrl}/docente/reclamos`)
-      .pipe(
-        catchError(() =>
-          of({
-            idTransaccion: 'error-claims',
-            exitoso: false,
-            mensajeUsuario: 'No fue posible cargar las solicitudes de revisión.',
-            datos: [],
-          })
-        )
-      );
+    return this.http.get<ApiResponse<SolicitudRevisionItem[]>>(`${environment.apiUrl}/docente/reclamos`);
   }
 
   getSesionesPorMateria(materiaId: string): Observable<ApiResponse<SesionMateriaDetalle[]>> {
-    if (environment.useMocks) {
-      const sesiones = this.sesionesPorMateria()[materiaId] || [];
-      return of({
-        idTransaccion: `mock-tx-sessions-${materiaId}`,
-        exitoso: true,
-        total: sesiones.length,
-        datos: [...sesiones],
-      }).pipe(delay(250));
-    }
-
-    return this.http
-      .get<ApiResponse<SesionMateriaDetalle[]>>(`${environment.apiUrl}/estudiante/materias/${materiaId}/sesiones`)
-      .pipe(
-        catchError(() =>
-          of({
-            idTransaccion: 'error-sessions',
-            exitoso: false,
-            mensajeUsuario: 'No fue posible cargar el historial de sesiones.',
-            datos: [],
-          })
-        )
-      );
+    return this.http.get<ApiResponse<SesionMateriaDetalle[]>>(`${environment.apiUrl}/estudiante/materias/${materiaId}/sesiones`);
   }
 
   crearReclamo(
     solicitud: Omit<SolicitudRevisionItem, 'id' | 'fechaSolicitud' | 'estadoSolicitud'>
   ): Observable<ApiResponse<SolicitudRevisionItem>> {
-    const id = `REC-${String(this.solicitudes().length + 1).padStart(3, '0')}`;
-    const fechaSolicitud = new Date().toISOString().split('T')[0];
-    const nuevaSolicitud: SolicitudRevisionItem = {
-      ...solicitud,
-      id,
-      fechaSolicitud,
-      estadoSolicitud: 'PENDIENTE',
+    const payload = {
+      sesionId: solicitud.sesionId,
+      categoria: solicitud.categoria,
+      justificacion: solicitud.justificacionSolicitud,
+      soporteNombre: solicitud.soporteAdjunto?.nombre,
+      soporteUrl: solicitud.soporteAdjunto?.urlSimulada,
     };
-
-    if (environment.useMocks) {
-      // 1. Agregar a la lista global de solicitudes
-      this.solicitudes.update((prev) => [nuevaSolicitud, ...prev]);
-
-      // 2. Actualizar la sesión en el desglose de la materia
-      this.sesionesPorMateria.update((map) => {
-        const sesiones = map[solicitud.materiaId] || [];
-        const actualizadas = sesiones.map((s) => {
-          if (s.id === solicitud.sesionId) {
-            return {
-              ...s,
-              reclamoId: id,
-              estadoReclamo: 'PENDIENTE' as const,
-              categoriaReclamo: solicitud.categoria,
-              soporteAdjuntoNombre: solicitud.soporteAdjunto?.nombre,
-              justificacionEstudiante: solicitud.justificacionSolicitud,
-            };
-          }
-          return s;
-        });
-        return { ...map, [solicitud.materiaId]: actualizadas };
-      });
-
-      return of({
-        idTransaccion: 'mock-tx-claim-created',
-        exitoso: true,
-        mensajeUsuario: 'Tu solicitud de revisión de asistencia ha sido radicada ante el docente.',
-        datos: nuevaSolicitud,
-      }).pipe(delay(350));
-    }
-
     return this.http.post<ApiResponse<SolicitudRevisionItem>>(
-      `${environment.apiUrl}/estudiante/reclamos`,
-      solicitud
+      `${environment.apiUrl}/asistencias/revisiones`,
+      payload
     );
   }
 
@@ -150,45 +53,7 @@ export class AttendanceClaimService {
     materiaId: string,
     sesionId: string
   ): Observable<ApiResponse<boolean>> {
-    if (environment.useMocks) {
-      this.solicitudes.update((prev) => prev.filter((item) => item.id !== id));
-
-      this.sesionesPorMateria.update((map) => {
-        const sesiones = map[materiaId] || [];
-        const actualizadas = sesiones.map((s) => {
-          if (s.id === sesionId) {
-            return {
-              ...s,
-              reclamoId: undefined,
-              estadoReclamo: undefined,
-              categoriaReclamo: undefined,
-              soporteAdjuntoNombre: undefined,
-              justificacionEstudiante: undefined,
-            };
-          }
-          return s;
-        });
-        return { ...map, [materiaId]: actualizadas };
-      });
-
-      return of({
-        idTransaccion: 'mock-tx-claim-delete',
-        exitoso: true,
-        mensajeUsuario: 'Solicitud de revisión eliminada correctamente.',
-        datos: true,
-      }).pipe(delay(200));
-    }
-
-    return this.http
-      .delete<ApiResponse<boolean>>(`${environment.apiUrl}/estudiante/reclamos/${id}`)
-      .pipe(
-        map((res) => ({
-          idTransaccion: res.idTransaccion || 'tx-claim-delete',
-          exitoso: res.exitoso,
-          mensajeUsuario: res.mensajeUsuario || 'Solicitud de revisión eliminada.',
-          datos: res.datos,
-        }))
-      );
+    return this.http.delete<ApiResponse<boolean>>(`${environment.apiUrl}/estudiante/reclamos/${id}`);
   }
 
   resolverReclamo(
@@ -196,92 +61,13 @@ export class AttendanceClaimService {
     accion: 'APROBADA' | 'RECHAZADA',
     respuestaDocente: string = ''
   ): Observable<ApiResponse<SolicitudRevisionItem | null>> {
-    const fechaRespuesta = new Date().toISOString().split('T')[0];
-
-    if (environment.useMocks) {
-      let resolvedItem: SolicitudRevisionItem | null = null;
-      this.solicitudes.update((prev) => {
-        return prev.map((item) => {
-          if (item.id === id) {
-            resolvedItem = {
-              ...item,
-              estadoSolicitud: accion,
-              justificacionRespuesta: respuestaDocente,
-              fechaRespuesta,
-            };
-            return resolvedItem;
-          }
-          return item;
-        });
-      });
-
-      if (resolvedItem) {
-        const item = resolvedItem as SolicitudRevisionItem;
-        // Actualizar el estado de la sesión si fue aprobada
-        this.sesionesPorMateria.update((map) => {
-          const sesiones = map[item.materiaId] || [];
-          const actualizadas = sesiones.map((s) => {
-            if (s.id === item.sesionId) {
-              return {
-                ...s,
-                estadoAsistencia: accion === 'APROBADA' ? ('JUSTIFICADA' as const) : s.estadoAsistencia,
-                estadoReclamo: accion,
-                respuestaDocente,
-              };
-            }
-            return s;
-          });
-          return { ...map, [item.materiaId]: actualizadas };
-        });
-
-        const mensaje =
-          accion === 'APROBADA'
-            ? 'Reclamo aprobado. Se ha actualizado la asistencia a "Justificada".'
-            : 'Reclamo rechazado con la justificación suministrada.';
-
-        return of({
-          idTransaccion: 'mock-tx-claim-resolved',
-          exitoso: true,
-          mensajeUsuario: mensaje,
-          datos: resolvedItem,
-        }).pipe(delay(300));
-      }
-
-      return of({
-        idTransaccion: 'mock-tx-not-found',
-        exitoso: false,
-        mensajeUsuario: 'Solicitud no encontrada.',
-        datos: null,
-      });
-    }
-
     return this.http.patch<ApiResponse<SolicitudRevisionItem | null>>(
       `${environment.apiUrl}/docente/reclamos/${id}`,
-      { accion, respuesta: respuestaDocente }
+      { accion, respuestaDocente, respuesta: respuestaDocente }
     );
   }
 
   getHorarioDocente(docenteId?: string): Observable<ApiResponse<HorarioDocenteItem[]>> {
-    if (environment.useMocks) {
-      return of({
-        idTransaccion: 'mock-tx-teacher-schedule',
-        exitoso: true,
-        total: this.horariosDocente().length,
-        datos: [...this.horariosDocente()],
-      }).pipe(delay(300));
-    }
-
-    return this.http
-      .get<ApiResponse<HorarioDocenteItem[]>>(`${environment.apiUrl}/docente/horarios`)
-      .pipe(
-        catchError(() =>
-          of({
-            idTransaccion: 'error-teacher-schedule',
-            exitoso: false,
-            mensajeUsuario: 'No fue posible cargar el horario del docente.',
-            datos: [],
-          })
-        )
-      );
+    return this.http.get<ApiResponse<HorarioDocenteItem[]>>(`${environment.apiUrl}/docente/horarios`);
   }
 }

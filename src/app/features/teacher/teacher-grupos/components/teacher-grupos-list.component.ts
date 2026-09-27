@@ -145,47 +145,22 @@ import { Course } from '../../../../core/models/course.model';
                   </div>
                 </div>
 
-                <div class="p-3 rounded-xl bg-warm-50 border border-warm-100 text-xs space-y-1.5 text-warm-700">
-                  <div class="flex items-center gap-2">
-                    <svg class="w-4 h-4 text-warm-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span class="font-medium">{{ course.schedule }}</span>
-                  </div>
-                </div>
-
-                <!-- Botones de Acción -->
-                <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-warm-100">
-                  <div class="flex items-center gap-2">
-                    <button
-                      type="button"
-                      (click)="editarGrupo.emit(course)"
-                      class="text-xs font-semibold text-warm-600 hover:text-warm-900 px-2.5 py-1.5 rounded-lg hover:bg-warm-100 transition-colors inline-flex items-center gap-1"
-                      title="Modificar datos del grupo"
-                    >
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                <!-- Información del Grupo y Acciones Directas -->
+                <div class="p-3 rounded-xl bg-warm-50 border border-warm-100 text-xs space-y-2 text-warm-700">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <svg class="w-4 h-4 text-warm-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      Editar Grupo
-                    </button>
-
-                    <app-button
-                      variant="secondary"
-                      size="sm"
-                      (clicked)="verHub.emit(course)"
-                    >
-                      <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                      </svg>
-                      Hub del Grupo & Sesiones
-                    </app-button>
+                      <span class="font-medium">{{ course.schedule }}</span>
+                    </div>
                   </div>
 
-                  <div class="flex items-center gap-2">
+                  <div class="flex items-center justify-between">
                     <button
                       type="button"
                       (click)="matricular.emit(course)"
-                      class="text-xs font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5 shadow-xs"
+                      class="text-[11px] font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-lg transition-colors inline-flex items-center gap-1 shadow-2xs"
                       title="Código QR y PIN para matrícula de estudiantes al grupo"
                     >
                       <svg class="w-3.5 h-3.5 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -207,14 +182,29 @@ import { Course } from '../../../../core/models/course.model';
                         QR Asistencia
                       </button>
                     }
-
-                    <app-button variant="primary" size="sm" (clicked)="tomarAsistencia.emit(course)">
-                      <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Asistencia
-                    </app-button>
                   </div>
+                </div>
+
+                <!-- Botones de Acción -->
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-warm-100">
+                  <button
+                    type="button"
+                    (click)="editarGrupo.emit(course)"
+                    class="text-xs font-semibold text-warm-600 hover:text-warm-900 px-2.5 py-1.5 rounded-lg hover:bg-warm-100 transition-colors inline-flex items-center gap-1"
+                    title="Modificar datos del grupo"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Editar Grupo
+                  </button>
+
+                  <app-button variant="primary" size="sm" (clicked)="tomarAsistencia.emit(course)">
+                    <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Control de Asistencia
+                  </app-button>
                 </div>
               </div>
             </app-card>
@@ -233,7 +223,6 @@ export class TeacherGruposListComponent {
   crearGrupo = output<void>();
   irAsistencia = output<void>();
   editarGrupo = output<Course>();
-  verHub = output<Course>();
   matricular = output<Course>();
   proyectarQr = output<Course>();
   tomarAsistencia = output<Course>();

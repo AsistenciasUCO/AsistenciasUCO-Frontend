@@ -21,9 +21,37 @@ import { ClassSession } from '../../../../core/models/attendance.model';
 
       <header class="bg-white p-4 sm:p-5 rounded-2xl border border-warm-200 shadow-warm-sm space-y-4">
         <!-- Fila Superior: Título + Botones de Gestión -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-warm-100 pb-3.5">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-warm-100 pb-3.5">
           <div>
-            <div class="flex items-center gap-2 mb-0.5">
+            <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
+              <!-- Botón Volver a la Lista de Todos los Grupos -->
+              <button
+                type="button"
+                (click)="backToGroups.emit()"
+                class="inline-flex items-center gap-1.5 text-xs font-bold text-warm-700 hover:text-warm-950 bg-warm-100 hover:bg-warm-200 px-2.5 py-1 rounded-lg border border-warm-200 transition-colors shadow-2xs"
+                title="Volver a la vista general de todos los grupos"
+              >
+                <svg class="w-3.5 h-3.5 text-warm-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                <span>Ver Todos los Grupos</span>
+              </button>
+              <span class="text-xs text-warm-300">•</span>
+
+              @if (showBackButton()) {
+                <button
+                  type="button"
+                  (click)="backToOverview.emit()"
+                  class="inline-flex items-center gap-1.5 text-xs font-bold text-primary-700 hover:text-primary-900 bg-primary-50 hover:bg-primary-100 px-2.5 py-1 rounded-lg border border-primary-200 transition-colors"
+                  title="Volver al panel y cronograma de sesiones de este grupo"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  <span>Cronograma del Grupo</span>
+                </button>
+                <span class="text-xs text-warm-300">•</span>
+              }
               @if (!sessionsEnabled() || !attendanceEnabled()) {
                 <app-badge variant="neutral" size="sm">Sesiones deshabilitadas</app-badge>
               }
@@ -36,29 +64,55 @@ import { ClassSession } from '../../../../core/models/attendance.model';
             </h1>
           </div>
 
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Botones contextuales de la sesión activa (gobernados por bulkDisabled) -->
             <app-button
               variant="accent"
               size="sm"
               [disabled]="bulkDisabled()"
               (clicked)="markAllPresent.emit()"
             >
-              <svg class="w-4 h-4 mr-1 text-warm-950 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              Todos Presentes
-            </app-button>
+                <svg class="w-4 h-4 mr-1 text-warm-950 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                Todos Presentes
+              </app-button>
 
+              <app-button
+                variant="danger"
+                size="sm"
+                [disabled]="bulkDisabled()"
+                (clicked)="markAllAbsent.emit()"
+              >
+                <svg class="w-4 h-4 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Todos Ausentes
+              </app-button>
+
+              <app-button
+                variant="secondary"
+                size="sm"
+                [disabled]="!selectedCourseId() || !selectedSessionId()"
+                (clicked)="openProjection.emit()"
+              >
+                <svg class="w-4 h-4 mr-1 text-emerald-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                </svg>
+                Proyectar QR
+              </app-button>
+
+            <!-- Botones GLOBALES del Grupo (visibles en ambos modos) -->
             <app-button
-              variant="danger"
+              variant="secondary"
               size="sm"
-              [disabled]="bulkDisabled()"
-              (clicked)="markAllAbsent.emit()"
+              [disabled]="!selectedCourseId()"
+              (clicked)="exportExcel.emit()"
             >
-              <svg class="w-4 h-4 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              <svg class="w-4 h-4 mr-1 text-emerald-800 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              Todos Ausentes
+              Excel
             </app-button>
 
             <app-button
@@ -74,9 +128,10 @@ import { ClassSession } from '../../../../core/models/attendance.model';
           </div>
         </div>
 
-        <!-- Fila Inferior: Selectores de Curso / Sesión alineados + Botón Nueva Sesión -->
+        <!-- Fila Inferior: Selectores de Curso y Sesión contextualmente adaptados -->
         <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center text-xs">
-          <div class="md:col-span-5">
+          <!-- Selector de Grupo / Asignatura -->
+          <div [class]="isDetailMode() ? 'md:col-span-6' : 'md:col-span-9'">
             <app-form-select
               [options]="courseOptions()"
               [value]="selectedCourseId()"
@@ -84,16 +139,20 @@ import { ClassSession } from '../../../../core/models/attendance.model';
             ></app-form-select>
           </div>
 
-          <div class="md:col-span-5">
-            <app-form-select
-              [options]="sessionOptions()"
-              [value]="selectedSessionId()"
-              [disabled]="!sessionsEnabled()"
-              (valueChange)="sessionChange.emit($event)"
-            ></app-form-select>
-          </div>
+          <!-- Selector de Sesión: Visible SOLO en modo DETALLE para saltos rápidos entre clases -->
+          @if (isDetailMode()) {
+            <div class="md:col-span-4">
+              <app-form-select
+                [options]="sessionOptions()"
+                [value]="selectedSessionId()"
+                [disabled]="!sessionsEnabled()"
+                (valueChange)="sessionChange.emit($event)"
+              ></app-form-select>
+            </div>
+          }
 
-          <div class="md:col-span-2 flex justify-end">
+          <!-- Botón Nueva Sesión -->
+          <div [class]="isDetailMode() ? 'md:col-span-2' : 'md:col-span-3'" class="flex justify-end">
             <app-button
               variant="primary"
               size="sm"
@@ -143,6 +202,8 @@ export class AttendanceControlHeaderComponent {
   selectedSessionId = input<string>('');
   sessions = input<ClassSession[]>([]);
   isLoadingSession = input<boolean>(false);
+  showBackButton = input<boolean>(false);
+  isDetailMode = input<boolean>(false);
 
   // Marcado masivo: features + guardado en curso + existencia de sesión. Sin estado sintético de sesión.
   bulkDisabled = computed(
@@ -157,6 +218,10 @@ export class AttendanceControlHeaderComponent {
   markAllAbsent = output<void>();
   openEnrollment = output<void>();
   openNewSession = output<void>();
+  openProjection = output<void>();
+  exportExcel = output<void>();
   courseChange = output<string>();
   sessionChange = output<string>();
+  backToOverview = output<void>();
+  backToGroups = output<void>();
 }

@@ -1,9 +1,11 @@
-import { Component, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
+import { Component, inject, signal, computed, ChangeDetectionStrategy, DestroyRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminManagementService } from '../../../core/services/admin-management.service';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
 import { ToastService } from '../../../shared/components/toast/toast.component';
+import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
 import {
   ParametroInstitucionalItem,
   RegistroAuditoriaItem,
@@ -351,16 +353,31 @@ export class AdminSystemComponent {
     this.toast.success(`Parámetro "${p.nombre}" actualizado a "${nuevoValor}"`);
   }
 
+  private destroyRef = inject(DestroyRef);
+
   iniciarCierreSemestral(): void {
     if (!confirm(`¿Confirma ejecutar el CIERRE MASIVO DEFINITIVO de asistencia para el período ${this.periodoSeleccionadoCierre}? Esta acción consolidará los registros de inasistencia de todos los estudiantes.`)) {
       return;
     }
 
+    // Resolver ID de período si existe en la lista de períodos, o usar el código como fallback
+    const periodoObj = this.periodos().find((p) => p.codigo === this.periodoSeleccionadoCierre);
+    const idPeriodo = periodoObj ? periodoObj.id : this.periodoSeleccionadoCierre;
+
     this.isProcesandoCierre.set(true);
-    setTimeout(() => {
-      const rep = this.adminService.ejecutarCierreMasivo(this.periodoSeleccionadoCierre);
-      this.isProcesandoCierre.set(false);
-      this.toast.success(`Cierre masivo del período ${this.periodoSeleccionadoCierre} completado. ${rep.totalEstudiantesProcesados} registros procesados.`);
-    }, 1200);
+    this.adminService
+      .ejecutarCierreMasivo(idPeriodo, this.periodoSeleccionadoCierre)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => {
+          this.isProcesandoCierre.set(false);
+          const mensajeExito = res?.mensajeUsuario || `Cierre masivo del período ${this.periodoSeleccionadoCierre} solicitado correctamente.`;
+          this.toast.success(mensajeExito);
+        },
+        error: (err: unknown) => {
+          this.isProcesandoCierre.set(false);
+          this.toast.error(getApiErrorMessage(err));
+        },
+      });
   }
 }

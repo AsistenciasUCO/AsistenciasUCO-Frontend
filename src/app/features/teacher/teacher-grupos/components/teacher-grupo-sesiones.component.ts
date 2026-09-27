@@ -54,6 +54,18 @@ import { ClassSession } from '../../../../core/models/attendance.model';
 
               <!-- Botones de Acción sobre la Sesión -->
               <div class="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  (click)="tomarAsistencia.emit(sesion)"
+                  class="text-xs font-bold text-white bg-primary-800 hover:bg-primary-900 px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5 shadow-xs"
+                  title="Tomar o registrar asistencia de esta sesión"
+                >
+                  <svg class="w-3.5 h-3.5 text-primary-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Tomar Asistencia
+                </button>
+
                 @if (qrEnabled()) {
                   <button
                     type="button"
@@ -122,6 +134,7 @@ export class TeacherGrupoSesionesComponent {
   cancelEnabled = input<boolean>(false);
 
   programarExtraordinaria = output<void>();
+  tomarAsistencia = output<ClassSession>();
   proyectar = output<ClassSession>();
   verDetalle = output<ClassSession>();
   ajustarHorario = output<ClassSession>();

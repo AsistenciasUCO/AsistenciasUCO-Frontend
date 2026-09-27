@@ -44,4 +44,10 @@ export class GroupService {
       `${environment.apiUrl}/grupos/${grupoId}/estudiantes`
     );
   }
+
+  descargarPlanillaExcel(grupoId: string): Observable<Blob> {
+    return this.http.get(`${environment.apiUrl}/grupos/${grupoId}/reportes/asistencia-excel`, {
+      responseType: 'blob',
+    });
+  }
 }

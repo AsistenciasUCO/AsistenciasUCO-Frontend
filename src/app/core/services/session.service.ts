@@ -7,6 +7,7 @@ import { ApiListResponse } from '../api/models/api-list-response.model';
 import { ApiMessageResponse } from '../api/models/api-message-response.model';
 import { ApiVoidDataResponse } from '../api/models/api-data-response.model';
 import { SesionConsultadaApiDto } from '../api/models/sesion-consultada-api-dto.model';
+import { getApiErrorMessage } from '../api/errors/api-error.util';
 import { ClassSession } from '../models/attendance.model';
 import { getSessionNameError } from '../validation/session-name.util';
 
@@ -342,9 +343,8 @@ export class SessionService {
         datos: res.datos,
       })),
       catchError((err: unknown) => {
-        const errAny = err as { error?: { message?: string; mensajeUsuario?: string } };
-        const msg = errAny?.error?.message || errAny?.error?.mensajeUsuario || 'El código ingresado no es válido o ha expirado.';
-        return throwError(() => new Error(msg));
+        const errorMsg = getApiErrorMessage(err);
+        return throwError(() => new Error(errorMsg));
       })
     );
   }

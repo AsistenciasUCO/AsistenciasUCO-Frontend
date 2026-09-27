@@ -15,6 +15,8 @@ export interface RealtimeEvent<TPayload = unknown> {
 /** Único evento de negocio actualmente conectado por el backend. */
 export const REALTIME_EVENT_TYPE = {
   ASISTENCIAS_SESION_ACTUALIZADAS: 'ASISTENCIAS_SESION_ACTUALIZADAS',
+  PARAMETER_UPDATED: 'PARAMETER_UPDATED',
+  MESSAGE_UPDATED: 'MESSAGE_UPDATED',
 } as const;
 
 export type RealtimeEventType =

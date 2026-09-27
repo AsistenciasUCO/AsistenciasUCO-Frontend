@@ -47,20 +47,17 @@ export class AttendanceService {
       );
     }
 
-    const motivo = request.motivo.trim();
+    const justificacion = (request.justificacion || '').trim();
 
-    if (motivo.length < 10 || motivo.length > 300) {
+    if (justificacion.length < 5 || justificacion.length > 500) {
       return throwError(
-        () => new Error('El motivo debe contener entre 10 y 300 caracteres.')
+        () => new Error('La justificación debe contener entre 5 y 500 caracteres.')
       );
     }
 
     return this.http.post<ApiMessageResponse>(
       `${environment.apiUrl}/asistencias/revisiones`,
-      {
-        asistencia: request.asistencia,
-        motivo,
-      }
+      request
     );
   }
 

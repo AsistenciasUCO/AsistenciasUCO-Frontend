@@ -26,11 +26,20 @@ import {
   parseIdentificationNumber,
 } from '../../../core/validation/request-form-validation.util';
 
+import { ActivatedRoute, Router } from '@angular/router';
+
 // Componentes Hijos Desacoplados
 import { AttendanceControlHeaderComponent } from './components/attendance-control-header.component';
 import { AttendanceControlTableComponent } from './components/attendance-control-table.component';
 import { AttendanceEnrollmentModalComponent } from './components/attendance-enrollment-modal.component';
 import { AttendanceNewSessionModalComponent } from './components/attendance-new-session-modal.component';
+import { AttendanceProjectionModalComponent } from './components/attendance-projection-modal.component';
+import { GroupSessionsOverviewComponent } from './components/group-sessions-overview.component';
+import { GroupInfoModalComponent } from './components/group-info-modal.component';
+import { GroupClaimsModalComponent } from './components/group-claims-modal.component';
+import { AttendanceClaimService } from '../../../core/services/attendance-claim.service';
+import { SolicitudRevisionItem } from '../../../core/models/role-management.model';
+import { EstudianteGrupoApiDto } from '../../../core/api/models/estudiante-grupo-api-dto.model';
 
 type StudentEnrollmentField =
   | 'tipoIdentificacionId'
@@ -53,6 +62,10 @@ type StudentEnrollmentField =
     AttendanceControlTableComponent,
     AttendanceEnrollmentModalComponent,
     AttendanceNewSessionModalComponent,
+    AttendanceProjectionModalComponent,
+    GroupSessionsOverviewComponent,
+    GroupInfoModalComponent,
+    GroupClaimsModalComponent,
   ],
   template: `
     <div class="space-y-4 animate-fade-in max-w-7xl mx-auto pb-12 relative">
@@ -69,27 +82,51 @@ type StudentEnrollmentField =
         [selectedSessionId]="selectedSessionId()"
         [sessions]="sessions()"
         [isLoadingSession]="isLoadingSession()"
+        [showBackButton]="vistaActual() === 'DETALLE'"
+        [isDetailMode]="vistaActual() === 'DETALLE'"
         (markAllPresent)="markAllPresent()"
         (markAllAbsent)="markAllAbsent()"
         (openEnrollment)="openStudentRegistration()"
         (openNewSession)="openNewSessionModal()"
+        (openProjection)="isProjectionModalOpen.set(true)"
+        (exportExcel)="descargarPlanillaExcel()"
         (courseChange)="onCourseSelect($event)"
         (sessionChange)="onSessionSelect($event)"
+        (backToOverview)="vistaActual.set('OVERVIEW')"
+        (backToGroups)="volverAListaGrupos()"
       />
 
-      <!-- 2. Tabla Interactiva de Estudiantes -->
-      <app-attendance-control-table
-        [students]="students()"
-        [isLoading]="isLoadingSession()"
-        [isSaving]="isSaving()"
-        [sessionsEnabled]="sessionsEnabled"
-        [attendanceEnabled]="attendanceEnabled"
-        (statusChange)="onStudentStatusChange($event)"
-        (openExcuseModal)="openExcuseModal($event)"
-        (saveAttendance)="saveAttendance()"
-      />
+      <!-- 2. VISTA MAESTRO: Bento Grid y Panorámica de Sesiones del Grupo -->
+      @if (vistaActual() === 'OVERVIEW') {
+        <app-group-sessions-overview
+          [course]="currentCourse()"
+          [sessions]="sessions()"
+          [totalReclamosPendientes]="pendingClaimsCount()"
+          (selectSession)="irASesionDetalle($event)"
+          (openProjectionSesion)="abrirProyeccionDeSesion($event)"
+          (openNewSession)="openNewSessionModal()"
+          (openEnrollment)="openStudentRegistration()"
+          (exportExcel)="descargarPlanillaExcel()"
+          (verAlumnos)="abrirInfoGrupo()"
+          (verReclamos)="abrirReclamosGrupo()"
+        />
+      }
 
-      <!-- 3. Modal de Matrícula de Estudiante -->
+      <!-- 3. VISTA DETALLE: Tabla Interactiva de Estudiantes para Toma de Asistencia -->
+      @if (vistaActual() === 'DETALLE') {
+        <app-attendance-control-table
+          [students]="students()"
+          [isLoading]="isLoadingSession()"
+          [isSaving]="isSaving()"
+          [sessionsEnabled]="sessionsEnabled"
+          [attendanceEnabled]="attendanceEnabled"
+          (statusChange)="onStudentStatusChange($event)"
+          (openExcuseModal)="openExcuseModal($event)"
+          (saveAttendance)="saveAttendance()"
+        />
+      }
+
+      <!-- 4. Modal de Matrícula de Estudiante -->
       <app-attendance-enrollment-modal
         [isOpen]="isRegisterModalOpen()"
         [isEnrolling]="isEnrolling()"
@@ -99,7 +136,7 @@ type StudentEnrollmentField =
         (closed)="isRegisterModalOpen.set(false)"
       />
 
-      <!-- 4. Modal de Creación de Sesión -->
+      <!-- 5. Modal de Creación de Sesión -->
       <app-attendance-new-session-modal
         [isOpen]="isNewSessionModalOpen()"
         [course]="currentCourse()"
@@ -108,6 +145,33 @@ type StudentEnrollmentField =
         (closed)="isNewSessionModalOpen.set(false)"
       />
 
+      <!-- 6. Modal de Proyección QR Dinámico en Aula -->
+      <app-attendance-projection-modal
+        [isOpen]="isProjectionModalOpen()"
+        [courseCode]="currentCourse()?.code || 'CURSO'"
+        [sessionTitle]="currentSession()?.title || 'Sesión de Clase'"
+        (closed)="isProjectionModalOpen.set(false)"
+      />
+
+      <!-- 7. Modal de Información del Grupo & Alumnos Matriculados -->
+      <app-group-info-modal
+        [isOpen]="isGroupInfoModalOpen()"
+        [course]="currentCourse()"
+        [students]="groupStudents()"
+        [isLoading]="isLoadingGroupStudents()"
+        (closed)="isGroupInfoModalOpen.set(false)"
+      />
+
+      <!-- 8. Modal de Reclamos y Justificaciones del Grupo -->
+      <app-group-claims-modal
+        [isOpen]="isGroupClaimsModalOpen()"
+        [course]="currentCourse()"
+        [reclamos]="filteredGroupClaims()"
+        [isLoading]="isLoadingClaims()"
+        (closed)="isGroupClaimsModalOpen.set(false)"
+        (resolver)="resolverReclamoGrupo($event)"
+        (irABandejaGeneral)="irABandejaGeneralReclamos()"
+      />
       <!-- Feedback Toast -->
       <app-toast
         [visible]="showToast()"
@@ -127,6 +191,7 @@ export class AttendanceControlComponent {
   private attendanceRealtimeSync = inject(AttendanceRealtimeSyncService);
   private destroyRef = inject(DestroyRef);
   private catalogService = inject(CatalogService);
+  private attendanceClaimService = inject(AttendanceClaimService);
 
   readonly sessionsEnabled = environment.features.sessionsEnabled;
   readonly attendanceEnabled = environment.features.attendanceEnabled;
@@ -134,6 +199,7 @@ export class AttendanceControlComponent {
   courses: Course[] = [];
   sessions = signal<ClassSession[]>([]);
 
+  vistaActual = signal<'OVERVIEW' | 'DETALLE'>('OVERVIEW');
   selectedCourseId = signal<string>('');
   selectedSessionId = signal<string>('');
 
@@ -154,6 +220,17 @@ export class AttendanceControlComponent {
   studentFieldErrors = signal<Partial<Record<StudentEnrollmentField, string>>>({});
   docTypes = signal<TipoIdentificacionApiDto[]>([]);
 
+  isProjectionModalOpen = signal<boolean>(false);
+
+  // Estado para Info del Grupo & Alumnos
+  isGroupInfoModalOpen = signal<boolean>(false);
+  groupStudents = signal<EstudianteGrupoApiDto[]>([]);
+  isLoadingGroupStudents = signal<boolean>(false);
+
+  // Estado para Reclamos del Grupo
+  isGroupClaimsModalOpen = signal<boolean>(false);
+  allTeacherClaims = signal<SolicitudRevisionItem[]>([]);
+  isLoadingClaims = signal<boolean>(false);
   showToast = signal<boolean>(false);
   toastMessage = signal<string>('');
   toastType = signal<'success' | 'info' | 'warning' | 'error'>('success');
@@ -167,37 +244,152 @@ export class AttendanceControlComponent {
     }))
   );
 
-  constructor() {
-    this.catalogService.getIdentityDocumentTypes().subscribe({
-      next: (documentTypes) => {
-        this.docTypes.set(documentTypes);
-      },
-    });
+  filteredGroupClaims = computed<SolicitudRevisionItem[]>(() => {
+    const courseId = this.selectedCourseId();
+    const course = this.currentCourse();
+    if (!courseId) return [];
 
-    this.courseService.getCurrentTeacherCourses().subscribe({
-      next: (res) => {
-        const courses = res.datos;
-        this.courses = courses;
-        this.courseOptions.set(
-          courses.map((course) => ({
-            value: course.id,
-            label: `${course.code} - ${course.name} (${course.section})`,
-          }))
-        );
-        if (courses.length > 0) {
-          this.onCourseSelect(courses[0].id);
-        }
-      },
-      error: (err) => {
-        this.courses = [];
-        this.courseOptions.set([]);
-        this.toastType.set('error');
-        this.toastMessage.set(
-          getApiErrorMessage(err) || 'No fue posible cargar los grupos del docente.'
-        );
-        this.showToast.set(true);
-      },
+    return this.allTeacherClaims().filter((c) => {
+      // Filtrar por ID de grupo o coincidencia de código/nombre de asignatura
+      if (c.materiaId && (c.materiaId === courseId || c.materiaId === course?.code)) return true;
+      if (c.materiaNombre && course?.name && c.materiaNombre.toLowerCase().includes(course.name.toLowerCase())) return true;
+      if (c.materiaCodigo && course?.code && c.materiaCodigo === course.code) return true;
+      return false;
     });
+  });
+
+  pendingClaimsCount = computed<number>(() => {
+    return this.filteredGroupClaims().filter((c) => c.estadoSolicitud === 'PENDIENTE').length;
+  });
+
+  private route = inject(ActivatedRoute, { optional: true });
+  private router = inject(Router, { optional: true });
+
+  volverAListaGrupos(): void {
+    this.router?.navigate(['/app/docente/grupos']);
+  }
+
+  irABandejaGeneralReclamos(): void {
+    this.isGroupClaimsModalOpen.set(false);
+    this.router?.navigate(['/app/docente/reclamos']);
+  }
+
+  abrirProyeccionDeSesion(sessionId: string): void {
+    this.selectedSessionId.set(sessionId);
+    this.isProjectionModalOpen.set(true);
+  }
+
+  abrirInfoGrupo(): void {
+    const courseId = this.selectedCourseId();
+    if (!courseId) return;
+
+    this.isGroupInfoModalOpen.set(true);
+    this.cargarEstudiantesGrupo(courseId);
+  }
+
+  abrirReclamosGrupo(): void {
+    this.isGroupClaimsModalOpen.set(true);
+    this.cargarReclamosDocente();
+  }
+
+  private cargarEstudiantesGrupo(courseId: string): void {
+    this.isLoadingGroupStudents.set(true);
+    this.groupService
+      .getStudentsByGroup(courseId)
+      .pipe(finalize(() => this.isLoadingGroupStudents.set(false)))
+      .subscribe({
+        next: (res) => {
+          this.groupStudents.set(res.datos || []);
+        },
+        error: () => {
+          this.groupStudents.set([]);
+        },
+      });
+  }
+
+  private cargarReclamosDocente(): void {
+    this.isLoadingClaims.set(true);
+    this.attendanceClaimService
+      .getReclamosDocente()
+      .pipe(finalize(() => this.isLoadingClaims.set(false)))
+      .subscribe({
+        next: (res) => {
+          this.allTeacherClaims.set(res.datos || []);
+        },
+        error: () => {
+          this.allTeacherClaims.set([]);
+        },
+      });
+  }
+
+  resolverReclamoGrupo(event: { id: string; accion: 'APROBADA' | 'RECHAZADA' }): void {
+    this.attendanceClaimService
+      .resolverReclamo(event.id, event.accion, `Decisión registrada desde el control de asistencia (${event.accion})`)
+      .subscribe({
+        next: (res) => {
+          if (res.exitoso) {
+            this.toastType.set('success');
+            this.toastMessage.set(res.mensajeUsuario || `Reclamo ${event.accion.toLowerCase()} correctamente.`);
+            this.showToast.set(true);
+            this.cargarReclamosDocente();
+          } else {
+            this.toastType.set('error');
+            this.toastMessage.set(res.mensajeUsuario || 'No se pudo resolver el reclamo.');
+            this.showToast.set(true);
+          }
+        },
+        error: (err) => {
+          this.toastType.set('error');
+          this.toastMessage.set(getApiErrorMessage(err) || 'Error al procesar la solicitud.');
+          this.showToast.set(true);
+        },
+      });
+  }
+
+  constructor() {
+    const queryCourseId = this.route?.snapshot?.queryParamMap?.get('courseId');
+    const querySessionId = this.route?.snapshot?.queryParamMap?.get('sessionId');
+
+    this.catalogService
+      .getIdentityDocumentTypes()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (documentTypes) => {
+          this.docTypes.set(documentTypes);
+        },
+      });
+
+    this.courseService
+      .getCurrentTeacherCourses()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => {
+          const courses = res.datos;
+          this.courses = courses;
+          this.courseOptions.set(
+            courses.map((course) => ({
+              value: course.id,
+              label: `${course.code} - ${course.name} (${course.section})`,
+            }))
+          );
+          if (courses.length > 0) {
+            const targetCourseId = queryCourseId && courses.some((c) => c.id === queryCourseId)
+              ? queryCourseId
+              : courses[0].id;
+
+            this.onCourseSelect(targetCourseId, querySessionId || undefined);
+          }
+        },
+        error: (err) => {
+          this.courses = [];
+          this.courseOptions.set([]);
+          this.toastType.set('error');
+          this.toastMessage.set(
+            getApiErrorMessage(err) || 'No fue posible cargar los grupos del docente.'
+          );
+          this.showToast.set(true);
+        },
+      });
 
     this.attendanceRealtimeSync
       .watch(
@@ -385,6 +577,26 @@ export class AttendanceControlComponent {
           this.showToast.set(true);
 
           const sessionId = this.selectedSessionId();
+          // Actualización inmutable reactiva instantánea
+          const studentId = `est-${identificationResult.value}`;
+          const nuevoRegistro: StudentAttendance = {
+            studentId,
+            studentName: `${data.primerNombre.trim()} ${data.primerApellido.trim()}`,
+            studentCode: String(identificationResult.value),
+            status: 'AN' as AttendanceStatus,
+          };
+
+          this.sessions.update((prev) =>
+            prev.map((s) => {
+              if (s.id !== sessionId) return s;
+              const records = s.records || [];
+              return {
+                ...s,
+                records: [...records, nuevoRegistro],
+              };
+            })
+          );
+
           if (sessionId) {
             this.cargarEstudiantesYSesion(courseId, sessionId);
           }
@@ -421,12 +633,14 @@ export class AttendanceControlComponent {
     this.studentFieldErrors.set(fieldErrors);
   }
 
-  onCourseSelect(courseId: string): void {
+  onCourseSelect(courseId: string, initialSessionId?: string): void {
     this.pendingStudentIds.clear();
     this.selectedCourseId.set(courseId);
     this.selectedSessionId.set('');
+    this.vistaActual.set(initialSessionId ? 'DETALLE' : 'OVERVIEW');
     if (courseId) {
       this.attendanceRealtimeSync.connectGroup(courseId);
+      this.cargarReclamosDocente();
     }
 
     this.sessionService.getSessionsByGroup(courseId).subscribe({
@@ -435,7 +649,11 @@ export class AttendanceControlComponent {
         this.sessions.set(sessions);
 
         if (sessions.length > 0) {
-          const defaultSession = sessions[0];
+          const matchingSession = initialSessionId
+            ? sessions.find((s) => s.id === initialSessionId)
+            : null;
+
+          const defaultSession = matchingSession || sessions[0];
 
           this.selectedSessionId.set(defaultSession.id);
           this.cargarEstudiantesYSesion(courseId, defaultSession.id);
@@ -450,9 +668,19 @@ export class AttendanceControlComponent {
     });
   }
 
+  irASesionDetalle(sessionId: string): void {
+    this.selectedSessionId.set(sessionId);
+    this.vistaActual.set('DETALLE');
+    const courseId = this.selectedCourseId();
+    if (courseId && sessionId) {
+      this.cargarEstudiantesYSesion(courseId, sessionId);
+    }
+  }
+
   onSessionSelect(sessionId: string): void {
     this.pendingStudentIds.clear();
     this.selectedSessionId.set(sessionId);
+    this.vistaActual.set('DETALLE');
     const courseId = this.selectedCourseId();
     if (courseId && sessionId) {
       this.cargarEstudiantesYSesion(courseId, sessionId);
@@ -592,5 +820,36 @@ export class AttendanceControlComponent {
           this.showToast.set(true);
         },
       });
+  }
+
+  descargarPlanillaExcel(): void {
+    const courseId = this.selectedCourseId();
+    if (!courseId) return;
+
+    this.groupService.descargarPlanillaExcel(courseId).subscribe({
+      next: (blob: Blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const course = this.currentCourse();
+        const fileName = `Planilla_Asistencias_${course?.code || 'Curso'}.xlsx`;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        this.toastType.set('success');
+        this.toastMessage.set('Planilla Excel descargada correctamente.');
+        this.showToast.set(true);
+      },
+      error: (err: unknown) => {
+        this.toastType.set('error');
+        this.toastMessage.set(
+          getApiErrorMessage(err) || 'Error al descargar la planilla Excel de asistencia.'
+        );
+        this.showToast.set(true);
+      },
+    });
   }
 }

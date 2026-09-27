@@ -149,7 +149,7 @@ export function getApiErrorMessage(error: unknown): string {
   // Endpoints fuera del Golden Path (sin envelope) pueden traer un texto de
   // negocio propio; se muestra tal cual, sin ramificar por su contenido.
   if (!envelope && error instanceof HttpErrorResponse && isRecord(error.error)) {
-    const legacy = error.error['mensajeUsuario'];
+    const legacy = error.error['mensajeUsuario'] ?? error.error['message'];
     if (typeof legacy === 'string' && legacy.trim()) {
       return legacy.trim();
     }

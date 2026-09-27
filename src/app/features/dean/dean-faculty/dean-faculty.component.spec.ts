@@ -47,6 +47,24 @@ describe('DeanFacultyComponent', () => {
       total: 0,
       datos: [],
     });
+
+    const catalogUrls = [
+      `${environment.apiUrl}/admin/sedes`,
+      `${environment.apiUrl}/admin/espacios-fisicos`,
+      `${environment.apiUrl}/admin/facultades`,
+      `${environment.apiUrl}/admin/areas`,
+      `${environment.apiUrl}/admin/parametros`,
+      `${environment.apiUrl}/admin/auditoria`,
+      `${environment.apiUrl}/coordinador/planes-estudio`,
+      `${environment.apiUrl}/coordinador/periodos-academicos`,
+    ];
+    for (const url of catalogUrls) {
+      http.expectOne(url).flush({
+        exitoso: true,
+        total: 0,
+        datos: [],
+      });
+    }
   });
 
   afterEach(() => http.verify());

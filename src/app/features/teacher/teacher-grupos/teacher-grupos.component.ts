@@ -51,9 +51,7 @@ type VistaGrupos = 'LISTA' | 'FORM_GRUPO' | 'HUB_GRUPO' | 'FORM_SESION';
           (crearGrupo)="abrirCrearGrupo()"
           (irAsistencia)="irATomaAsistencia()"
           (editarGrupo)="abrirEditarGrupo($event)"
-          (verHub)="verHubGrupo($event)"
           (matricular)="abrirModalMatriculaGrupo($event)"
-          (proyectarQr)="abrirModalProyeccionParaGrupo($event)"
           (tomarAsistencia)="tomarAsistenciaGrupo($event)"
         />
       }
@@ -85,6 +83,7 @@ type VistaGrupos = 'LISTA' | 'FORM_GRUPO' | 'HUB_GRUPO' | 'FORM_SESION';
           [(subPestanaHub)]="subPestanaHub"
           (volver)="volverALista()"
           (irAsistencia)="tomarAsistenciaGrupo($event)"
+          (tomarAsistenciaSesion)="tomarAsistenciaSesionEspecifica($event)"
           (proyectarQr)="abrirModalProyeccionParaGrupo($event)"
           (matricular)="abrirModalMatriculaGrupo($event)"
           (programarExtraordinaria)="abrirCrearSesionExtraordinaria()"
@@ -632,6 +631,17 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
 
   tomarAsistenciaGrupo(course: Course): void {
     this.router.navigate(['/app/asistencia'], { queryParams: { courseId: course.id } });
+  }
+
+  tomarAsistenciaSesionEspecifica(sesion: ClassSession): void {
+    const course = this.selectedCourse();
+    if (!course) return;
+    this.router.navigate(['/app/asistencia'], {
+      queryParams: {
+        courseId: course.id,
+        sessionId: sesion.id,
+      },
+    });
   }
 
   irAGestionReclamos(): void {

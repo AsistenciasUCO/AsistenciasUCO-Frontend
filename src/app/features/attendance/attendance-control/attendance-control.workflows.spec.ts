@@ -7,6 +7,7 @@ import { CourseService } from '../../../core/services/course.service';
 import { GroupService } from '../../../core/services/group.service';
 import { SessionService } from '../../../core/services/session.service';
 import { StudentService } from '../../../core/services/student.service';
+import { AttendanceClaimService } from '../../../core/services/attendance-claim.service';
 import { AttendanceControlComponent } from './attendance-control.component';
 import { AttendanceRealtimeSyncService } from './attendance-realtime-sync.service';
 
@@ -17,6 +18,7 @@ describe('AttendanceControlComponent public workflows', () => {
   let groupService: jasmine.SpyObj<GroupService>;
   let studentService: jasmine.SpyObj<StudentService>;
   let attendanceService: jasmine.SpyObj<AttendanceService>;
+  let attendanceClaimService: jasmine.SpyObj<AttendanceClaimService>;
   let realtime: jasmine.SpyObj<AttendanceRealtimeSyncService>;
 
   const course = {
@@ -90,6 +92,14 @@ describe('AttendanceControlComponent public workflows', () => {
     realtime.watch.and.returnValue(NEVER);
     realtime.connectionAlerts.and.returnValue(NEVER);
 
+    attendanceClaimService = jasmine.createSpyObj('AttendanceClaimService', [
+      'getReclamosDocente',
+      'resolverReclamo',
+    ]);
+    attendanceClaimService.getReclamosDocente.and.returnValue(
+      of({ exitoso: true, datos: [] })
+    );
+
     TestBed.configureTestingModule({
       imports: [AttendanceControlComponent],
       providers: [
@@ -98,6 +108,7 @@ describe('AttendanceControlComponent public workflows', () => {
         { provide: GroupService, useValue: groupService },
         { provide: StudentService, useValue: studentService },
         { provide: AttendanceService, useValue: attendanceService },
+        { provide: AttendanceClaimService, useValue: attendanceClaimService },
         {
           provide: CatalogService,
           useValue: { getIdentityDocumentTypes: () => of([]) },

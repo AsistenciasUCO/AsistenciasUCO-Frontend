@@ -422,9 +422,7 @@ export class StudentCoursesComponent implements OnInit {
         },
         error: (err) => {
           this.procesandoAutoAsistencia.set(false);
-          this.toast.error(
-            err?.error?.message || err?.message || 'El código ingresado no es válido o ha expirado.'
-          );
+          this.toast.error(getApiErrorMessage(err));
         },
       });
   }

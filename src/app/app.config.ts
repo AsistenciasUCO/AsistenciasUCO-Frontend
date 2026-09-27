@@ -2,8 +2,10 @@ import { ApplicationConfig, provideZoneChangeDetection, APP_INITIALIZER } from '
 import { provideRouter } from '@angular/router';
 import { provideHttpClient, withInterceptors, withXsrfConfiguration } from '@angular/common/http';
 import { routes } from './app.routes';
+import { environment } from '../environments/environment';
 import { correlationInterceptor } from './core/interceptors/correlation.interceptor';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
+import { mockBackendInterceptor } from './core/interceptors/mock-backend.interceptor';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
 import { AuthService } from './core/services/auth.service';
 import { REALTIME_TRANSPORT } from './core/realtime/contract/realtime-transport';
@@ -18,7 +20,12 @@ export const appConfig: ApplicationConfig = {
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
     provideHttpClient(
-      withInterceptors([correlationInterceptor, authInterceptor, errorInterceptor]),
+      withInterceptors([
+        correlationInterceptor,
+        authInterceptor,
+        ...(environment.useMocks ? [mockBackendInterceptor] : []),
+        errorInterceptor,
+      ]),
       withXsrfConfiguration({
         cookieName: 'XSRF-TOKEN',
         headerName: 'X-XSRF-TOKEN',

@@ -292,21 +292,18 @@ export class AuthService implements OnDestroy {
     }
 
     if (!response.ok) {
-      let errorDesc = this.resolveAuthMessage('AUTH_GENERIC_ERROR');
+      let errorCode = 'AUTH_GENERIC_ERROR';
       try {
         const errorJson = await response.json();
-        if (errorJson?.error_description) {
-          const rawDescription = errorJson.error_description;
-          if (rawDescription === 'Invalid user credentials') {
-            errorDesc = this.resolveAuthMessage('AUTH_INVALID_CREDENTIALS');
-          } else {
-            errorDesc = rawDescription;
-          }
+        // En OAuth 2.0 (RFC 6749 §5.2), 'invalid_grant' es el estándar inmutable para credenciales inválidas.
+        // Se evalúa el código formal y nunca cadenas libres en inglés ('Invalid user credentials').
+        if (errorJson?.error === 'invalid_grant') {
+          errorCode = 'AUTH_INVALID_CREDENTIALS';
         }
       } catch {
         // Ignorar error al parsear cuerpo
       }
-      throw new Error(errorDesc);
+      throw new Error(this.resolveAuthMessage(errorCode));
     }
 
     const tokenData = await response.json();
