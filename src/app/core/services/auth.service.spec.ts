@@ -872,6 +872,11 @@ describe('AuthService', () => {
         service.updateUserProfile({ primerNombre: 'Nuevo' }).subscribe((res) => {
           expect(res.exitoso).toBeTrue();
           expect(res.datos.primerNombre).toBe('Actualizado');
+          const [url, init] = fetchSpy.calls.mostRecent().args as [string, RequestInit];
+          expect(url).toContain('/usuarios/perfil');
+          expect(init.method).toBe('PUT');
+          expect(init.credentials).toBe('omit');
+          expect((init.headers as Record<string, string>)['Authorization']).toMatch(/^Bearer /);
           done();
         });
       });
@@ -941,6 +946,10 @@ describe('AuthService', () => {
       const result = await service.fetchProfileFromBackend();
 
       expect(result?.primerNombre).toBe('Sincronizado');
+      const [url, init] = fetchSpy.calls.mostRecent().args as [string, RequestInit];
+      expect(url).toContain('/usuarios/perfil');
+      expect(init.credentials).toBe('omit');
+      expect((init.headers as Record<string, string>)['Authorization']).toMatch(/^Bearer /);
     });
 
     it('conserva los valores actuales cuando el backend no envía todos los campos', async () => {

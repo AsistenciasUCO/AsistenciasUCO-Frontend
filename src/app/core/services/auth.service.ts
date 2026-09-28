@@ -547,6 +547,8 @@ export class AuthService implements OnDestroy {
       const token = this.token();
       fetch(`${environment.apiUrl}/usuarios/perfil`, {
         method: 'PUT',
+        // API Bearer-only: no se adjuntan cookies del navegador.
+        credentials: 'omit',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -599,6 +601,8 @@ export class AuthService implements OnDestroy {
 
     try {
       const res = await fetch(`${environment.apiUrl}/usuarios/perfil`, {
+        // API Bearer-only: no se adjuntan cookies del navegador.
+        credentials: 'omit',
         headers: {
           Authorization: `Bearer ${authToken}`,
         },

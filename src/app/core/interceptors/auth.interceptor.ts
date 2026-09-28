@@ -36,25 +36,18 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   }
 
   if (authService.isMockMode()) {
-    return currentToken
-      ? next(
-          req.clone({
-            withCredentials: true,
-            headers: req.headers.set('Authorization', `Bearer ${currentToken}`),
-          })
-        )
-      : next(req.clone({ withCredentials: true }));
+    return next(currentToken ? attachToken(req, currentToken) : req);
   }
 
   if (!authService.isAuthenticated()) {
-    return next(req.clone({ withCredentials: true }));
+    return next(req);
   }
 
   return from(authService.getValidAccessToken(30)).pipe(
     switchMap((token) => {
       const activeToken = token || authService.token();
       if (!activeToken) {
-        return next(req.clone({ withCredentials: true }));
+        return next(req);
       }
       return next(attachToken(req, activeToken));
     }),
@@ -111,9 +104,12 @@ function handle401(
   );
 }
 
+/**
+ * La API es stateless y Bearer-only: la única credencial es Authorization. Nunca se activa
+ * `withCredentials`, para que el navegador no adjunte cookies en peticiones cross-origin.
+ */
 function attachToken(req: HttpRequest<unknown>, token: string): HttpRequest<unknown> {
   return req.clone({
-    withCredentials: true,
     headers: req.headers.set('Authorization', `Bearer ${token}`),
   });
 }
