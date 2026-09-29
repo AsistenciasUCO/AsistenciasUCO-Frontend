@@ -176,7 +176,7 @@ export class AttendanceEnrollmentModalComponent {
   lastName = signal<string>('');
   secondLastName = signal<string>('');
   email = signal<string>('');
-  password = signal<string>('');
+  password = signal<string>('Temporal2026*');
 
   submitted = output<{
     tipoIdentificacionId: string;
