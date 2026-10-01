@@ -100,4 +100,31 @@ export class StudentService {
       `${environment.apiUrl}/estudiantes/${estudianteId}`
     );
   }
+
+  searchStudentByIdentification(
+    tipoIdentificacionId: string,
+    numeroIdentificacion: number
+  ): Observable<EstudiantePaginaApiDto> {
+    if (environment.useFrontendMocks) {
+      return of({
+        items: [],
+        totalItems: 0,
+        totalPages: 0,
+        page: 0,
+        size: 0,
+      }).pipe(delay(200));
+    }
+
+    return this.http.get<EstudiantePaginaApiDto>(
+      `${environment.apiUrl}/estudiantes`,
+      {
+        params: {
+          tipoIdentificacionId,
+          numeroIdentificacion: numeroIdentificacion.toString(),
+          page: '0',
+          size: '1',
+        },
+      }
+    );
+  }
 }

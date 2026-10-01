@@ -11,6 +11,9 @@ import { StudentAttendance, AttendanceStatus } from '../../../../core/models/att
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, FormsModule, CardComponent, ButtonComponent, AvatarComponent],
+  host: {
+    class: 'block w-full'
+  },
   template: `
     <div class="space-y-4">
       <!-- Barra Unificada Compacta: Buscador + Filtros -->

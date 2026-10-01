@@ -43,7 +43,11 @@ import { Course } from '../../../../core/models/course.model';
             </div>
             <div>
               <span class="text-warm-400 block text-[10px] uppercase font-bold">Capacidad / Cupo:</span>
-              <span class="font-bold text-emerald-800">{{ students().length }} / {{ course()?.cupoMaximo || 35 }} inscritos</span>
+              @if (course()?.cupoMaximo) {
+                <span class="font-bold text-emerald-800">{{ students().length }} / {{ course()?.cupoMaximo }} cupos</span>
+              } @else {
+                <span class="font-bold text-emerald-800">{{ students().length }} estudiantes inscritos</span>
+              }
             </div>
           </div>
         </div>

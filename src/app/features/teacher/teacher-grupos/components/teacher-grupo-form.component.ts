@@ -34,7 +34,9 @@ import { ButtonComponent } from '../../../../shared/components/button/button.com
             {{ modo() === 'CREAR' ? 'Apertura de Nuevo Grupo Académico' : 'Editar Información de Grupo' }}
           </h2>
           <p class="text-sm text-warm-600 mt-1">
-            Define los parámetros de la asignatura, horario regular semanal, aula asignada y cupo de estudiantes.
+            {{ modo() === 'CREAR'
+              ? 'Define los parámetros de la asignatura, horario regular semanal, aula asignada y cupo de estudiantes.'
+              : 'Como docente titular puedes ajustar el horario regular semanal del grupo. Los datos académicos e institucionales son de solo lectura.' }}
           </p>
         </div>
 
@@ -58,42 +60,50 @@ import { ButtonComponent } from '../../../../shared/components/button/button.com
             </div>
           }
 
-          <app-form-field label="Código de la Asignatura" [required]="true">
+          <app-form-field label="Código de la Asignatura" [required]="modo() === 'CREAR'">
             <input
               type="text"
               [(ngModel)]="form().code"
-              [disabled]="modo() === 'CREAR' && asignaturasDocente().length > 0"
+              [disabled]="modo() === 'EDITAR' || (modo() === 'CREAR' && asignaturasDocente().length > 0)"
               placeholder="Ej. MAT-301, FIS-202"
-              class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:bg-warm-100 disabled:text-warm-500 disabled:cursor-not-allowed"
             />
           </app-form-field>
 
-          <app-form-field label="Sección / Grupo" [required]="true">
+          <app-form-field label="Sección / Grupo" [required]="modo() === 'CREAR'">
             <input
               type="text"
               [(ngModel)]="form().section"
+              [disabled]="modo() === 'EDITAR'"
               placeholder="Ej. Grupo 01, Sección B"
-              class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:bg-warm-100 disabled:text-warm-500 disabled:cursor-not-allowed"
             />
           </app-form-field>
 
           <div class="sm:col-span-2">
-            <app-form-field label="Nombre de la Asignatura" [required]="true">
+            <app-form-field label="Nombre de la Asignatura" [required]="modo() === 'CREAR'">
               <input
                 type="text"
                 [(ngModel)]="form().name"
-                [disabled]="modo() === 'CREAR' && asignaturasDocente().length > 0"
+                [disabled]="modo() === 'EDITAR' || (modo() === 'CREAR' && asignaturasDocente().length > 0)"
                 placeholder="Ej. Matemática Avanzada III"
-                class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:bg-warm-100 disabled:text-warm-500 disabled:cursor-not-allowed"
               />
             </app-form-field>
           </div>
 
-          <!-- Selector de Días y Horas Estructurado -->
-          <div class="sm:col-span-2 space-y-2 p-3.5 bg-warm-50/70 border border-warm-200 rounded-2xl">
-            <label class="block text-xs font-bold text-warm-700 uppercase tracking-wider">
-              Días de Clase Regular <span class="text-red-500">*</span>
-            </label>
+          <!-- Selector de Días y Horas Estructurado (Editable por el Docente) -->
+          <div class="sm:col-span-2 space-y-2 p-3.5 bg-warm-50/70 border border-primary-200/80 rounded-2xl relative">
+            <div class="flex items-center justify-between">
+              <label class="block text-xs font-bold text-warm-700 uppercase tracking-wider">
+                Días de Clase Regular <span class="text-red-500">*</span>
+              </label>
+              @if (modo() === 'EDITAR') {
+                <span class="text-[11px] font-semibold text-primary-700 bg-primary-50 border border-primary-200 px-2 py-0.5 rounded-full">
+                  Editable por Docente
+                </span>
+              }
+            </div>
             <div class="flex flex-wrap gap-2">
               @for (d of ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']; track d) {
                 <button
@@ -132,32 +142,35 @@ import { ButtonComponent } from '../../../../shared/components/button/button.com
             </p>
           </div>
 
-          <app-form-field label="Aula Asignada" [required]="true">
+          <app-form-field label="Aula Asignada" [required]="modo() === 'CREAR'">
             <input
               type="text"
               [(ngModel)]="form().room"
+              [disabled]="modo() === 'EDITAR'"
               placeholder="Ej. Aula A-204, Lab L-102"
-              class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:bg-warm-100 disabled:text-warm-500 disabled:cursor-not-allowed"
             />
           </app-form-field>
 
-          <app-form-field label="Cupo Máximo de Estudiantes" [required]="true">
+          <app-form-field label="Cupo Máximo de Estudiantes" [required]="modo() === 'CREAR'">
             <input
               type="number"
               [(ngModel)]="form().cupoMaximo"
+              [disabled]="modo() === 'EDITAR'"
               min="1"
               max="100"
               placeholder="35"
-              class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:bg-warm-100 disabled:text-warm-500 disabled:cursor-not-allowed"
             />
           </app-form-field>
 
-          <app-form-field label="Docente Responsable" [required]="true">
+          <app-form-field label="Docente Responsable" [required]="modo() === 'CREAR'">
             <input
               type="text"
               [(ngModel)]="form().docenteName"
+              [disabled]="modo() === 'EDITAR'"
               placeholder="Nombre del docente responsable"
-              class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:bg-warm-100 disabled:text-warm-500 disabled:cursor-not-allowed"
             />
           </app-form-field>
 

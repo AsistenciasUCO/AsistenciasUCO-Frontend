@@ -1,8 +1,10 @@
 import { Component, OnInit, OnDestroy, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { forkJoin, of } from 'rxjs';
 import { CourseService } from '../../../core/services/course.service';
 import { SessionService } from '../../../core/services/session.service';
+import { GroupService } from '../../../core/services/group.service';
 import { StudentService } from '../../../core/services/student.service';
 import { AttendanceClaimService } from '../../../core/services/attendance-claim.service';
 import { ToastService } from '../../../shared/components/toast/toast.component';
@@ -144,6 +146,7 @@ type VistaGrupos = 'LISTA' | 'FORM_GRUPO' | 'HUB_GRUPO' | 'FORM_SESION';
 export class TeacherGruposComponent implements OnInit, OnDestroy {
   private courseService = inject(CourseService);
   private sessionService = inject(SessionService);
+  private groupService = inject(GroupService);
   private studentService = inject(StudentService);
   private claimService = inject(AttendanceClaimService);
   private router = inject(Router);
@@ -229,8 +232,9 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
   cargarGrupos(): void {
     this.isLoading.set(true);
     this.courseService.getTeacherCourses().subscribe({
-      next: (res) => {
-        this.courses.set(res.datos || []);
+      next: (coursesRes) => {
+        const teacherCourses = coursesRes.datos || [];
+        this.courses.set(teacherCourses);
         this.isLoading.set(false);
       },
       error: (err: unknown) => {
@@ -285,6 +289,22 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
     this.modoFormGrupo = 'EDITAR';
     this.selectedGrupoId = course.id;
     this.selectedCourse.set(course);
+
+    // Detección inteligente de horario existente
+    const sched = course.schedule || '';
+    const timeMatch = sched.match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+    const horaInicio = timeMatch ? timeMatch[1] : '08:00';
+    const horaFin = timeMatch ? timeMatch[2] : '10:00';
+
+    const lower = sched.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const dias: string[] = [];
+    if (lower.includes('lun')) dias.push('Lunes');
+    if (lower.includes('mar')) dias.push('Martes');
+    if (lower.includes('mie')) dias.push('Miércoles');
+    if (lower.includes('jue')) dias.push('Jueves');
+    if (lower.includes('vie')) dias.push('Viernes');
+    if (lower.includes('sab')) dias.push('Sábado');
+
     this.grupoForm = {
       code: course.code,
       section: course.section,
@@ -294,9 +314,9 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
       cupoMaximo: course.cupoMaximo || 35,
       docenteName: course.docenteName || '',
       asignaturaId: '',
-      diasSeleccionados: ['Lunes', 'Miércoles'],
-      horaInicio: '08:00',
-      horaFin: '10:00',
+      diasSeleccionados: dias.length > 0 ? dias : ['Lunes', 'Miércoles'],
+      horaInicio,
+      horaFin,
       generarSesionesAutomaticas: false,
     };
     this.vistaActual.set('FORM_GRUPO');

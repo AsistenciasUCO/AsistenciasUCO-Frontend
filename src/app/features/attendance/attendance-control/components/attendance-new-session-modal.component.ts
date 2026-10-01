@@ -144,7 +144,7 @@ export class AttendanceNewSessionModalComponent {
         this.startTime.set('08:00');
         this.endTime.set('10:00');
       }
-    });
+    }, { allowSignalWrites: true });
   }
 
   onSubmit(e: Event): void {

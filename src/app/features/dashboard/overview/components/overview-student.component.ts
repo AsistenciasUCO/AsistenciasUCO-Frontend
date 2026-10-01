@@ -12,6 +12,9 @@ import { ProximaClaseInfo } from '../utils/proxima-clase.util';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, RouterLink, CardComponent, BadgeComponent, ButtonComponent],
+  host: {
+    class: 'block w-full',
+  },
   template: `
     <div class="space-y-6">
       <!-- KPIs Estudiante -->

@@ -41,6 +41,7 @@ import { TeacherMatriculaModalComponent } from '../../teacher/teacher-grupos/com
 import { AttendanceClaimService } from '../../../core/services/attendance-claim.service';
 import { SolicitudRevisionItem } from '../../../core/models/role-management.model';
 import { EstudianteGrupoApiDto } from '../../../core/api/models/estudiante-grupo-api-dto.model';
+import { findActiveOrUpcomingSession } from '../../../core/utils/session-selection.util';
 
 type StudentEnrollmentField =
   | 'tipoIdentificacionId'
@@ -70,7 +71,7 @@ type StudentEnrollmentField =
     TeacherMatriculaModalComponent,
   ],
   template: `
-    <div class="space-y-4 animate-fade-in max-w-7xl mx-auto pb-12 relative">
+    <div class="flex flex-col gap-6 animate-fade-in max-w-7xl mx-auto pb-12 relative">
       <!-- 1. Encabezado y Selectores de Curso / Sesión -->
       <app-attendance-control-header
         [sessionsEnabled]="sessionsEnabled"
@@ -92,9 +93,9 @@ type StudentEnrollmentField =
         (openNewSession)="openNewSessionModal()"
         (openProjection)="isProjectionModalOpen.set(true)"
         (exportExcel)="descargarPlanillaExcel()"
-        (courseChange)="onCourseSelect($event)"
+        (courseChange)="seleccionarCurso($event)"
         (sessionChange)="onSessionSelect($event)"
-        (backToOverview)="vistaActual.set('OVERVIEW')"
+        (backToOverview)="volverAOverview()"
         (backToGroups)="volverAListaGrupos()"
       />
 
@@ -136,6 +137,7 @@ type StudentEnrollmentField =
         [docTypeOptions]="docTypeOptions()"
         [fieldErrors]="studentFieldErrors()"
         (submitted)="onRegisterStudentSubmit($event)"
+        (clearFieldError)="onClearStudentFieldError($event)"
         (closed)="isRegisterModalOpen.set(false)"
       />
 
@@ -319,6 +321,11 @@ export class AttendanceControlComponent {
   }
 
   private cargarReclamosDocente(): void {
+    if (!environment.features.teacherClaimsEnabled) {
+      this.allTeacherClaims.set([]);
+      this.isLoadingClaims.set(false);
+      return;
+    }
     this.isLoadingClaims.set(true);
     this.attendanceClaimService
       .getReclamosDocente()
@@ -358,9 +365,6 @@ export class AttendanceControlComponent {
   }
 
   constructor() {
-    const queryCourseId = this.route?.snapshot?.queryParamMap?.get('courseId');
-    const querySessionId = this.route?.snapshot?.queryParamMap?.get('sessionId');
-
     this.catalogService
       .getIdentityDocumentTypes()
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -374,8 +378,8 @@ export class AttendanceControlComponent {
       .getCurrentTeacherCourses()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (res) => {
-          const courses = res.datos;
+        next: (coursesRes) => {
+          const courses = coursesRes.datos || [];
           this.courses.set(courses);
           this.courseOptions.set(
             courses.map((course) => ({
@@ -383,10 +387,14 @@ export class AttendanceControlComponent {
               label: `${course.code} - ${course.name} (${course.section})`,
             }))
           );
+
           if (courses.length > 0) {
-            const targetCourseId = queryCourseId && courses.some((c) => c.id === queryCourseId)
-              ? queryCourseId
-              : courses[0].id;
+            const queryCourseId = this.route?.snapshot?.queryParamMap?.get('courseId');
+            const querySessionId = this.route?.snapshot?.queryParamMap?.get('sessionId');
+            const targetCourseId =
+              queryCourseId && courses.some((c) => c.id === queryCourseId)
+                ? queryCourseId
+                : courses[0].id;
 
             this.onCourseSelect(targetCourseId, querySessionId || undefined);
           }
@@ -401,6 +409,34 @@ export class AttendanceControlComponent {
           this.showToast.set(true);
         },
       });
+
+    if (this.route?.queryParamMap) {
+      this.route.queryParamMap
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((params) => {
+          const queryCourseId = params.get('courseId');
+          const querySessionId = params.get('sessionId');
+          const courses = this.courses();
+
+          if (courses.length > 0 && queryCourseId) {
+            const courseExists = courses.some((c) => c.id === queryCourseId);
+            if (courseExists) {
+              const currentCourse = this.selectedCourseId();
+              const currentSession = this.selectedSessionId();
+              const currentVista = this.vistaActual();
+              const targetVista = querySessionId ? 'DETALLE' : 'OVERVIEW';
+
+              if (queryCourseId !== currentCourse) {
+                this.onCourseSelect(queryCourseId, querySessionId || undefined);
+              } else if (querySessionId && querySessionId !== currentSession) {
+                this.irASesionDetalle(querySessionId);
+              } else if (!querySessionId && currentVista !== 'OVERVIEW') {
+                this.vistaActual.set('OVERVIEW');
+              }
+            }
+          }
+        });
+    }
 
     this.attendanceRealtimeSync
       .watch(
@@ -533,7 +569,17 @@ export class AttendanceControlComponent {
     this.isRegisterModalOpen.set(true);
   }
 
+  onClearStudentFieldError(field: string): void {
+    this.studentFieldErrors.update((prev) => {
+      if (!prev[field as StudentEnrollmentField]) return prev;
+      const updated = { ...prev };
+      delete updated[field as StudentEnrollmentField];
+      return updated;
+    });
+  }
+
   onRegisterStudentSubmit(data: any): void {
+    this.studentFieldErrors.set({});
     const identificationResult = parseIdentificationNumber(data.numeroIdentificacion);
     const effectivePassword = data.password?.trim() ?? '';
     const passwordError = getPasswordValidationError(effectivePassword, data.numeroIdentificacion);
@@ -557,16 +603,20 @@ export class AttendanceControlComponent {
       fieldErrors.password = passwordError;
     }
 
-    if (!data.tipoIdentificacionId || Object.keys(fieldErrors).length > 0) {
+    if (!data.tipoIdentificacionId || Object.keys(fieldErrors).length > 0 || data.hasLocalConfirmError) {
       if (!data.tipoIdentificacionId) {
         fieldErrors.tipoIdentificacionId = 'El campo Tipo de Documento es obligatorio.';
       }
       this.studentFieldErrors.set(fieldErrors);
       this.toastType.set('error');
       const errList = Object.values(fieldErrors);
-      this.toastMessage.set(
-        errList.length === 1 ? errList[0]! : `Campos con error en la inscripción: ${Object.keys(fieldErrors).join(', ')}.`
-      );
+      if (errList.length > 0) {
+        this.toastMessage.set(
+          errList.length === 1 ? errList[0]! : `Campos con error en la inscripción: ${Object.keys(fieldErrors).join(', ')}.`
+        );
+      } else if (data.hasLocalConfirmError) {
+        this.toastMessage.set('Por favor verifique la confirmación de la contraseña.');
+      }
       this.showToast.set(true);
       return;
     }
@@ -696,7 +746,7 @@ export class AttendanceControlComponent {
             ? populatedSessions.find((s) => s.id === initialSessionId)
             : null;
 
-          const defaultSession = matchingSession || populatedSessions[0];
+          const defaultSession = matchingSession || findActiveOrUpcomingSession(populatedSessions) || populatedSessions[0];
 
           this.selectedSessionId.set(defaultSession.id);
           this.cargarEstudiantesYSesion(courseId, defaultSession.id);
@@ -711,9 +761,34 @@ export class AttendanceControlComponent {
     });
   }
 
+  seleccionarCurso(courseId: string): void {
+    if (this.selectedCourseId() === courseId) return;
+    this.router?.navigate([], {
+      relativeTo: this.route || undefined,
+      queryParams: { courseId, sessionId: null },
+      queryParamsHandling: 'merge',
+    });
+    this.onCourseSelect(courseId);
+  }
+
+  volverAOverview(): void {
+    this.vistaActual.set('OVERVIEW');
+    this.selectedSessionId.set('');
+    this.router?.navigate([], {
+      relativeTo: this.route || undefined,
+      queryParams: { sessionId: null },
+      queryParamsHandling: 'merge',
+    });
+  }
+
   irASesionDetalle(sessionId: string): void {
     this.selectedSessionId.set(sessionId);
     this.vistaActual.set('DETALLE');
+    this.router?.navigate([], {
+      relativeTo: this.route || undefined,
+      queryParams: { sessionId },
+      queryParamsHandling: 'merge',
+    });
     const courseId = this.selectedCourseId();
     if (courseId && sessionId) {
       this.cargarEstudiantesYSesion(courseId, sessionId);
@@ -724,6 +799,11 @@ export class AttendanceControlComponent {
     this.pendingStudentIds.clear();
     this.selectedSessionId.set(sessionId);
     this.vistaActual.set('DETALLE');
+    this.router?.navigate([], {
+      relativeTo: this.route || undefined,
+      queryParams: { sessionId },
+      queryParamsHandling: 'merge',
+    });
     const courseId = this.selectedCourseId();
     if (courseId && sessionId) {
       this.cargarEstudiantesYSesion(courseId, sessionId);

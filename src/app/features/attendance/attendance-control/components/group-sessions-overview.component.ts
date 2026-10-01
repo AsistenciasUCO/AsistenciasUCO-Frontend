@@ -3,12 +3,16 @@ import { CommonModule } from '@angular/common';
 import { ButtonComponent } from '../../../../shared/components/button/button.component';
 import { Course } from '../../../../core/models/course.model';
 import { ClassSession } from '../../../../core/models/attendance.model';
+import { findActiveOrUpcomingSession } from '../../../../core/utils/session-selection.util';
 
 @Component({
   selector: 'app-group-sessions-overview',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, ButtonComponent],
+  host: {
+    class: 'block w-full'
+  },
   template: `
     <div class="space-y-6 animate-fade-in">
       <!-- 1. BENTO GRID DE KPIs GLOBALES DEL GRUPO -->
@@ -335,14 +339,18 @@ export class GroupSessionsOverviewComponent {
     return enRiesgo;
   });
 
+  sesionRecomendada = computed(() => {
+    return findActiveOrUpcomingSession(this.sessions());
+  });
+
   sesionActivaHoy = computed(() => {
     const hoy = new Date().toISOString().split('T')[0];
-    return this.sessions().find((s) => s.date === hoy);
+    const recomendada = this.sesionRecomendada();
+    return recomendada && recomendada.date === hoy ? recomendada : undefined;
   });
 
   sesionReciente = computed(() => {
-    const list = this.sessions();
-    return list.length > 0 ? list[0] : undefined;
+    return this.sesionRecomendada();
   });
 
   getPresentesCount(session: ClassSession): number {

@@ -592,7 +592,7 @@ export class AuthService implements OnDestroy {
   }
 
   async fetchProfileFromBackend(token?: string): Promise<User | null> {
-    if (this.mockModeSignal()) {
+    if (this.mockModeSignal() || !environment.features.userProfileEndpointEnabled) {
       return this.currentUser();
     }
 

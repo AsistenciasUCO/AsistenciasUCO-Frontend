@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, catchError, of, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 import {
@@ -25,7 +25,18 @@ export class AttendanceClaimService {
   }
 
   getReclamosDocente(docenteId?: string): Observable<ApiResponse<SolicitudRevisionItem[]>> {
-    return this.http.get<ApiResponse<SolicitudRevisionItem[]>>(`${environment.apiUrl}/docente/reclamos`);
+    return this.http.get<ApiResponse<SolicitudRevisionItem[]>>(`${environment.apiUrl}/docente/reclamos`).pipe(
+      catchError((error) => {
+        if (error?.status === 501 || error?.status === 404) {
+          return of({
+            exitoso: true,
+            mensajeUsuario: 'Módulo de reclamos no disponible en este entorno',
+            datos: []
+          });
+        }
+        return throwError(() => error);
+      })
+    );
   }
 
   getSesionesPorMateria(materiaId: string): Observable<ApiResponse<SesionMateriaDetalle[]>> {

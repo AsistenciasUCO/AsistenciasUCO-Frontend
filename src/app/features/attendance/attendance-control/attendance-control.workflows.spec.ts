@@ -215,6 +215,30 @@ describe('AttendanceControlComponent public workflows', () => {
     expect(component.toastType()).toBe('success');
   });
 
+  it('matricula un estudiante existente institucional sin fallos', () => {
+    const component = createComponent();
+    component.openStudentRegistration();
+
+    component.onRegisterStudentSubmit({
+      tipoIdentificacionId: 'tipo-1',
+      numeroIdentificacion: '1017123456',
+      primerNombre: 'Carlos',
+      primerApellido: 'Perez',
+      correo: 'carlos.perez@uco.edu.co',
+      password: 'Temporal2026*',
+    });
+
+    expect(studentService.enrollStudentInGroup).toHaveBeenCalledWith(jasmine.objectContaining({
+      grupo: 'group-1',
+      numeroIdentificacion: 1017123456,
+      primerNombre: 'Carlos',
+      primerApellido: 'Perez',
+      correoElectronico: 'carlos.perez@uco.edu.co',
+    }));
+    expect(component.isRegisterModalOpen()).toBeFalse();
+    expect(component.toastType()).toBe('success');
+  });
+
   it('mapea errores de campo devueltos por matrícula', () => {
     const component = createComponent();
     studentService.enrollStudentInGroup.and.returnValue(throwError(() =>

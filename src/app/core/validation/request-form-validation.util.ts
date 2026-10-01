@@ -58,8 +58,12 @@ export function getPasswordValidationError(
     return 'El campo Contraseña es obligatorio.';
   }
 
-  if (password.length < 8 || password.length > 255) {
-    return 'El campo Contraseña debe contener entre 8 y 255 caracteres.';
+  if (password.length < 8) {
+    return 'El campo Contraseña debe tener más de 8 caracteres.';
+  }
+
+  if (password.length > 255) {
+    return 'El campo Contraseña debe tener menos de 255 caracteres.';
   }
 
   if (/\s/.test(password)) {

@@ -29,6 +29,10 @@ export const environment = {
     // BACKEND_GOLDEN_PATH_CONTRACT. Deshabilitadas hasta que exista un contrato propio.
     sessionCancelEnabled: false,
     sessionQrEnabled: false,
+    // Habilitado contractualmente para sincronización de perfil
+    userProfileEndpointEnabled: true,
+    // Módulo de reclamos docente en backend responde 501 (fuera de alcance en esta fase)
+    teacherClaimsEnabled: false,
   },
   keycloak: {
     get url(): string {
