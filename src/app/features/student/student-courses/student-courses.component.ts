@@ -269,6 +269,7 @@ export class StudentCoursesComponent implements OnInit {
         next: (res) => {
           if (res.exitoso && res.datos) {
             this.archivoAdjunto.set({
+              fileId: res.datos.fileId,
               nombre: res.datos.nombre,
               tipo: file.type || 'application/pdf',
               tamanioKb: Math.max(1, Math.round(file.size / 1024)),

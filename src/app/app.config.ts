@@ -2,7 +2,6 @@ import { ApplicationConfig, provideZoneChangeDetection, APP_INITIALIZER } from '
 import { provideRouter } from '@angular/router';
 import { provideHttpClient, withInterceptors, withXsrfConfiguration } from '@angular/common/http';
 import { routes } from './app.routes';
-import { environment } from '../environments/environment';
 import { correlationInterceptor } from './core/interceptors/correlation.interceptor';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { mockBackendInterceptor } from './core/interceptors/mock-backend.interceptor';
@@ -23,7 +22,9 @@ export const appConfig: ApplicationConfig = {
       withInterceptors([
         correlationInterceptor,
         authInterceptor,
-        ...(environment.useMocks ? [mockBackendInterceptor] : []),
+        // Siempre está registrado, pero decide por petición si el modo mock está
+        // activo. Así cambiar de modo en runtime no deja un pipeline inconsistente.
+        mockBackendInterceptor,
         errorInterceptor,
       ]),
       withXsrfConfiguration({

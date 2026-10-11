@@ -18,6 +18,19 @@ function okResponse<T>(datos: T, mensajeUsuario?: string, total?: number): HttpR
 }
 
 export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
+  // `AuthService.setMockMode()` puede cambiar el modo después del bootstrap.
+  // Consultar la preferencia por petición evita simular respuestas en modo real
+  // y evita que el modo mock intente llegar a la red por falta de interceptor.
+  const runtimeMocks = typeof window !== 'undefined'
+    ? (window as Window & { env?: Record<string, unknown> }).env?.['USE_MOCKS']
+    : undefined;
+  const mockEnabled = typeof localStorage !== 'undefined'
+    ? (localStorage.getItem('USE_MOCKS') ?? String(runtimeMocks ?? '')) === 'true'
+    : String(runtimeMocks ?? '') === 'true';
+  if (!mockEnabled) {
+    return next(req);
+  }
+
   const url = req.url;
   const method = req.method;
 
@@ -420,6 +433,7 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
   // ================= RECLAMOS Y JUSTIFICACIONES =================
   if (url.endsWith('/archivos/subir') && method === 'POST') {
     const mockFileRes = {
+      fileId: `00000000-0000-4000-8000-${String(Date.now()).slice(-12).padStart(12, '0')}`,
       nombre: 'soporte_medico.pdf',
       nombreGuardado: `mock_${Date.now()}_soporte.pdf`,
       url: `/api/v1/archivos/mock_${Date.now()}_soporte.pdf`,

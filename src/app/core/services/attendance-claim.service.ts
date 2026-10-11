@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
+import { ApiDataResponse } from '../api/models/api-data-response.model';
 import {
   SesionMateriaDetalle,
   SolicitudRevisionItem,
@@ -15,13 +16,19 @@ import {
 export class AttendanceClaimService {
   constructor(private http: HttpClient) {}
 
-  subirSoporte(file: File): Observable<ApiResponse<{ nombre: string; nombreGuardado: string; url: string; tamanio: number }>> {
+  subirSoporte(file: File): Observable<ApiDataResponse<{ fileId: string; nombre: string; url: string; tamanio: number }>> {
     const formData = new FormData();
     formData.append('archivo', file);
-    return this.http.post<ApiResponse<{ nombre: string; nombreGuardado: string; url: string; tamanio: number }>>(
+    return this.http.post<ApiDataResponse<{ fileId: string; nombre: string; url: string; tamanio: number }>>(
       `${environment.apiUrl}/archivos/subir`,
       formData
     );
+  }
+
+  descargarSoporte(fileId: string): Observable<Blob> {
+    return this.http.get(`${environment.apiUrl}/archivos/${encodeURIComponent(fileId)}`, {
+      responseType: 'blob',
+    });
   }
 
   getReclamosDocente(docenteId?: string): Observable<ApiResponse<SolicitudRevisionItem[]>> {

@@ -60,6 +60,13 @@ type VistaDocenteReclamos = 'BANDEJA' | 'RESOLUCION';
           </div>
         </div>
 
+        @if (listUnavailable()) {
+          <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-900">
+            El listado de reclamos docentes está pendiente del contrato backend y responde <strong>501 Not Implemented</strong>.
+            La resolución individual permanece disponible cuando se conoce el identificador del reclamo.
+          </div>
+        }
+
         <!-- Filtros y Búsqueda -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div class="sm:col-span-2">
@@ -362,6 +369,7 @@ export class TeacherClaimsComponent implements OnInit {
   vistaActual = signal<VistaDocenteReclamos>('BANDEJA');
   reclamos = signal<SolicitudRevisionItem[]>([]);
   isLoading = signal<boolean>(true);
+  listUnavailable = signal<boolean>(false);
   searchQuery = '';
   selectedEstado: string = 'TODOS';
 
@@ -396,14 +404,16 @@ export class TeacherClaimsComponent implements OnInit {
 
   cargarReclamos(): void {
     this.isLoading.set(true);
+    this.listUnavailable.set(false);
     this.claimService.getReclamosDocente().subscribe({
       next: (res) => {
         this.reclamos.set(res.datos || []);
         this.isLoading.set(false);
       },
-      error: () => {
+      error: (error: any) => {
+        this.listUnavailable.set(error?.status === 501);
         this.isLoading.set(false);
-        this.toast.error('Error al cargar solicitudes de revisión.');
+        if (error?.status !== 501) this.toast.error(getApiErrorMessage(error));
       },
     });
   }
@@ -438,13 +448,22 @@ export class TeacherClaimsComponent implements OnInit {
   }
 
   descargarSoporte(adjunto: SoporteAdjuntoItem): void {
-    if (adjunto.urlSimulada) {
-      const url = adjunto.urlSimulada.startsWith('http')
-        ? adjunto.urlSimulada
-        : `http://localhost:8080${adjunto.urlSimulada}`;
-      window.open(url, '_blank');
+    if (!adjunto.fileId) {
+      this.toast.warning('Este soporte no contiene un fileId descargable en el contrato actual.');
+      return;
     }
-    this.toast.success(`Abriendo comprobante "${adjunto.nombre}" (${adjunto.tamanioKb} KB)...`);
+    this.claimService.descargarSoporte(adjunto.fileId).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = adjunto.nombre;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        this.toast.success(`Soporte "${adjunto.nombre}" descargado.`);
+      },
+      error: (error) => this.toast.error(getApiErrorMessage(error)),
+    });
   }
 
   getReclamoBadgeVariant(estado: EstadoSolicitudRevision): BadgeVariant {
