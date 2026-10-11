@@ -1,4 +1,4 @@
-import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AdminManagementService } from '../../../core/services/admin-management.service';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
@@ -133,7 +133,7 @@ type TabCatalogo = 'SEDES' | 'ESPACIOS' | 'FACULTADES' | 'AREAS';
     </div>
   `,
 })
-export class AdminCatalogsComponent {
+export class AdminCatalogsComponent implements OnInit {
   private adminService = inject(AdminManagementService);
   private coordService = inject(CoordinatorManagementService);
   private toast = inject(ToastService);
@@ -147,6 +147,15 @@ export class AdminCatalogsComponent {
   planes = this.coordService.planes;
 
   getAsignaturasPlanFn = (planId: string) => this.coordService.getAsignaturasPlan(planId);
+
+  ngOnInit(): void {
+    // Esta pantalla agrupa los cuatro catálogos; los carga una sola vez al
+    // entrar, mientras que el servicio permanece sin efectos globales.
+    this.adminService.cargarSedes().subscribe();
+    this.adminService.cargarEspacios().subscribe();
+    this.adminService.cargarFacultades().subscribe();
+    this.adminService.cargarAreas().subscribe();
+  }
 
   // Sedes
   guardarSede(event: { id?: string; datos: any }): void {

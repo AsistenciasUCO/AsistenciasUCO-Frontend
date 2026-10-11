@@ -47,18 +47,7 @@ export class AdminManagementService {
   private _reportesCierre = signal<CierrePeriodoReporte[]>([]);
   reportesCierre = this._reportesCierre.asReadonly();
 
-  constructor(private http: HttpClient) {
-    this.cargarDatosIniciales();
-  }
-
-  private cargarDatosIniciales(): void {
-    this.cargarSedes().subscribe();
-    this.cargarEspacios().subscribe();
-    this.cargarFacultades().subscribe();
-    this.cargarAreas().subscribe();
-    this.cargarParametros().subscribe();
-    this.cargarAuditoria().subscribe();
-  }
+  constructor(private http: HttpClient) {}
 
   // ================= DECANOS =================
   getDecanos(): Observable<ApiResponse<DecanoItem[]>> {

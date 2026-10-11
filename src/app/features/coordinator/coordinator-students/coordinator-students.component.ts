@@ -115,7 +115,8 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
           <div class="sm:col-span-2 relative">
             <input
               type="text"
-              [(ngModel)]="searchDirectorio"
+              [ngModel]="searchDirectorio()"
+              (ngModelChange)="onDirectorioSearchChange($event)"
               placeholder="Buscar estudiante por documento, código universitario o nombre..."
               class="w-full pl-10 pr-4 py-2.5 bg-white border border-warm-200 rounded-xl text-sm text-warm-900 placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 shadow-warm-sm"
             />
@@ -126,13 +127,13 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
 
           <div>
             <select
-              [(ngModel)]="filtroEstadoDirectorio"
+              [ngModel]="filtroEstadoDirectorio()"
+              (ngModelChange)="onDirectorioStatusChange($event)"
               class="w-full px-3.5 py-2.5 bg-white border border-warm-200 rounded-xl text-sm text-warm-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 shadow-warm-sm"
             >
               <option value="TODOS">Todos los estados</option>
               <option value="ACTIVO">Solo Activos</option>
               <option value="INACTIVO">Solo Inactivos</option>
-              <option value="BLOQUEADO">Bloqueados</option>
             </select>
           </div>
         </div>
@@ -166,7 +167,7 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
                   <div class="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-warm-50 text-xs border border-warm-100 my-2">
                     <div>
                       <span class="text-warm-400 block text-[10px]">Semestre</span>
-                      <span class="font-semibold text-warm-900">{{ est.semestreActual }}° Semestre</span>
+                      <span class="font-semibold text-warm-900">{{ est.semestreActual ? est.semestreActual + '° Semestre' : 'No informado' }}</span>
                     </div>
                     <div>
                       <span class="text-warm-400 block text-[10px]">Programa</span>
@@ -181,13 +182,13 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
                     </div>
                     <div class="flex items-center justify-between">
                       <span class="text-warm-500">Promedio Ponderado</span>
-                      <span class="font-bold text-primary-700">{{ est.promedioAcumulado || '4.0' }}</span>
+                      <span class="font-bold text-primary-700">{{ est.promedioAcumulado ?? 'No informado' }}</span>
                     </div>
                   </div>
                 </div>
 
                 <div class="flex items-center justify-between pt-2 border-t border-warm-100 text-xs text-warm-500">
-                  <span>{{ est.gruposInscritos?.length || 0 }} asignaturas matriculadas</span>
+                  <span>{{ est.gruposInscritos ? est.gruposInscritos.length + ' asignaturas matriculadas' : 'Matrícula académica no informada' }}</span>
                   <span class="text-primary-700 font-semibold">UCO Estudiante</span>
                 </div>
               </div>
@@ -197,10 +198,10 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
 
         <!-- Paginador del Directorio -->
         <app-pagination
-          [totalItems]="filteredDirectorio().length"
-          [pageSize]="pageSizeDirectorio"
-          [currentPage]="currentPageDirectorio"
-          (pageChange)="currentPageDirectorio = $event"
+          [totalItems]="totalDirectorio()"
+          [pageSize]="pageSizeDirectorio()"
+          [currentPage]="currentPageDirectorio()"
+          (pageChange)="onDirectorioPageChange($event)"
           (pageSizeChange)="onPageSizeDirectorioChange($event)"
         ></app-pagination>
       }
@@ -471,8 +472,10 @@ export class CoordinatorStudentsComponent implements OnInit {
 
   // Directorio
   directorio = signal<EstudianteDirectorioItem[]>([]);
-  searchDirectorio = '';
-  filtroEstadoDirectorio = 'TODOS';
+  searchDirectorio = signal('');
+  filtroEstadoDirectorio = signal('TODOS');
+  totalDirectorio = signal(0);
+  isLoadingDirectorio = signal(false);
 
   // Matrícula por Grupo
   courses = signal<Course[]>([]);
@@ -487,8 +490,8 @@ export class CoordinatorStudentsComponent implements OnInit {
   feedbackSolicitud: Record<string, string> = {};
 
   // Paginación Directorio
-  currentPageDirectorio = 1;
-  pageSizeDirectorio = 6;
+  currentPageDirectorio = signal(1);
+  pageSizeDirectorio = signal(6);
 
   // Paginación Solicitudes
   currentPageSolicitudes = 1;
@@ -503,24 +506,13 @@ export class CoordinatorStudentsComponent implements OnInit {
   });
 
   filteredDirectorio = computed(() => {
-    const q = this.searchDirectorio.toLowerCase().trim();
-    const estado = this.filtroEstadoDirectorio;
-
-    return this.directorio().filter((e) => {
-      const matchQ =
-        !q ||
-        e.nombreCompleto.toLowerCase().includes(q) ||
-        e.codigo.toLowerCase().includes(q) ||
-        e.documento.includes(q);
-      const matchEstado = estado === 'TODOS' || e.estadoMatricula === estado;
-      return matchQ && matchEstado;
-    });
+    // El filtro y el total vienen del servidor. Este computed se conserva como
+    // adaptador para consumidores visuales existentes, no para paginar en memoria.
+    return this.directorio();
   });
 
   paginatedDirectorio = computed(() => {
-    const items = this.filteredDirectorio();
-    const start = (this.currentPageDirectorio - 1) * this.pageSizeDirectorio;
-    return items.slice(start, start + this.pageSizeDirectorio);
+    return this.directorio();
   });
 
   filteredSolicitudes = computed(() => {
@@ -536,8 +528,9 @@ export class CoordinatorStudentsComponent implements OnInit {
   });
 
   onPageSizeDirectorioChange(newSize: number): void {
-    this.pageSizeDirectorio = newSize;
-    this.currentPageDirectorio = 1;
+    this.pageSizeDirectorio.set(newSize);
+    this.currentPageDirectorio.set(1);
+    this.cargarDirectorio();
   }
 
   onPageSizeSolicitudesChange(newSize: number): void {
@@ -556,9 +549,7 @@ export class CoordinatorStudentsComponent implements OnInit {
 
   cargarDatos(): void {
     // 1. Cargar Directorio
-    this.coordinatorService.getEstudiantesDirectorio().subscribe({
-      next: (res) => this.directorio.set(res.datos || []),
-    });
+    this.cargarDirectorio();
 
     // 2. Cargar Cursos
     this.courseService.getTeacherCourses().subscribe({
@@ -578,6 +569,73 @@ export class CoordinatorStudentsComponent implements OnInit {
     this.coordinatorService.getSolicitudesMatricula().subscribe({
       next: (res) => this.solicitudes.set(res.datos || []),
     });
+  }
+
+  onDirectorioSearchChange(value: string): void {
+    this.searchDirectorio.set(value);
+    this.currentPageDirectorio.set(1);
+    this.cargarDirectorio();
+  }
+
+  onDirectorioStatusChange(value: string): void {
+    this.filtroEstadoDirectorio.set(value);
+    this.currentPageDirectorio.set(1);
+    this.cargarDirectorio();
+  }
+
+  onDirectorioPageChange(page: number): void {
+    this.currentPageDirectorio.set(page);
+    this.cargarDirectorio();
+  }
+
+  cargarDirectorio(): void {
+    const paginated = (this.coordinatorService as any).getEstudiantesDirectorioPagina;
+    if (typeof paginated !== 'function') {
+      // Compatibilidad con dobles de prueba y consumidores legacy.
+      this.coordinatorService.getEstudiantesDirectorio().subscribe({
+        next: (res) => {
+          this.directorio.set(res.datos || []);
+          this.totalDirectorio.set((res.datos || []).length);
+        },
+      });
+      return;
+    }
+    const query = this.searchDirectorio().trim();
+    const isNumeric = /^\d+$/.test(query);
+    this.isLoadingDirectorio.set(true);
+    paginated.call(this.coordinatorService, {
+      page: this.currentPageDirectorio() - 1,
+      size: this.pageSizeDirectorio(),
+      ...(query ? (isNumeric ? { numeroIdentificacion: query } : { nombre: query }) : {}),
+      ...(this.filtroEstadoDirectorio() !== 'TODOS'
+        ? { activo: this.filtroEstadoDirectorio() === 'ACTIVO' }
+        : {}),
+    }).subscribe({
+      next: (page: any) => {
+        this.directorio.set((page.items || []).map((item: any) => this.toDirectoryItem(item)));
+        this.totalDirectorio.set(Number(page.totalItems || 0));
+        this.isLoadingDirectorio.set(false);
+      },
+      error: (error: unknown) => {
+        this.isLoadingDirectorio.set(false);
+        this.toast.error(getApiErrorMessage(error));
+      },
+    });
+  }
+
+  private toDirectoryItem(item: any): EstudianteDirectorioItem {
+    return {
+      id: item.id,
+      documento: String(item.numeroIdentificacion ?? ''),
+      codigo: item.codigo ?? '',
+      nombreCompleto: item.nombreCompleto,
+      correo: item.correo,
+      programa: item.programa ?? 'No informado por el directorio',
+      semestreActual: item.semestreActual,
+      estadoMatricula: item.estaActivoUsuario ? 'ACTIVO' : 'INACTIVO',
+      promedioAcumulado: item.promedioAcumulado,
+      gruposInscritos: item.gruposInscritos,
+    };
   }
 
   onSelectCourse(cursoId: string): void {
@@ -613,7 +671,7 @@ export class CoordinatorStudentsComponent implements OnInit {
           this.toast.success(res.mensajeUsuario || 'Estudiante matriculado exitosamente.');
           this.mostrarModalMatricular.set(false);
           this.cargarEstudiantesGrupo(cursoId);
-          this.coordinatorService.getEstudiantesDirectorio().subscribe((r) => this.directorio.set(r.datos || []));
+          this.cargarDirectorio();
         }
       },
       error: (err) => {
@@ -633,7 +691,7 @@ export class CoordinatorStudentsComponent implements OnInit {
           if (res.exitoso) {
             this.toast.success(res.mensajeUsuario || 'Estudiante retirado.');
             this.cargarEstudiantesGrupo(cursoId);
-            this.coordinatorService.getEstudiantesDirectorio().subscribe((r) => this.directorio.set(r.datos || []));
+            this.cargarDirectorio();
           }
         },
         error: (err) => this.toast.error(getApiErrorMessage(err)),
