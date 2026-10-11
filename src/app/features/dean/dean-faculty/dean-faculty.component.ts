@@ -15,6 +15,7 @@ import { CardComponent } from '../../../shared/components/card/card.component';
 import { BadgeComponent } from '../../../shared/components/badge/badge.component';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
+import { SessionTimeZoneService } from '../../../core/services/session-timezone.service';
 
 type TabDecanoFacultad = 'GRUPOS' | 'ESTRUCTURA' | 'PERIODOS';
 type SubVistaDecano = 'LISTA' | 'DETALLE_GRUPO';
@@ -452,9 +453,13 @@ type SubVistaDecano = 'LISTA' | 'DETALLE_GRUPO';
                 <div class="space-y-1 flex-1 min-w-0">
                   <div class="flex flex-wrap items-center gap-2">
                     <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded-md bg-warm-100 text-warm-800">#{{ s.sessionNumber }}</span>
-                    <span class="text-xs font-medium text-warm-600">{{ s.date }}</span>
-                    <span class="text-warm-300">•</span>
-                    <span class="text-xs font-mono font-bold text-warm-800">{{ s.startTime }} - {{ s.endTime }}</span>
+                    @if (s.estadoTemporal === 'INDETERMINADA') {
+                      <span class="text-xs font-semibold text-amber-800">Horario no confirmado</span>
+                    } @else {
+                      <span class="text-xs font-medium text-warm-600">{{ timeZone.displaySessionDate(s) }}{{ timeZone.displaySessionEndDate(s) !== timeZone.displaySessionDate(s) ? ' – ' + timeZone.displaySessionEndDate(s) : '' }}</span>
+                      <span class="text-warm-300">•</span>
+                      <span class="text-xs font-mono font-bold text-warm-800">{{ timeZone.displaySessionStartTime(s) }} - {{ timeZone.displaySessionEndTime(s) }}</span>
+                    }
                     <span class="text-warm-300">•</span>
                     <span class="text-xs text-warm-600 bg-warm-100/60 px-2 py-0.5 rounded-md">Aula: {{ selectedCourse()?.room }}</span>
                   </div>
@@ -556,6 +561,7 @@ export class DeanFacultyComponent implements OnInit {
   private sessionService = inject(SessionService);
   private adminService = inject(AdminManagementService);
   private coordService = inject(CoordinatorManagementService);
+  readonly timeZone = inject(SessionTimeZoneService);
 
   tabActiva = signal<TabDecanoFacultad>('GRUPOS');
   subVista = signal<SubVistaDecano>('LISTA');
@@ -659,6 +665,10 @@ export class DeanFacultyComponent implements OnInit {
     this.courseService.getTeacherCourses().subscribe({
       next: (res) => this.courses.set(res.datos || []),
     });
+    this.adminService.cargarSedes().subscribe();
+    this.adminService.cargarEspacios().subscribe();
+    this.adminService.cargarFacultades().subscribe();
+    this.adminService.cargarAreas().subscribe();
   }
 
   abrirDetalleGrupo(curso: Course): void {
