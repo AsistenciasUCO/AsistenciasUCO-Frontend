@@ -17,6 +17,11 @@
 - Archivo `fileId` y descarga Blob autenticada.
 - 501 de reclamos/perfil sin perder sesión ni fabricar datos.
 - Cambio mock/real sin interceptor residual.
+- `USE_MOCKS=true/false` en runtime, ruta API sin mock controlada y recurso externo no interceptado.
+- Directorio: búsquedas rápidas con respuestas invertidas, cancelación, errores, loading sin resultados antiguos y página vacía.
+- Matrícula: búsqueda server-side separada del directorio paginado, filtro activo y no carga masiva.
+- Reclamos: lista exitosa vacía, 501, 403, error de red, 500 y PATCH void con `exitoso=true` sin `datos`.
+- Temporalidad: `08:00–08:00`, `23:30–01:30`, `+05:99`, cambio de zona durante edición y caché de formateadores.
 
 ## Integración manual condicionada
 
@@ -25,4 +30,8 @@ Solo se puede ejecutar con el backend real accesible, `APP_SESIONES_V2_ENABLED=t
 ## Evidencia esperada
 
 Guardar URL, método, status, `X-Correlation-Id`, payload sin secretos, captura de la UI y resultado de la consulta posterior. Nunca guardar access tokens ni archivos de credenciales.
+
+## Criterio de certificación
+
+La suite solo se considera aprobada con ChromeHeadless conectado y número exacto de specs PASS/FAIL/SKIP. Un bundle generado sin navegador conectado no es PASS.
 

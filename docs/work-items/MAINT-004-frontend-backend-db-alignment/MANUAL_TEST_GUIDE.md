@@ -23,7 +23,7 @@ Usar `USE_MOCKS=false`. Para UTC v2, activar además `USE_SESSIONS_V2=true` en e
 |---|---|---|---|
 | Buscar estudiantes | `GET /api/v1/estudiantes?page=0&size=6&nombre=...` / COORDINADOR | nombre, documento, estado | Resultados, `totalItems` y páginas vienen del servidor |
 | Cambiar página/filtro | mismo endpoint | página vacía y filtro combinado | Reinicia a página cero; no carga miles en memoria |
-| Matrícula por grupo | `/grupos/{grupoId}/estudiantes` | ID estudiante real | Se conserva el ID y se recarga el grupo |
+| Matrícula por grupo | búsqueda `/estudiantes` + `/grupos/{grupoId}/estudiantes` | nombre/documento e ID estudiante real | La búsqueda es server-side, excluye matriculados visibles y se recarga el grupo |
 
 ## DOCENTE
 
@@ -34,14 +34,15 @@ Usar `USE_MOCKS=false`. Para UTC v2, activar además `USE_SESSIONS_V2=true` en e
 | Crear sesión v2 | `POST /api/v2/sesiones` | nombre, fecha/hora local, zona IANA | Body con offset; 201; listado se vuelve a consultar |
 | Editar solo nombre | `PATCH /api/v2/sesiones/{id}` | sesión existente | Instantes conservan todos sus decimales |
 | Editar horario | PATCH v2 | horario DST/medianoche | Se comparan instantes; hora inexistente/ambigua se rechaza explícitamente |
+| Validar horario | formulario UTC v2 | `08:00–08:00`, `23:30–01:30`, cambio de zona durante edición | Igualdad se rechaza; medianoche se conserva; cambio de zona exige revisión |
 | Tomar asistencia | GET grupo/asistencias + POST lote | IDs reales y `AN/SJC/EX` | `EX` permanece `EX`; éxito activa recarga/SSE |
-| Reclamos | GET docente/reclamos | JWT DOCENTE | 501 se informa; no se muestran mocks en real |
+| Reclamos | GET docente/reclamos | JWT DOCENTE | Lista vacía exitosa, 501, 403, red y 500 se distinguen; no se muestran mocks en real |
 
 ## ESTUDIANTE
 
 | Acción | Endpoint / rol | Datos | Resultado |
 |---|---|---|---|
 | Subir soporte | `POST /api/v1/archivos/subir` / ESTUDIANTE | PDF/JPG/PNG válido | Respuesta contiene `fileId`, `nombre`, `url`, `tamanio` |
-| Radicar reclamo | `POST /api/v1/asistencias/revisiones` | sesión, categoría, justificación | Se guarda el ID de archivo si existe |
+| Radicar reclamo | `POST /api/v1/asistencias/revisiones` | sesión, categoría, justificación y soporte | Se conserva el `fileId` recibido para la descarga autenticada posterior |
 | Consultar sesión histórica | endpoint estudiantil v1 existente | sesión propia | No se inventa zona ni se oculta la asistencia |
 

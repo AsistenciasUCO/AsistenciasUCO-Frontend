@@ -9,8 +9,12 @@
 | Histórico v1 sin procedencia | v2 entrega `INDETERMINADA` y fechas null; la UI muestra la sesión y no inventa horario. |
 | POST no devuelve ID | El listado se recarga y la UI no elige por nombre/fecha cuando puede haber duplicados. |
 | Paginación y alcance institucional | `/estudiantes` se usa solo para el directorio coordinador en roles autorizados; el grupo docente sigue usando `/grupos/{id}/estudiantes`. |
-| Interceptor mock residual | Se registra siempre pero se autoexcluye por `USE_MOCKS` en cada petición; el modo real continúa a la red. |
+| Interceptor mock residual | `AuthService.isMockMode()` decide por petición; modo real deja pasar y modo mock devuelve 501 controlado para API desconocida. |
 | Reclamos GET 501 | No se fabrican mocks en real y se muestra limitación explícita; PATCH individual queda separado. |
 | Descarga protegida | Se usa `HttpClient`/Blob con Bearer; no se abre una URL sin autenticación. |
-| Calidad CI | El build de desarrollo pasa; la ejecución Karma queda pendiente porque ChromeHeadless no inicia en el entorno actual. |
+| Calidad CI | Builds development/production pasan; Karma no conecta ChromeHeadless en el host actual y no permite certificar tests/cobertura. |
+| Horas iguales | Validación explícita rechaza `08:00–08:00`; no se interpreta como 24 horas. |
+| RFC3339 malformado | Se rechazan offsets como `+05:99` y valores fuera de ±14:00. |
+| Selector de matrícula | Consulta server-side por nombre/documento con tamaño limitado; no declara disponibilidad global si el resultado no fue consultado. |
+| Dependencias | 59 alertas siguen abiertas; arreglos automáticos requieren Angular mayor y no se aplican sin análisis de compatibilidad. |
 

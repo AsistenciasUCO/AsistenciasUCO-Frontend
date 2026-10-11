@@ -17,8 +17,9 @@ Fuente primaria consultada: `C:\Users\josev\AsistenciasUCO\AsistenciasUCO\docs\c
 | `POST /api/v1/asistencias/lote` | control / `AttendanceService` | `ApiMessageResponse`, 201 | DOCENTE | IMPLEMENTADO | SSE posterior recarga HTTP |
 | `GET /api/v1/realtime/stream?grupoId=` | sincronización / transporte SSE | `text/event-stream` | Autenticado + scope | IMPLEMENTADO, PENDIENTE_E2E | Reconexión preservada |
 | `GET /api/v1/estudiantes` | directorio / `CoordinatorManagementService` | `EstudiantePaginaDTO` sin envelope | COORDINADOR/ADMINISTRADOR | IMPLEMENTADO, PENDIENTE_E2E | page 0-based, size 1..100, filtros AND |
+| `GET /api/v1/estudiantes` | selector de matrícula / `CoordinatorStudentsComponent` | `EstudiantePaginaDTO` sin envelope | COORDINADOR | IMPLEMENTADO, PENDIENTE_E2E | búsqueda server-side limitada; no carga global |
 | `GET /api/v1/docente/reclamos` | bandeja / `AttendanceClaimService` | endpoint actual 501 | DOCENTE | BLOQUEADO_POR_CONTRATO | UI informa 501; no mocks en real |
-| `PATCH /api/v1/docente/reclamos/{id}` | resolución / `AttendanceClaimService` | request de resolución | DOCENTE | IMPLEMENTADO, PENDIENTE_E2E | Mantener para IDs reales |
+| `PATCH /api/v1/docente/reclamos/{id}` | resolución / `AttendanceClaimService` | request de resolución + respuesta void | DOCENTE | IMPLEMENTADO, PENDIENTE_E2E | éxito por `exitoso=true`, `datos` opcional |
 | `POST /api/v1/archivos/subir` | soportes / `AttendanceClaimService` | `ApiDataResponse<{fileId,nombre,url,tamanio}>`, 201 | ESTUDIANTE | IMPLEMENTADO, PENDIENTE_E2E | Respuesta corregida |
 | `GET /api/v1/archivos/{fileId}` | descarga / `AttendanceClaimService` | Blob autenticado | Propietario JWT | IMPLEMENTADO, PENDIENTE_E2E | No `window.open` sin Bearer |
 | `GET /api/v1/usuarios/perfil` | perfil / `AuthService` | endpoint actual 501 | Autenticado | BLOQUEADO_POR_CONTRATO | JWT seguro se conserva si falla |
