@@ -34,6 +34,24 @@ export interface LocalDateTimeParts {
 const LOCAL_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const LOCAL_TIME_PATTERN = /^(\d{2}):(\d{2})$/;
 const RFC3339_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,7}))?(Z|[+-]\d{2}:\d{2})$/;
+const formatterCache = new Map<string, Intl.DateTimeFormat>();
+
+function getFormatter(timeZone: string): Intl.DateTimeFormat {
+  const cached = formatterCache.get(timeZone);
+  if (cached) return cached;
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  formatterCache.set(timeZone, formatter);
+  return formatter;
+}
 
 function validTimeZone(timeZone: string): boolean {
   try {
@@ -88,16 +106,7 @@ function localNaiveEpoch(date: string, time: string): number {
 }
 
 function formatParts(epochMs: number, timeZone: string): LocalDateTimeParts {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  });
+  const formatter = getFormatter(timeZone);
   const parts = Object.fromEntries(
     formatter.formatToParts(new Date(epochMs)).map((part) => [part.type, part.value])
   );
@@ -119,16 +128,7 @@ function formatPartsWithSeconds(
   epochMs: number,
   timeZone: string
 ): { year: number; month: number; day: number; hour: number; minute: number; second: number } {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  });
+  const formatter = getFormatter(timeZone);
   const parts = Object.fromEntries(
     formatter.formatToParts(new Date(epochMs)).map((part) => [part.type, part.value])
   );
@@ -206,6 +206,12 @@ export function localDateTimeToExplicitInstant(
 }
 
 export function localSessionToInstants(input: LocalSessionInput): LocalSessionInstants {
+  if (input.startTime === input.endTime) {
+    throw new SessionTimeZoneError(
+      'END_BEFORE_START',
+      'La hora de fin debe ser posterior a la hora de inicio; una sesión de 24 horas no se crea implícitamente.'
+    );
+  }
   const start = localDateTimeToExplicitInstant(input.date, input.startTime, input.timeZone);
   const endDate = input.endTime <= input.startTime ? addCalendarDay(input.date) : input.date;
   const end = localDateTimeToExplicitInstant(endDate, input.endTime, input.timeZone);
@@ -234,12 +240,14 @@ export function normalizeRfc3339ToUtc(value: string): string {
     throw new SessionTimeZoneError('INVALID_INPUT', `Instante RFC3339 inválido: ${value}`);
   }
   const rawOffset = match[8];
-  const offsetMinutes = rawOffset === 'Z'
-    ? 0
-    : (Number(rawOffset.slice(1, 3)) * 60 + Number(rawOffset.slice(4, 6))) * (rawOffset[0] === '+' ? 1 : -1);
-  if (Math.abs(offsetMinutes) > 14 * 60) {
+  const offsetHours = rawOffset === 'Z' ? 0 : Number(rawOffset.slice(1, 3));
+  const offsetRemainder = rawOffset === 'Z' ? 0 : Number(rawOffset.slice(4, 6));
+  if (offsetRemainder > 59 || offsetHours > 14 || (offsetHours === 14 && offsetRemainder !== 0)) {
     throw new SessionTimeZoneError('INVALID_INPUT', `Offset RFC3339 inválido: ${value}`);
   }
+  const offsetMinutes = rawOffset === 'Z'
+    ? 0
+    : (offsetHours * 60 + offsetRemainder) * (rawOffset[0] === '+' ? 1 : -1);
   const instant = new Date(0);
   instant.setUTCFullYear(year, month - 1, day);
   instant.setUTCHours(hour, minute, second, 0);

@@ -16,6 +16,7 @@ import { AvatarComponent } from '../../../shared/components/avatar/avatar.compon
 import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
 
 type VistaDocenteReclamos = 'BANDEJA' | 'RESOLUCION';
+type ReclamosListState = 'LOADING' | 'LOADED' | 'UNAVAILABLE' | 'FORBIDDEN' | 'NETWORK_ERROR' | 'SERVER_ERROR';
 
 @Component({
   selector: 'app-teacher-claims',
@@ -102,6 +103,10 @@ type VistaDocenteReclamos = 'BANDEJA' | 'RESOLUCION';
             @for (n of [1, 2, 3, 4]; track n) {
               <div class="h-56 bg-warm-100 rounded-2xl animate-pulse"></div>
             }
+          </div>
+        } @else if (listState() !== 'LOADED') {
+          <div class="bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-sm text-red-900">
+            {{ listStateMessage() }}
           </div>
         } @else if (filteredReclamos().length === 0) {
           <div class="bg-white rounded-2xl border border-warm-200 p-12 text-center shadow-warm-sm">
@@ -370,6 +375,7 @@ export class TeacherClaimsComponent implements OnInit {
   reclamos = signal<SolicitudRevisionItem[]>([]);
   isLoading = signal<boolean>(true);
   listUnavailable = signal<boolean>(false);
+  listState = signal<ReclamosListState>('LOADING');
   searchQuery = '';
   selectedEstado: string = 'TODOS';
 
@@ -405,15 +411,25 @@ export class TeacherClaimsComponent implements OnInit {
   cargarReclamos(): void {
     this.isLoading.set(true);
     this.listUnavailable.set(false);
+    this.listState.set('LOADING');
     this.claimService.getReclamosDocente().subscribe({
       next: (res) => {
         this.reclamos.set(res.datos || []);
+        this.listState.set('LOADED');
         this.isLoading.set(false);
       },
-      error: (error: any) => {
-        this.listUnavailable.set(error?.status === 501);
+      error: (error: unknown) => {
+        const status = (error as { status?: number })?.status;
+        this.listState.set(status === 501
+          ? 'UNAVAILABLE'
+          : status === 403
+            ? 'FORBIDDEN'
+            : status === 0
+              ? 'NETWORK_ERROR'
+              : 'SERVER_ERROR');
+        this.listUnavailable.set(status === 501);
         this.isLoading.set(false);
-        if (error?.status !== 501) this.toast.error(getApiErrorMessage(error));
+        if (status !== 501) this.toast.error(getApiErrorMessage(error));
       },
     });
   }
@@ -437,7 +453,7 @@ export class TeacherClaimsComponent implements OnInit {
 
     this.claimService.resolverReclamo(reclamo.id, accion, feedback).subscribe({
       next: (res) => {
-        if (res.exitoso && res.datos) {
+        if (res.exitoso) {
           this.toast.success(res.mensajeUsuario || 'Reclamo procesado.');
           this.cargarReclamos();
           this.volverABandeja();
@@ -445,6 +461,16 @@ export class TeacherClaimsComponent implements OnInit {
       },
       error: (err) => this.toast.error(getApiErrorMessage(err)),
     });
+  }
+
+  listStateMessage(): string {
+    switch (this.listState()) {
+      case 'FORBIDDEN': return 'No tienes autorización para consultar los reclamos de este alcance institucional (403).';
+      case 'NETWORK_ERROR': return 'No se pudo conectar con el backend. La lista no se reemplazó por datos simulados.';
+      case 'SERVER_ERROR': return 'El backend no pudo cargar los reclamos. Intenta nuevamente más tarde.';
+      case 'UNAVAILABLE': return 'El listado de reclamos todavía no está implementado en el backend (501).';
+      default: return 'No fue posible cargar los reclamos.';
+    }
   }
 
   descargarSoporte(adjunto: SoporteAdjuntoItem): void {

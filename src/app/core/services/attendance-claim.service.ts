@@ -10,6 +10,15 @@ import {
   HorarioDocenteItem,
 } from '../models/role-management.model';
 
+export interface ResolverReclamoResponse {
+  exitoso: boolean;
+  idTransaccion?: string;
+  mensajeUsuario?: string;
+  mensajeTecnico?: string;
+  /** El contrato de resolución es void; algunos despliegues omiten `datos`. */
+  datos?: null;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -67,8 +76,8 @@ export class AttendanceClaimService {
     id: string,
     accion: 'APROBADA' | 'RECHAZADA',
     respuestaDocente: string = ''
-  ): Observable<ApiResponse<SolicitudRevisionItem | null>> {
-    return this.http.patch<ApiResponse<SolicitudRevisionItem | null>>(
+  ): Observable<ResolverReclamoResponse> {
+    return this.http.patch<ResolverReclamoResponse>(
       `${environment.apiUrl}/docente/reclamos/${id}`,
       { accion, respuestaDocente, respuesta: respuestaDocente }
     );

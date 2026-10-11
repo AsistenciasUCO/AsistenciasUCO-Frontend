@@ -197,6 +197,9 @@ export class SessionService {
     if (nombreError) {
       return throwError(() => new Error(nombreError));
     }
+    if (data.startTime === data.endTime) {
+      return throwError(() => new Error('La hora de fin debe ser posterior a la hora de inicio; una sesión de 24 horas no se crea implícitamente.'));
+    }
 
     if (environment.useSessionsV2 && !environment.useMocks) {
       return this.sessionV2.createSession(grupoId, data);
@@ -248,6 +251,9 @@ export class SessionService {
     const nombreError = getSessionNameError(cambios.title);
     if (nombreError) {
       return throwError(() => new Error(nombreError));
+    }
+    if (cambios.startTime === cambios.endTime) {
+      return throwError(() => new Error('La hora de fin debe ser posterior a la hora de inicio; una sesión de 24 horas no se crea implícitamente.'));
     }
 
     if (environment.useSessionsV2 && !environment.useMocks) {

@@ -218,6 +218,7 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
     endTime: '10:00',
     sessionNumber: 1,
   };
+  private sesionFormTimeZone: string | null = null;
 
   ngOnInit(): void {
     this.cargarGrupos();
@@ -432,6 +433,7 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
       endTime: '16:00',
       sessionNumber: this.sessions().length + 1,
     };
+    this.sesionFormTimeZone = this.timeZone.zone();
     this.vistaActual.set('FORM_SESION');
   }
 
@@ -445,6 +447,7 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
       endTime: sesion.endTime,
       sessionNumber: sesion.sessionNumber,
     };
+    this.sesionFormTimeZone = this.timeZone.zone();
     this.vistaActual.set('FORM_SESION');
   }
 
@@ -469,6 +472,20 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
     }
     if (!this.sesionForm.startTime || !this.sesionForm.endTime) {
       this.toast.warning('Los campos Hora Inicio y Hora Fin de la sesión son obligatorios.');
+      return;
+    }
+    if (this.modoFormSesion === 'EDITAR' && this.sesionFormTimeZone !== this.timeZone.zone()) {
+      const original = this.sessions().find((session) => session.id === this.selectedSessionId);
+      if (original) {
+        this.sesionForm = {
+          ...this.sesionForm,
+          date: this.timeZone.displaySessionDate(original),
+          startTime: this.timeZone.displaySessionStartTime(original),
+          endTime: this.timeZone.displaySessionEndTime(original),
+        };
+      }
+      this.sesionFormTimeZone = this.timeZone.zone();
+      this.toast.warning('La zona horaria activa cambió mientras editabas. Se recargó el horario original; revisa los datos antes de guardar.');
       return;
     }
     if (!environment.useSessionsV2 && this.sesionForm.startTime >= this.sesionForm.endTime) {

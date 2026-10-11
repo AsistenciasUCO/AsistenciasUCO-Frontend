@@ -36,6 +36,15 @@ describe('session-timezone.util', () => {
     });
   });
 
+  it('rechaza inicio y fin iguales en lugar de convertirlos silenciosamente en 24 horas', () => {
+    expect(() => localSessionToInstants({
+      date: '2026-07-15',
+      startTime: '08:00',
+      endTime: '08:00',
+      timeZone: 'America/Bogota',
+    })).toThrowError(/24 horas/);
+  });
+
   it('rechaza una hora inexistente y una hora ambigua por DST', () => {
     expect(() => {
       try {
@@ -58,6 +67,11 @@ describe('session-timezone.util', () => {
   it('conserva hasta siete decimales al normalizar un offset explícito', () => {
     expect(normalizeRfc3339ToUtc('2026-07-15T20:00:00.1234567-05:00'))
       .toBe('2026-07-16T01:00:00.1234567Z');
+  });
+
+  it('rechaza minutos imposibles en un offset RFC3339', () => {
+    expect(() => normalizeRfc3339ToUtc('2026-07-15T20:00:00+05:99'))
+      .toThrowError(/Offset RFC3339 inválido/);
   });
 
   it('expone códigos accionables para los errores temporales', () => {
