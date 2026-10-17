@@ -67,6 +67,7 @@ interface JwtTokenPayload {
   given_name?: string;
   family_name?: string;
   name?: string;
+  numeroIdentificacion?: string | number;
   exp?: number;
   iat?: number;
   realm_access?: {
@@ -273,6 +274,7 @@ export class AuthService implements OnDestroy {
       grant_type: 'password',
       username: username,
       password: password,
+      scope: 'openid email profile',
     });
 
     let response: Response;
@@ -673,6 +675,7 @@ export class AuthService implements OnDestroy {
       institutionName: 'Universidad Católica de Oriente',
       department: this.getDepartmentForRole(primaryRole),
       status: 'active',
+      numeroIdentificacion: payload.numeroIdentificacion,
     };
   }
 
