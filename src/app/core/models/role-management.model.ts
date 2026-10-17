@@ -110,6 +110,7 @@ export type CategoriaJustificacion =
   | 'Otro';
 
 export interface SoporteAdjuntoItem {
+  fileId?: string;
   nombre: string;
   tipo: string;
   tamanioKb: number;
@@ -190,7 +191,7 @@ export interface EstudianteDirectorioItem {
   nombreCompleto: string;
   correo: string;
   programa: string;
-  semestreActual: number;
+  semestreActual?: number;
   estadoMatricula: 'ACTIVO' | 'INACTIVO' | 'BLOQUEADO';
   promedioAcumulado?: number;
   gruposInscritos?: string[];

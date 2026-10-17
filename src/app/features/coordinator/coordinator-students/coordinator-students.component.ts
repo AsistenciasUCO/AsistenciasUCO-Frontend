@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, DestroyRef, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
@@ -16,6 +16,10 @@ import { AvatarComponent } from '../../../shared/components/avatar/avatar.compon
 import { ToastService } from '../../../shared/components/toast/toast.component';
 import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
+import { Subject, EMPTY } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, finalize, switchMap } from 'rxjs/operators';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { EstudianteResumenApiDto } from '../../../core/api/models/estudiante-api-dto.model';
 
 type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
 
@@ -115,7 +119,8 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
           <div class="sm:col-span-2 relative">
             <input
               type="text"
-              [(ngModel)]="searchDirectorio"
+              [ngModel]="searchDirectorio()"
+              (ngModelChange)="onDirectorioSearchChange($event)"
               placeholder="Buscar estudiante por documento, código universitario o nombre..."
               class="w-full pl-10 pr-4 py-2.5 bg-white border border-warm-200 rounded-xl text-sm text-warm-900 placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 shadow-warm-sm"
             />
@@ -126,18 +131,29 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
 
           <div>
             <select
-              [(ngModel)]="filtroEstadoDirectorio"
+              [ngModel]="filtroEstadoDirectorio()"
+              (ngModelChange)="onDirectorioStatusChange($event)"
               class="w-full px-3.5 py-2.5 bg-white border border-warm-200 rounded-xl text-sm text-warm-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 shadow-warm-sm"
             >
               <option value="TODOS">Todos los estados</option>
               <option value="ACTIVO">Solo Activos</option>
               <option value="INACTIVO">Solo Inactivos</option>
-              <option value="BLOQUEADO">Bloqueados</option>
             </select>
           </div>
         </div>
 
         <!-- Grid de Tarjetas de Estudiante -->
+        @if (isLoadingDirectorio()) {
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-5" aria-live="polite" aria-busy="true">
+            @for (n of [1, 2, 3, 4]; track n) {
+              <div class="h-56 bg-warm-100 rounded-2xl animate-pulse"></div>
+            }
+          </div>
+        } @else if (paginatedDirectorio().length === 0) {
+          <div class="bg-white rounded-2xl border border-warm-200 p-10 text-center text-sm text-warm-500">
+            No hay estudiantes que coincidan con los filtros actuales.
+          </div>
+        } @else {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
           @for (est of paginatedDirectorio(); track est.id) {
             <app-card [hoverable]="true" padding="md">
@@ -166,7 +182,7 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
                   <div class="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-warm-50 text-xs border border-warm-100 my-2">
                     <div>
                       <span class="text-warm-400 block text-[10px]">Semestre</span>
-                      <span class="font-semibold text-warm-900">{{ est.semestreActual }}° Semestre</span>
+                      <span class="font-semibold text-warm-900">{{ est.semestreActual ? est.semestreActual + '° Semestre' : 'No informado' }}</span>
                     </div>
                     <div>
                       <span class="text-warm-400 block text-[10px]">Programa</span>
@@ -181,26 +197,27 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
                     </div>
                     <div class="flex items-center justify-between">
                       <span class="text-warm-500">Promedio Ponderado</span>
-                      <span class="font-bold text-primary-700">{{ est.promedioAcumulado || '4.0' }}</span>
+                      <span class="font-bold text-primary-700">{{ est.promedioAcumulado ?? 'No informado' }}</span>
                     </div>
                   </div>
                 </div>
 
                 <div class="flex items-center justify-between pt-2 border-t border-warm-100 text-xs text-warm-500">
-                  <span>{{ est.gruposInscritos?.length || 0 }} asignaturas matriculadas</span>
+                  <span>{{ est.gruposInscritos ? est.gruposInscritos.length + ' asignaturas matriculadas' : 'Matrícula académica no informada' }}</span>
                   <span class="text-primary-700 font-semibold">UCO Estudiante</span>
                 </div>
               </div>
             </app-card>
           }
         </div>
+        }
 
         <!-- Paginador del Directorio -->
         <app-pagination
-          [totalItems]="filteredDirectorio().length"
-          [pageSize]="pageSizeDirectorio"
-          [currentPage]="currentPageDirectorio"
-          (pageChange)="currentPageDirectorio = $event"
+          [totalItems]="totalDirectorio()"
+          [pageSize]="pageSizeDirectorio()"
+          [currentPage]="currentPageDirectorio()"
+          (pageChange)="onDirectorioPageChange($event)"
           (pageSizeChange)="onPageSizeDirectorioChange($event)"
         ></app-pagination>
       }
@@ -306,7 +323,7 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
                 <h4 class="font-serif font-bold text-base text-warm-900">
                   Matricular Alumno en {{ selectedCourse()?.name }}
                 </h4>
-                <p class="text-xs text-warm-500">Selecciona un estudiante del directorio activo para registrarlo en el grupo.</p>
+                <p class="text-xs text-warm-500">Busca por nombre o documento. La selección consulta el directorio en servidor y no carga todos los estudiantes.</p>
               </div>
               <button (click)="mostrarModalMatricular.set(false)" class="text-warm-400 hover:text-warm-700 text-xs font-bold">
                 ✕ Cerrar
@@ -314,13 +331,21 @@ type PestanaModulo = 'DIRECTORIO' | 'MATRICULA_GRUPO' | 'SOLICITUDES';
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div class="sm:col-span-2">
+              <div class="sm:col-span-2 space-y-2">
+                <input
+                  type="search"
+                  [ngModel]="searchMatricula()"
+                  (ngModelChange)="onMatriculaSearchChange($event)"
+                  placeholder="Escribe al menos parte del nombre o documento..."
+                  aria-label="Buscar estudiante para matrícula"
+                  class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm text-warm-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                />
                 <app-form-field label="Estudiante a Matricular">
                   <select
                     [(ngModel)]="estudianteAMatricularId"
                     class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm text-warm-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
                   >
-                    <option value="">Selecciona un estudiante...</option>
+                    <option value="">{{ isLoadingMatricula() ? 'Buscando estudiantes...' : 'Selecciona un resultado...' }}</option>
                     @for (est of estudiantesDisponiblesParaGrupo(); track est.id) {
                       <option [value]="est.id">
                         {{ est.nombreCompleto }} (Cód. {{ est.codigo }}) — {{ est.programa }}
@@ -466,18 +491,26 @@ export class CoordinatorStudentsComponent implements OnInit {
   private coordinatorService = inject(CoordinatorManagementService);
   private courseService = inject(CourseService);
   private toast = inject(ToastService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly directorioQuery$ = new Subject<string>();
+  private readonly matriculaSearch$ = new Subject<string>();
 
   pestanaActiva = signal<PestanaModulo>('DIRECTORIO');
 
   // Directorio
   directorio = signal<EstudianteDirectorioItem[]>([]);
-  searchDirectorio = '';
-  filtroEstadoDirectorio = 'TODOS';
+  searchDirectorio = signal('');
+  filtroEstadoDirectorio = signal('TODOS');
+  totalDirectorio = signal(0);
+  isLoadingDirectorio = signal(false);
 
   // Matrícula por Grupo
   courses = signal<Course[]>([]);
   selectedCourseId = signal<string>('crs-1');
   enrolledStudents = signal<EstudianteDirectorioItem[]>([]);
+  searchMatricula = signal('');
+  estudiantesDisponiblesMatricula = signal<EstudianteDirectorioItem[]>([]);
+  isLoadingMatricula = signal(false);
   mostrarModalMatricular = signal<boolean>(false);
   estudianteAMatricularId = '';
 
@@ -487,8 +520,8 @@ export class CoordinatorStudentsComponent implements OnInit {
   feedbackSolicitud: Record<string, string> = {};
 
   // Paginación Directorio
-  currentPageDirectorio = 1;
-  pageSizeDirectorio = 6;
+  currentPageDirectorio = signal(1);
+  pageSizeDirectorio = signal(6);
 
   // Paginación Solicitudes
   currentPageSolicitudes = 1;
@@ -503,24 +536,13 @@ export class CoordinatorStudentsComponent implements OnInit {
   });
 
   filteredDirectorio = computed(() => {
-    const q = this.searchDirectorio.toLowerCase().trim();
-    const estado = this.filtroEstadoDirectorio;
-
-    return this.directorio().filter((e) => {
-      const matchQ =
-        !q ||
-        e.nombreCompleto.toLowerCase().includes(q) ||
-        e.codigo.toLowerCase().includes(q) ||
-        e.documento.includes(q);
-      const matchEstado = estado === 'TODOS' || e.estadoMatricula === estado;
-      return matchQ && matchEstado;
-    });
+    // El filtro y el total vienen del servidor. Este computed se conserva como
+    // adaptador para consumidores visuales existentes, no para paginar en memoria.
+    return this.directorio();
   });
 
   paginatedDirectorio = computed(() => {
-    const items = this.filteredDirectorio();
-    const start = (this.currentPageDirectorio - 1) * this.pageSizeDirectorio;
-    return items.slice(start, start + this.pageSizeDirectorio);
+    return this.directorio();
   });
 
   filteredSolicitudes = computed(() => {
@@ -536,8 +558,10 @@ export class CoordinatorStudentsComponent implements OnInit {
   });
 
   onPageSizeDirectorioChange(newSize: number): void {
-    this.pageSizeDirectorio = newSize;
-    this.currentPageDirectorio = 1;
+    this.pageSizeDirectorio.set(newSize);
+    this.currentPageDirectorio.set(1);
+    this.invalidateDirectoryResults();
+    this.cargarDirectorio();
   }
 
   onPageSizeSolicitudesChange(newSize: number): void {
@@ -547,18 +571,87 @@ export class CoordinatorStudentsComponent implements OnInit {
 
   estudiantesDisponiblesParaGrupo = computed(() => {
     const enrolledIds = new Set(this.enrolledStudents().map((e) => e.id));
-    return this.directorio().filter((e) => e.estadoMatricula === 'ACTIVO' && !enrolledIds.has(e.id));
+    return this.estudiantesDisponiblesMatricula()
+      .filter((e) => e.estadoMatricula === 'ACTIVO' && !enrolledIds.has(e.id));
   });
 
   ngOnInit(): void {
+    this.configureDirectorySearch();
+    this.configureEnrollmentSearch();
     this.cargarDatos();
+  }
+
+  private configureDirectorySearch(): void {
+    this.directorioQuery$
+      .pipe(
+        debounceTime(250),
+        distinctUntilChanged(),
+        switchMap(() => {
+          const query = this.searchDirectorio().trim();
+          const isNumeric = /^\d+$/.test(query);
+          this.isLoadingDirectorio.set(true);
+          return this.coordinatorService.getEstudiantesDirectorioPagina({
+            page: this.currentPageDirectorio() - 1,
+            size: this.pageSizeDirectorio(),
+            ...(query ? (isNumeric ? { numeroIdentificacion: query } : { nombre: query }) : {}),
+            ...(this.filtroEstadoDirectorio() !== 'TODOS'
+              ? { activo: this.filtroEstadoDirectorio() === 'ACTIVO' }
+              : {}),
+          }).pipe(
+            catchError((error: unknown) => {
+              this.directorio.set([]);
+              this.totalDirectorio.set(0);
+              this.toast.error(getApiErrorMessage(error));
+              return EMPTY;
+            }),
+            finalize(() => this.isLoadingDirectorio.set(false)),
+          );
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((page) => {
+        this.directorio.set(page.items.map((item) => this.toDirectoryItem(item)));
+        this.totalDirectorio.set(Number(page.totalItems || 0));
+      });
+  }
+
+  private configureEnrollmentSearch(): void {
+    this.matriculaSearch$
+      .pipe(
+        debounceTime(250),
+        distinctUntilChanged(),
+        switchMap((value) => {
+          const query = value.trim();
+          if (!query) {
+            this.estudiantesDisponiblesMatricula.set([]);
+            return EMPTY;
+          }
+          const isNumeric = /^\d+$/.test(query);
+          this.isLoadingMatricula.set(true);
+          return this.coordinatorService.getEstudiantesDirectorioPagina({
+            page: 0,
+            size: 25,
+            ...(isNumeric ? { numeroIdentificacion: query } : { nombre: query }),
+            activo: true,
+          }).pipe(
+            catchError((error: unknown) => {
+              this.estudiantesDisponiblesMatricula.set([]);
+              this.toast.error(getApiErrorMessage(error));
+              return EMPTY;
+            }),
+            finalize(() => this.isLoadingMatricula.set(false)),
+          );
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((page) => {
+        this.estudiantesDisponiblesMatricula.set(page.items.map((item) => this.toDirectoryItem(item)));
+      });
   }
 
   cargarDatos(): void {
     // 1. Cargar Directorio
-    this.coordinatorService.getEstudiantesDirectorio().subscribe({
-      next: (res) => this.directorio.set(res.datos || []),
-    });
+    this.cargarDirectorio();
 
     // 2. Cargar Cursos
     this.courseService.getTeacherCourses().subscribe({
@@ -580,6 +673,59 @@ export class CoordinatorStudentsComponent implements OnInit {
     });
   }
 
+  onDirectorioSearchChange(value: string): void {
+    this.searchDirectorio.set(value);
+    this.currentPageDirectorio.set(1);
+    this.invalidateDirectoryResults();
+    this.cargarDirectorio();
+  }
+
+  onDirectorioStatusChange(value: string): void {
+    this.filtroEstadoDirectorio.set(value);
+    this.currentPageDirectorio.set(1);
+    this.invalidateDirectoryResults();
+    this.cargarDirectorio();
+  }
+
+  onDirectorioPageChange(page: number): void {
+    this.currentPageDirectorio.set(page);
+    this.invalidateDirectoryResults();
+    this.cargarDirectorio();
+  }
+
+  private invalidateDirectoryResults(): void {
+    this.directorio.set([]);
+    this.totalDirectorio.set(0);
+    this.isLoadingDirectorio.set(true);
+  }
+
+  cargarDirectorio(): void {
+    this.directorioQuery$.next([
+      this.currentPageDirectorio(),
+      this.pageSizeDirectorio(),
+      this.searchDirectorio().trim(),
+      this.filtroEstadoDirectorio(),
+    ].join('|'));
+  }
+
+  onMatriculaSearchChange(value: string): void {
+    this.searchMatricula.set(value);
+    this.estudianteAMatricularId = '';
+    this.matriculaSearch$.next(value);
+  }
+
+  private toDirectoryItem(item: EstudianteResumenApiDto): EstudianteDirectorioItem {
+    return {
+      id: item.id,
+      documento: String(item.numeroIdentificacion),
+      codigo: '',
+      nombreCompleto: item.nombreCompleto,
+      correo: item.correo,
+      programa: 'No informado por el directorio',
+      estadoMatricula: item.estaActivoUsuario ? 'ACTIVO' : 'INACTIVO',
+    };
+  }
+
   onSelectCourse(cursoId: string): void {
     this.selectedCourseId.set(cursoId);
     this.cargarEstudiantesGrupo(cursoId);
@@ -593,6 +739,8 @@ export class CoordinatorStudentsComponent implements OnInit {
 
   abrirModalMatricular(): void {
     this.estudianteAMatricularId = '';
+    this.searchMatricula.set('');
+    this.estudiantesDisponiblesMatricula.set([]);
     this.mostrarModalMatricular.set(true);
   }
 
@@ -613,7 +761,7 @@ export class CoordinatorStudentsComponent implements OnInit {
           this.toast.success(res.mensajeUsuario || 'Estudiante matriculado exitosamente.');
           this.mostrarModalMatricular.set(false);
           this.cargarEstudiantesGrupo(cursoId);
-          this.coordinatorService.getEstudiantesDirectorio().subscribe((r) => this.directorio.set(r.datos || []));
+          this.cargarDirectorio();
         }
       },
       error: (err) => {
@@ -633,7 +781,7 @@ export class CoordinatorStudentsComponent implements OnInit {
           if (res.exitoso) {
             this.toast.success(res.mensajeUsuario || 'Estudiante retirado.');
             this.cargarEstudiantesGrupo(cursoId);
-            this.coordinatorService.getEstudiantesDirectorio().subscribe((r) => this.directorio.set(r.datos || []));
+            this.cargarDirectorio();
           }
         },
         error: (err) => this.toast.error(getApiErrorMessage(err)),
