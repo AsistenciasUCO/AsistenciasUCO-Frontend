@@ -254,10 +254,34 @@ export class DashboardLayoutComponent {
       icon: 'sistema',
     },
     {
-      label: 'Facultad & Grupos',
+      label: 'Mi Facultad',
       route: '/app/decano/facultad',
       roles: ['DECANO'],
       icon: 'facultad',
+    },
+    {
+      label: 'Grupos de la Facultad',
+      route: '/app/decano/grupos',
+      roles: ['DECANO'],
+      icon: 'grupos',
+    },
+    {
+      label: 'Programas y Planes',
+      route: '/app/decano/programas',
+      roles: ['DECANO'],
+      icon: 'planes-estudio',
+    },
+    {
+      label: 'Períodos Académicos',
+      route: '/app/decano/periodos',
+      roles: ['DECANO'],
+      icon: 'horarios',
+    },
+    {
+      label: 'Áreas y Sedes',
+      route: '/app/decano/infraestructura',
+      roles: ['DECANO'],
+      icon: 'catalogos',
     },
     {
       label: 'Gestión de Coordinadores',
@@ -278,10 +302,22 @@ export class DashboardLayoutComponent {
       icon: 'planes-estudio',
     },
     {
-      label: 'Estudiantes & Matrícula',
+      label: 'Períodos Académicos',
+      route: '/app/coordinador/periodos',
+      roles: ['COORDINADOR'],
+      icon: 'horarios',
+    },
+    {
+      label: 'Estudiantes del Programa',
       route: '/app/coordinador/estudiantes',
       roles: ['COORDINADOR'],
       icon: 'estudiantes',
+    },
+    {
+      label: 'Materias del Programa',
+      route: '/app/coordinador/materias',
+      roles: ['COORDINADOR'],
+      icon: 'materias',
     },
     {
       label: 'Mis Grupos',

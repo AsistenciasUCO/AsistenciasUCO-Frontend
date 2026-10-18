@@ -126,6 +126,60 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'decano/grupos',
+        canActivate: [roleGuard],
+        data: { roles: ['DECANO'] },
+        loadComponent: () =>
+          import('./features/dean/dean-grupos/dean-grupos.component').then(
+            (m) => m.DeanGruposComponent
+          ),
+      },
+      {
+        path: 'decano/grupos/:grupoId',
+        canActivate: [roleGuard],
+        data: { roles: ['DECANO'] },
+        loadComponent: () =>
+          import('./features/dean/dean-grupo-detalle/dean-grupo-detalle.component').then(
+            (m) => m.DeanGrupoDetalleComponent
+          ),
+      },
+      {
+        path: 'decano/programas',
+        canActivate: [roleGuard],
+        data: { roles: ['DECANO'] },
+        loadComponent: () =>
+          import('./features/dean/dean-programas/dean-programas.component').then(
+            (m) => m.DeanProgramasComponent
+          ),
+      },
+      {
+        path: 'decano/programas/:planId',
+        canActivate: [roleGuard],
+        data: { roles: ['DECANO'] },
+        loadComponent: () =>
+          import('./features/dean/dean-plan-malla/dean-plan-malla.component').then(
+            (m) => m.DeanPlanMallaComponent
+          ),
+      },
+      {
+        path: 'decano/periodos',
+        canActivate: [roleGuard],
+        data: { roles: ['DECANO'] },
+        loadComponent: () =>
+          import('./features/dean/dean-periodos/dean-periodos.component').then(
+            (m) => m.DeanPeriodosComponent
+          ),
+      },
+      {
+        path: 'decano/infraestructura',
+        canActivate: [roleGuard],
+        data: { roles: ['DECANO'] },
+        loadComponent: () =>
+          import('./features/dean/dean-infraestructura/dean-infraestructura.component').then(
+            (m) => m.DeanInfraestructuraComponent
+          ),
+      },
+      {
         path: 'decano/coordinadores',
         canActivate: [roleGuard],
         data: { roles: ['DECANO'] },
@@ -154,6 +208,60 @@ export const routes: Routes = [
           ).then((m) => m.CoordinatorStudyPlansComponent),
       },
       {
+        path: 'coordinador/planes-estudio/nuevo',
+        canActivate: [roleGuard],
+        data: { roles: ['COORDINADOR'] },
+        loadComponent: () =>
+          import(
+            './features/coordinator/coordinator-study-plans/pages/study-plan-form-page.component'
+          ).then((m) => m.CoordinatorStudyPlanFormPageComponent),
+      },
+      {
+        path: 'coordinador/planes-estudio/:planId/editar',
+        canActivate: [roleGuard],
+        data: { roles: ['COORDINADOR'] },
+        loadComponent: () =>
+          import(
+            './features/coordinator/coordinator-study-plans/pages/study-plan-form-page.component'
+          ).then((m) => m.CoordinatorStudyPlanFormPageComponent),
+      },
+      {
+        path: 'coordinador/planes-estudio/:planId/malla',
+        canActivate: [roleGuard],
+        data: { roles: ['COORDINADOR'] },
+        loadComponent: () =>
+          import(
+            './features/coordinator/coordinator-study-plans/pages/study-plan-mesh-page.component'
+          ).then((m) => m.CoordinatorStudyPlanMeshPageComponent),
+      },
+      {
+        path: 'coordinador/planes-estudio/:planId/asignaturas/nueva',
+        canActivate: [roleGuard],
+        data: { roles: ['COORDINADOR'] },
+        loadComponent: () =>
+          import(
+            './features/coordinator/coordinator-study-plans/pages/subject-form-page.component'
+          ).then((m) => m.CoordinatorSubjectFormPageComponent),
+      },
+      {
+        path: 'coordinador/planes-estudio/:planId/asignaturas/:asignaturaId/editar',
+        canActivate: [roleGuard],
+        data: { roles: ['COORDINADOR'] },
+        loadComponent: () =>
+          import(
+            './features/coordinator/coordinator-study-plans/pages/subject-form-page.component'
+          ).then((m) => m.CoordinatorSubjectFormPageComponent),
+      },
+      {
+        path: 'coordinador/periodos',
+        canActivate: [roleGuard],
+        data: { roles: ['COORDINADOR'] },
+        loadComponent: () =>
+          import('./features/coordinator/coordinator-periods/coordinator-periods.component').then(
+            (m) => m.CoordinatorPeriodsComponent
+          ),
+      },
+      {
         path: 'coordinador/estudiantes',
         canActivate: [roleGuard],
         data: { roles: ['COORDINADOR'] },
@@ -161,6 +269,15 @@ export const routes: Routes = [
           import(
             './features/coordinator/coordinator-students/coordinator-students.component'
           ).then((m) => m.CoordinatorStudentsComponent),
+      },
+      {
+        path: 'coordinador/materias',
+        canActivate: [roleGuard],
+        data: { roles: ['COORDINADOR'] },
+        loadComponent: () =>
+          import(
+            './features/coordinator/coordinator-subjects/coordinator-subjects.component'
+          ).then((m) => m.CoordinatorSubjectsComponent),
       },
       // Rutas Docente
       {
