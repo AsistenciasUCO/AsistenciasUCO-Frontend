@@ -224,16 +224,28 @@ export class DashboardLayoutComponent {
       icon: 'dashboard',
     },
     {
+      label: 'Gestión de Facultades',
+      route: '/app/admin/facultades',
+      roles: ['ADMINISTRADOR', 'ADMIN'],
+      icon: 'facultad',
+    },
+    {
       label: 'Gestión de Decanos',
       route: '/app/admin/decanos',
       roles: ['ADMINISTRADOR', 'ADMIN'],
       icon: 'decanos',
     },
     {
-      label: 'Infraestructura & Sedes',
-      route: '/app/admin/catalogos',
+      label: 'Sedes Institucionales',
+      route: '/app/admin/sedes',
       roles: ['ADMINISTRADOR', 'ADMIN'],
       icon: 'catalogos',
+    },
+    {
+      label: 'Áreas de Conocimiento',
+      route: '/app/admin/areas',
+      roles: ['ADMINISTRADOR', 'ADMIN'],
+      icon: 'materias',
     },
     {
       label: 'Sistema & Auditoría',

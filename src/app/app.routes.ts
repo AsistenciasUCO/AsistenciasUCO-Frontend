@@ -66,6 +66,33 @@ export const routes: Routes = [
       },
       // Rutas Administrador
       {
+        path: 'admin/facultades',
+        canActivate: [roleGuard],
+        data: { roles: ['ADMINISTRADOR', 'ADMIN'] },
+        loadComponent: () =>
+          import('./features/admin/admin-facultades/admin-facultades.component').then(
+            (m) => m.AdminFacultadesComponent
+          ),
+      },
+      {
+        path: 'admin/sedes',
+        canActivate: [roleGuard],
+        data: { roles: ['ADMINISTRADOR', 'ADMIN'] },
+        loadComponent: () =>
+          import('./features/admin/admin-sedes/admin-sedes.component').then(
+            (m) => m.AdminSedesComponent
+          ),
+      },
+      {
+        path: 'admin/areas',
+        canActivate: [roleGuard],
+        data: { roles: ['ADMINISTRADOR', 'ADMIN'] },
+        loadComponent: () =>
+          import('./features/admin/admin-areas/admin-areas.component').then(
+            (m) => m.AdminAreasComponent
+          ),
+      },
+      {
         path: 'admin/decanos',
         canActivate: [roleGuard],
         data: { roles: ['ADMINISTRADOR', 'ADMIN'] },
@@ -76,12 +103,8 @@ export const routes: Routes = [
       },
       {
         path: 'admin/catalogos',
-        canActivate: [roleGuard],
-        data: { roles: ['ADMINISTRADOR', 'ADMIN'] },
-        loadComponent: () =>
-          import('./features/admin/admin-catalogs/admin-catalogs.component').then(
-            (m) => m.AdminCatalogsComponent
-          ),
+        redirectTo: 'admin/facultades',
+        pathMatch: 'full',
       },
       {
         path: 'admin/sistema',
