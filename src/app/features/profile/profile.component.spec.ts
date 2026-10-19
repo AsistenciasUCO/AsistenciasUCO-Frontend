@@ -1,0 +1,100 @@
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
+import { of } from 'rxjs';
+import { ProfileComponent } from './profile.component';
+import { AuthService } from '../../core/services/auth.service';
+import { ToastService } from '../../shared/components/toast/toast.component';
+import { Location } from '@angular/common';
+import { Router } from '@angular/router';
+import { UserRole } from '../../core/models/user.model';
+
+describe('ProfileComponent', () => {
+  let fixture: ComponentFixture<ProfileComponent>;
+  let component: ProfileComponent;
+  let authServiceSpy: jasmine.SpyObj<AuthService>;
+  let toastServiceSpy: jasmine.SpyObj<ToastService>;
+  let routerSpy: jasmine.SpyObj<Router>;
+  let locationSpy: jasmine.SpyObj<Location>;
+
+  const mockUser = {
+    id: 'usr-1',
+    name: 'Roberto Gómez',
+    email: 'rgomez@uco.edu.co',
+    role: 'DOCENTE' as UserRole,
+    primerNombre: 'Roberto',
+    segundoNombre: '',
+    primerApellido: 'Gómez',
+    segundoApellido: '',
+  };
+
+  beforeEach(async () => {
+    authServiceSpy = jasmine.createSpyObj('AuthService', ['fetchProfileFromBackend', 'updateUserProfile'], {
+      currentUser: signal(mockUser).asReadonly(),
+    });
+    authServiceSpy.fetchProfileFromBackend.and.returnValue(Promise.resolve(mockUser));
+    authServiceSpy.updateUserProfile.and.returnValue(of({ exitoso: true, mensajeUsuario: 'Ok', datos: null }));
+
+    toastServiceSpy = jasmine.createSpyObj('ToastService', ['show', 'success', 'error', 'info', 'warning']);
+    routerSpy = jasmine.createSpyObj('Router', ['navigate']);
+    locationSpy = jasmine.createSpyObj('Location', ['back']);
+
+    await TestBed.configureTestingModule({
+      imports: [ProfileComponent],
+      providers: [
+        { provide: AuthService, useValue: authServiceSpy },
+        { provide: ToastService, useValue: toastServiceSpy },
+        { provide: Router, useValue: routerSpy },
+        { provide: Location, useValue: locationSpy },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(ProfileComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it('debe crearse e inicializar formulario con los datos del usuario', () => {
+    expect(component).toBeTruthy();
+    expect(component.formModel.primerNombre).toBe('Roberto');
+    expect(component.formModel.primerApellido).toBe('Gómez');
+  });
+
+  it('computedFullName calcula el nombre completo correctamente', () => {
+    expect(component.computedFullName()).toBe('Roberto Gómez');
+  });
+
+  it('enableEditing activa el modo edición cuando canEditProfile es true', () => {
+    component.canEditProfile.set(true);
+    component.enableEditing();
+    expect(component.isEditing()).toBeTrue();
+  });
+
+  it('cancelEditing restablece formulario y apaga modo edición', () => {
+    component.canEditProfile.set(true);
+    component.enableEditing();
+    component.formModel.primerNombre = 'Modificado';
+    component.cancelEditing();
+
+    expect(component.isEditing()).toBeFalse();
+    expect(component.formModel.primerNombre).toBe('Roberto');
+  });
+
+  it('saveProfile valida campos obligatorios y envía actualización', () => {
+    component.canEditProfile.set(true);
+    component.enableEditing();
+    component.formModel.primerNombre = 'Roberto';
+    component.formModel.primerApellido = 'Gómez';
+
+    component.saveProfile();
+
+    expect(authServiceSpy.updateUserProfile).toHaveBeenCalled();
+    expect(toastServiceSpy.show).toHaveBeenCalledWith('¡Perfil actualizado con éxito!', 'success');
+    expect(component.isEditing()).toBeFalse();
+  });
+
+  it('getRoleBadgeVariant retorna la variante visual esperada', () => {
+    expect(component.getRoleBadgeVariant('DOCENTE')).toBe('info');
+    expect(component.getRoleBadgeVariant('ESTUDIANTE')).toBe('success');
+    expect(component.getRoleBadgeVariant('ADMINISTRADOR')).toBe('danger');
+  });
+});

@@ -6,14 +6,9 @@ import { CoordinatorDocentesComponent } from './coordinator-docentes.component';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
 import { CatalogService } from '../../../core/services/catalog.service';
 import { CourseService } from '../../../core/services/course.service';
+import { ToastService } from '../../../shared/components/toast/toast.component';
 import { Course } from '../../../core/models/course.model';
 import { DocenteItem } from '../../../core/models/role-management.model';
-
-// LB-001B.1B (DB source of truth cleanup, PLAN.md AS-IS #19): verFichaDocente() empareja
-// cursos por coincidencia de texto libre contra Course.docenteName, incluyendo literales
-// fallback 'maria'/'docente' que emparejan casi cualquier curso (fragilidad aguas abajo del
-// hardcode de course.service.ts:83). TARGET: se retira la lectura de docenteName; sin
-// sustituto sintético, la ficha no debe "inventar" cursos del docente por este heurístico.
 
 describe('CoordinatorDocentesComponent', () => {
   let fixture: ComponentFixture<CoordinatorDocentesComponent>;
@@ -21,15 +16,33 @@ describe('CoordinatorDocentesComponent', () => {
   let coordinatorService: jasmine.SpyObj<CoordinatorManagementService>;
   let catalogService: jasmine.SpyObj<CatalogService>;
   let courseService: jasmine.SpyObj<CourseService>;
+  let toastService: jasmine.SpyObj<ToastService>;
 
-  const docente: DocenteItem = {
+  const docente1: DocenteItem = {
     id: 'doc-1',
     numeroIdentificacion: '9999',
     nombres: 'Roberto',
     apellidos: 'Gómez',
-  } as DocenteItem;
+    correo: 'rgomez@uco.edu.co',
+    departamento: 'Ingeniería',
+    especialidad: 'Software',
+    estado: 'ACTIVO',
+    totalGruposAsignados: 2,
+  };
 
-  const cursoNoRelacionado: Course = {
+  const docente2: DocenteItem = {
+    id: 'doc-2',
+    numeroIdentificacion: '8888',
+    nombres: 'Luisa',
+    apellidos: 'Castro',
+    correo: 'lcastro@uco.edu.co',
+    departamento: 'Ciencias Básicas',
+    especialidad: 'Matemáticas',
+    estado: 'INACTIVO',
+    totalGruposAsignados: 0,
+  };
+
+  const cursoRelacionado: Course = {
     id: 'crs-1',
     code: 'MAT-301',
     name: 'Matemática Avanzada III',
@@ -38,31 +51,41 @@ describe('CoordinatorDocentesComponent', () => {
     room: 'Aula A-204',
     enrolledStudentsCount: 32,
     cupoMaximo: 35,
-    // Contiene el literal fallback 'docente' que hoy produce coincidencias falsas.
-    docenteName: 'Equipo Docente Regular',
+    docenteId: 'doc-1',
+    docenteName: 'Roberto Gómez',
     colorCategory: 'emerald',
   };
 
   beforeEach(() => {
     coordinatorService = jasmine.createSpyObj<CoordinatorManagementService>(
       'CoordinatorManagementService',
-      ['getDocentes', 'toggleDocenteStatus']
+      ['getDocentes', 'toggleDocenteStatus', 'createDocente']
     );
     catalogService = jasmine.createSpyObj<CatalogService>('CatalogService', [
       'getTiposIdentificacion',
+      'getDepartamentosAcademicos',
     ]);
     courseService = jasmine.createSpyObj<CourseService>('CourseService', [
       'getTeacherCourses',
     ]);
+    toastService = jasmine.createSpyObj<ToastService>('ToastService', [
+      'success',
+      'error',
+      'warning',
+      'info',
+    ]);
 
     coordinatorService.getDocentes.and.returnValue(
-      of({ exitoso: true, datos: [docente] } as any)
+      of({ exitoso: true, datos: [docente1, docente2] })
     );
     catalogService.getTiposIdentificacion.and.returnValue(
-      of({ exitoso: true, datos: [] } as any)
+      of({ exitoso: true, datos: [{ id: 'tipo-1', tipoIdentificacion: 'CC', nombre: 'Cédula' }] })
+    );
+    catalogService.getDepartamentosAcademicos.and.returnValue(
+      of({ exitoso: true, datos: ['Ingeniería', 'Ciencias Básicas'] })
     );
     courseService.getTeacherCourses.and.returnValue(
-      of({ exitoso: true, datos: [cursoNoRelacionado] } as any)
+      of({ exitoso: true, datos: [cursoRelacionado] })
     );
 
     TestBed.configureTestingModule({
@@ -73,6 +96,7 @@ describe('CoordinatorDocentesComponent', () => {
         { provide: CoordinatorManagementService, useValue: coordinatorService },
         { provide: CatalogService, useValue: catalogService },
         { provide: CourseService, useValue: courseService },
+        { provide: ToastService, useValue: toastService },
       ],
     });
 
@@ -81,9 +105,61 @@ describe('CoordinatorDocentesComponent', () => {
     fixture.detectChanges();
   });
 
-  it('verFichaDocente() ya no empareja cursos por el fallback de texto libre sobre docenteName', () => {
-    component.verFichaDocente(docente);
+  it('debe crearse e inicializar la lista de docentes y cursos', () => {
+    expect(component).toBeTruthy();
+    expect(component.docentes().length).toBe(2);
+    expect(component.allCourses().length).toBe(1);
+    expect(component.isLoading()).toBeFalse();
+  });
 
-    expect(component.cursosDocente()).toEqual([]);
+  it('filteredDocentes filtra por término de búsqueda', () => {
+    component.searchQuery = 'roberto';
+    expect(component.filteredDocentes().length).toBe(1);
+    expect(component.filteredDocentes()[0].nombres).toBe('Roberto');
+  });
+
+  it('filteredDocentes filtra por estado', () => {
+    component.selectedEstado = 'INACTIVO';
+    expect(component.filteredDocentes().length).toBe(1);
+    expect(component.filteredDocentes()[0].nombres).toBe('Luisa');
+  });
+
+  it('verFichaDocente() empareja cursos por docenteId real', () => {
+    component.verFichaDocente(docente1);
+    expect(component.docenteSeleccionado()).toBe(docente1);
+    expect(component.cursosDocente().length).toBe(1);
+    expect(component.cursosDocente()[0].id).toBe('crs-1');
+  });
+
+  it('cerrarFichaDocente() limpia la selección de ficha', () => {
+    component.verFichaDocente(docente1);
+    component.cerrarFichaDocente();
+    expect(component.docenteSeleccionado()).toBeNull();
+    expect(component.cursosDocente().length).toBe(0);
+  });
+
+  it('abrirFormularioRegistro y volverALista cambian la vista correctamente', () => {
+    component.abrirFormularioRegistro();
+    expect(component.vistaActual()).toBe('REGISTRO');
+
+    component.volverALista();
+    expect(component.vistaActual()).toBe('LISTA');
+  });
+
+  it('toggleEstado alterna el estado del docente y notifica éxito', () => {
+    coordinatorService.toggleDocenteStatus.and.returnValue(
+      of({ exitoso: true, mensajeUsuario: 'Estado actualizado', datos: { ...docente1, estado: 'INACTIVO' } })
+    );
+
+    component.toggleEstado(docente1);
+
+    expect(coordinatorService.toggleDocenteStatus).toHaveBeenCalledWith('doc-1');
+    expect(toastService.success).toHaveBeenCalledWith('Estado actualizado');
+  });
+
+  it('onNumeroIdentificacionInput limpia caracteres no numéricos', () => {
+    const event = { target: { value: '1017-999-ABC' } } as unknown as Event;
+    component.onNumeroIdentificacionInput(event);
+    expect(component.formData.numeroIdentificacion).toBe('1017999');
   });
 });
