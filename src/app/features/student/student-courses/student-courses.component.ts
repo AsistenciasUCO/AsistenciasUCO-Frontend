@@ -1,4 +1,5 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Subscription, finalize } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { StudentManagementService } from '../../../core/services/student-management.service';
@@ -9,6 +10,7 @@ import { CourseService } from '../../../core/services/course.service';
 import { SessionService } from '../../../core/services/session.service';
 import { ToastService } from '../../../shared/components/toast/toast.component';
 import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
+import { validateSoporteFile } from '../../../core/files/soporte-file.validator';
 import {
   MateriaEstudianteItem,
   SesionMateriaDetalle,
@@ -74,6 +76,9 @@ type VistaEstudiante = 'LISTA' | 'DETALLE' | 'RECLAMO' | 'SOLICITAR_MATRICULA';
           [materia]="selectedMateria()"
           [sesion]="sesionReclamar()"
           [archivo]="archivoAdjunto()"
+          [subiendo]="subiendoSoporte()"
+          [submitting]="enviandoReclamo()"
+          [errorSoporte]="errorSoporte()"
           (back)="volverADetalle()"
           (fileSelected)="onFileSelected($event)"
           (removeFile)="removerAdjunto()"
@@ -108,7 +113,7 @@ type VistaEstudiante = 'LISTA' | 'DETALLE' | 'RECLAMO' | 'SOLICITAR_MATRICULA';
     </div>
   `,
 })
-export class StudentCoursesComponent implements OnInit {
+export class StudentCoursesComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private studentService = inject(StudentManagementService);
   private claimService = inject(AttendanceClaimService);
@@ -141,6 +146,10 @@ export class StudentCoursesComponent implements OnInit {
   // Radicación reclamo
   sesionReclamar = signal<SesionMateriaDetalle | null>(null);
   archivoAdjunto = signal<SoporteAdjuntoItem | null>(null);
+  subiendoSoporte = signal<boolean>(false);
+  enviandoReclamo = signal<boolean>(false);
+  errorSoporte = signal<string | null>(null);
+  private subidaEnCurso: Subscription | null = null;
 
   // Prerrequisitos de Materia
   modalPrerrequisitosVisible = signal<boolean>(false);
@@ -238,45 +247,100 @@ export class StudentCoursesComponent implements OnInit {
 
   iniciarReclamo(sesion: SesionMateriaDetalle): void {
     this.sesionReclamar.set(sesion);
-    this.archivoAdjunto.set(null);
+    this.limpiarSoporte();
     this.vistaActual.set('RECLAMO');
   }
 
   volverADetalle(): void {
     this.vistaActual.set('DETALLE');
     this.sesionReclamar.set(null);
-    this.archivoAdjunto.set(null);
+    this.limpiarSoporte();
+  }
+
+  ngOnDestroy(): void {
+    this.cancelarSubida();
   }
 
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
-    if (input.files && input.files.length > 0) {
-      const file = input.files[0];
-      this.claimService.subirSoporte(file).subscribe({
+    const file = input.files?.[0];
+    // Permite volver a elegir el mismo archivo tras un error o una cancelacion.
+    input.value = '';
+    if (!file || this.subiendoSoporte()) return;
+
+    const validacion = validateSoporteFile(file);
+    if (!validacion.valid) {
+      this.errorSoporte.set(validacion.message ?? 'El archivo no es válido.');
+      this.toast.error(validacion.message ?? 'El archivo no es válido.');
+      return;
+    }
+
+    this.errorSoporte.set(null);
+    this.subiendoSoporte.set(true);
+    this.subidaEnCurso = this.claimService
+      .subirSoporte(file)
+      .pipe(
+        finalize(() => {
+          this.subiendoSoporte.set(false);
+          this.subidaEnCurso = null;
+        })
+      )
+      .subscribe({
         next: (res) => {
-          if (res.exitoso && res.datos) {
+          if (res.exitoso && res.datos?.fileId) {
             this.archivoAdjunto.set({
               fileId: res.datos.fileId,
               nombre: res.datos.nombre,
-              tipo: file.type || 'application/pdf',
+              tipo: file.type,
               tamanioKb: Math.max(1, Math.round(file.size / 1024)),
+              tamanioBytes: res.datos.tamanio,
+              // Fecha local de presentacion; el instante autoritativo (UTC) lo conserva el backend.
               fechaSubida: new Date().toISOString().split('T')[0],
               urlSimulada: res.datos.url,
             });
-            this.toast.success(`Archivo "${file.name}" cargado y almacenado correctamente.`);
+            this.toast.success(`Archivo "${file.name}" cargado y analizado correctamente.`);
           } else {
-            this.toast.error('No fue posible almacenar el archivo adjunto.');
+            this.errorSoporte.set('No fue posible almacenar el archivo adjunto.');
           }
         },
-        error: () => {
-          this.toast.error('Error al subir el archivo adjunto al servidor.');
+        error: (err) => {
+          const mensaje = this.mensajeErrorSubida(err);
+          this.errorSoporte.set(mensaje);
+          this.toast.error(mensaje);
         },
       });
-    }
   }
 
   removerAdjunto(): void {
+    this.cancelarSubida();
     this.archivoAdjunto.set(null);
+    this.errorSoporte.set(null);
+  }
+
+  private limpiarSoporte(): void {
+    this.cancelarSubida();
+    this.archivoAdjunto.set(null);
+    this.errorSoporte.set(null);
+    this.enviandoReclamo.set(false);
+  }
+
+  private cancelarSubida(): void {
+    // Cancela la peticion HTTP en vuelo (HttpClient aborta al desuscribirse).
+    this.subidaEnCurso?.unsubscribe();
+    this.subidaEnCurso = null;
+    this.subiendoSoporte.set(false);
+  }
+
+  private mensajeErrorSubida(err: unknown): string {
+    const status = (err as { status?: number })?.status;
+    if (status === 401) return 'Tu sesión expiró. Inicia sesión nuevamente para adjuntar el soporte.';
+    if (status === 403) return 'No tienes permiso para adjuntar soportes.';
+    // El frontend decide por codigo/status, no por el texto del backend: 400 cubre malware, formato y contenido invalido.
+    if (status === 400 || status === 413) {
+      return 'El archivo fue rechazado: no cumple los requisitos de seguridad o formato (PDF, PNG o JPG de hasta 5 MB).';
+    }
+    if (status === 0) return 'No se pudo conectar con el servidor. Verifica tu conexión e inténtalo de nuevo.';
+    return 'El servicio de archivos no está disponible. Inténtalo de nuevo en unos minutos.';
   }
 
   retirarReclamo(sesion: SesionMateriaDetalle): void {
@@ -315,7 +379,10 @@ export class StudentCoursesComponent implements OnInit {
     const currentUser = this.authService.currentUser();
 
     if (!sesion || !materia || !event.justificacion.trim()) return;
+    // Sin doble envio: ni mientras sube el soporte (aun no hay fileId) ni mientras otra radicacion esta en curso.
+    if (this.enviandoReclamo() || this.subiendoSoporte()) return;
 
+    this.enviandoReclamo.set(true);
     this.claimService
       .crearReclamo({
         estudianteId: currentUser?.id || 'estudiante-current',
@@ -333,6 +400,7 @@ export class StudentCoursesComponent implements OnInit {
         soporteAdjunto: this.archivoAdjunto() || undefined,
         justificacionSolicitud: event.justificacion.trim(),
       })
+      .pipe(finalize(() => this.enviandoReclamo.set(false)))
       .subscribe({
         next: (res) => {
           if (res.exitoso) {
@@ -341,7 +409,16 @@ export class StudentCoursesComponent implements OnInit {
             this.cargarSesiones(materia.id);
           }
         },
-        error: (err) => this.toast.error(getApiErrorMessage(err)),
+        error: (err) => {
+          if ((err as { status?: number })?.status === 404 && this.archivoAdjunto()) {
+            // El soporte ya no esta disponible para radicar (inexistente, ajeno o ya usado): hay que volver a adjuntarlo.
+            this.archivoAdjunto.set(null);
+            this.errorSoporte.set('El soporte adjunto ya no está disponible. Adjúntalo nuevamente para radicar.');
+            this.toast.error('El soporte adjunto ya no está disponible. Adjúntalo nuevamente.');
+            return;
+          }
+          this.toast.error(getApiErrorMessage(err));
+        },
       });
   }
 

@@ -114,12 +114,18 @@ export type CategoriaJustificacion =
   | 'Otro';
 
 export interface SoporteAdjuntoItem {
+  /** Identificador opaco generado por el backend; unica fuente de verdad del vinculo del soporte. */
   fileId?: string;
   nombre: string;
   tipo: string;
   tamanioKb: number;
+  /** Tamano exacto reportado por el backend (bytes); `tamanioKb` es solo presentacion. */
+  tamanioBytes?: number;
+  /** Ruta relativa al backend autenticado (`/api/v1/archivos/{fileId}`), nunca una URL del storage. */
   urlSimulada?: string;
   fechaSubida: string;
+  /** Instante UTC original de registro del soporte; se presenta en la zona IANA del usuario. */
+  fechaSubidaUtc?: string;
 }
 
 export interface SesionMateriaDetalle {
@@ -151,7 +157,10 @@ export interface SolicitudRevisionItem {
   sesionId: string;
   sesionNumero: number;
   fechaSesion: string;
-  estadoOriginal: EstadoAsistenciaSesion;
+  /** Instante UTC de inicio de la sesion; ausente cuando el dato historico no tiene procedencia verificable. */
+  fechaSesionUtc?: string;
+  /** El estado original no lo informa el backend en el listado del docente. */
+  estadoOriginal?: EstadoAsistenciaSesion;
   fechaSolicitud: string;
   estadoSolicitud: EstadoSolicitudRevision;
   categoria?: CategoriaJustificacion;

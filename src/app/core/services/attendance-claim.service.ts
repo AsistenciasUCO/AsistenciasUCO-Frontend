@@ -1,9 +1,11 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, catchError, of, throwError } from 'rxjs';
+import { Observable, catchError, map, of, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 import { ApiDataResponse } from '../api/models/api-data-response.model';
+import { ClaimMapper, ReclamoDocenteApi } from '../mappers/claim.mapper';
+import { SessionTimeZoneService } from './session-timezone.service';
 import {
   SesionMateriaDetalle,
   SolicitudRevisionItem,
@@ -23,6 +25,8 @@ export interface ResolverReclamoResponse {
   providedIn: 'root',
 })
 export class AttendanceClaimService {
+  private readonly sessionTimeZone = inject(SessionTimeZoneService);
+
   constructor(private http: HttpClient) {}
 
   subirSoporte(file: File): Observable<ApiDataResponse<{ fileId: string; nombre: string; url: string; tamanio: number }>> {
@@ -40,8 +44,18 @@ export class AttendanceClaimService {
     });
   }
 
+  /**
+   * Reclamos del docente titular. El backend (LB-004D) devuelve `ApiListResponse<ReclamoDocenteApi>` con instantes UTC;
+   * se adaptan al modelo de UI presentando las fechas en la zona IANA seleccionada, sin perder el instante original.
+   */
   getReclamosDocente(docenteId?: string): Observable<ApiResponse<SolicitudRevisionItem[]>> {
-    return this.http.get<ApiResponse<SolicitudRevisionItem[]>>(`${environment.apiUrl}/docente/reclamos`).pipe(
+    return this.http.get<ApiResponse<ReclamoDocenteApi[]>>(`${environment.apiUrl}/docente/reclamos`).pipe(
+      map((res): ApiResponse<SolicitudRevisionItem[]> => ({
+        ...res,
+        datos: (res.datos ?? []).map((item) =>
+          ClaimMapper.fromReclamoDocente(item, (instant) => this.sessionTimeZone.displayInstant(instant).date)
+        ),
+      })),
       catchError((error) => {
         if (error?.status === 501 || error?.status === 404) {
           return of({
@@ -62,13 +76,20 @@ export class AttendanceClaimService {
   crearReclamo(
     solicitud: Omit<SolicitudRevisionItem, 'id' | 'fechaSolicitud' | 'estadoSolicitud'>
   ): Observable<ApiResponse<SolicitudRevisionItem>> {
-    const payload = {
+    // El unico dato de soporte que viaja es el fileId opaco generado por el backend (nunca nombre ni URL).
+    const payload: {
+      sesionId: string;
+      categoria?: string;
+      justificacion: string;
+      soporteArchivoId?: string;
+    } = {
       sesionId: solicitud.sesionId,
       categoria: solicitud.categoria,
       justificacion: solicitud.justificacionSolicitud,
-      soporteNombre: solicitud.soporteAdjunto?.nombre,
-      soporteUrl: solicitud.soporteAdjunto?.urlSimulada,
     };
+    if (solicitud.soporteAdjunto?.fileId) {
+      payload.soporteArchivoId = solicitud.soporteAdjunto.fileId;
+    }
     return this.http.post<ApiResponse<SolicitudRevisionItem>>(
       `${environment.apiUrl}/asistencias/revisiones`,
       payload
