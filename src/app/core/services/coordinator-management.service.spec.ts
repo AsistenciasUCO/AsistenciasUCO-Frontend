@@ -336,5 +336,73 @@ describe('CoordinatorManagementService', () => {
         },
       });
     });
+
+    it('agregarSemestrePlan y eliminarSemestrePlan ejecutan endpoints correspondientes', () => {
+      service.agregarSemestrePlan('plan-1').subscribe((res) => {
+        expect(res.exitoso).toBeTrue();
+      });
+      const postReq = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/plan-1/semestres`);
+      expect(postReq.request.method).toBe('POST');
+      postReq.flush({ exitoso: true, datos: { planEstudioId: 'plan-1' } });
+
+      service.eliminarSemestrePlan('plan-1', 10).subscribe((res) => {
+        expect(res.exitoso).toBeTrue();
+      });
+      const delReq = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/plan-1/semestres/10`);
+      expect(delReq.request.method).toBe('DELETE');
+      delReq.flush({ exitoso: true, datos: { planEstudioId: 'plan-1', semestreEliminado: 10 } });
+    });
+
+    it('matricularEstudianteGrupo y retirarEstudianteGrupo gestionan grupos de estudiantes', () => {
+      service.matricularEstudianteGrupo('grp-1', 'est-1').subscribe((res) => {
+        expect(res.exitoso).toBeTrue();
+      });
+      const postReq = http.expectOne(`${environment.apiUrl}/grupos/grp-1/estudiantes`);
+      expect(postReq.request.method).toBe('POST');
+      postReq.flush({ exitoso: true, datos: true });
+
+      service.retirarEstudianteGrupo('grp-1', 'est-1').subscribe((res) => {
+        expect(res.exitoso).toBeTrue();
+      });
+      const delReq = http.expectOne(`${environment.apiUrl}/grupos/grp-1/estudiantes/est-1`);
+      expect(delReq.request.method).toBe('DELETE');
+      delReq.flush({ exitoso: true, datos: true });
+    });
+
+    it('crearSolicitudMatricula envía POST y actualiza la lista', () => {
+      service.crearSolicitudMatricula({
+        estudianteId: 'est-1',
+        estudianteNombre: 'Laura',
+        estudianteCodigo: '1017009',
+        estudianteCorreo: 'laura@uco.edu.co',
+        cursoId: 'cur-1',
+        cursoCodigo: 'SIS-101',
+        cursoNombre: 'Algoritmos',
+        grupo: 'G01',
+        motivo: 'Inscripción tardía',
+      }).subscribe((res) => {
+        expect(res.exitoso).toBeTrue();
+      });
+
+      const req = http.expectOne(`${environment.apiUrl}/estudiante/solicitudes-matricula`);
+      expect(req.request.method).toBe('POST');
+      req.flush({
+        exitoso: true,
+        datos: {
+          id: 'sol-nueva',
+          estudianteId: 'est-1',
+          estudianteNombre: 'Laura',
+          estudianteCodigo: '1017009',
+          estudianteCorreo: 'laura@uco.edu.co',
+          cursoId: 'cur-1',
+          cursoCodigo: 'SIS-101',
+          cursoNombre: 'Algoritmos',
+          grupo: 'G01',
+          fechaSolicitud: '2026-02-10',
+          estado: 'PENDIENTE',
+          motivo: 'Inscripción tardía',
+        },
+      });
+    });
   });
 });

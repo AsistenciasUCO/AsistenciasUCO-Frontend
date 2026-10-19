@@ -125,4 +125,15 @@ describe('CoordinatorStudentsComponent', () => {
     component.irAMaterias();
     expect(router.navigate).toHaveBeenCalledWith(['/app/coordinador/materias']);
   });
+
+  it('onSelectCourse asigna el curso seleccionado y cargarDatos actualiza directorio', () => {
+    component.onSelectCourse('crs-100');
+    expect(component.selectedCourseId()).toBe('crs-100');
+
+    component.cargarDatos();
+    expect(coordinatorService.getEstudiantesDirectorioPagina).toHaveBeenCalled();
+
+    component.onDirectorioSearchChange('Carlos');
+    expect(component.searchDirectorio()).toBe('Carlos');
+  });
 });

@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { ProfileComponent } from './profile.component';
 import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../shared/components/toast/toast.component';
@@ -94,9 +94,60 @@ describe('ProfileComponent', () => {
     expect(component.isEditing()).toBeFalse();
   });
 
+  it('saveProfile advierte si falta primerNombre o primerApellido', () => {
+    component.enableEditing();
+    component.formModel.primerNombre = '   ';
+    component.saveProfile();
+    expect(toastServiceSpy.show).toHaveBeenCalledWith('El campo Primer Nombre es obligatorio.', 'warning');
+
+    component.formModel.primerNombre = 'Roberto';
+    component.formModel.primerApellido = '   ';
+    component.saveProfile();
+    expect(toastServiceSpy.show).toHaveBeenCalledWith('El campo Primer Apellido es obligatorio.', 'warning');
+  });
+
+  it('saveProfile muestra error cuando el backend responde no exitoso', () => {
+    authServiceSpy.updateUserProfile.and.returnValue(
+      of({ exitoso: false, mensajeUsuario: 'Error de validación en backend' } as any)
+    );
+    component.enableEditing();
+    component.formModel.primerNombre = 'Roberto';
+    component.formModel.primerApellido = 'Gómez';
+    component.saveProfile();
+
+    expect(toastServiceSpy.show).toHaveBeenCalledWith('Error de validación en backend', 'error');
+  });
+
+  it('saveProfile muestra error cuando el observable falla', () => {
+    authServiceSpy.updateUserProfile.and.returnValue(throwError(() => new Error('Network error')));
+    component.enableEditing();
+    component.formModel.primerNombre = 'Roberto';
+    component.formModel.primerApellido = 'Gómez';
+    component.saveProfile();
+
+    expect(toastServiceSpy.show).toHaveBeenCalledWith(
+      'Ocurrió un error al intentar guardar los cambios.',
+      'error'
+    );
+  });
+
+  it('goBack invoca location.back cuando window.history.length > 1', () => {
+    spyOnProperty(window.history, 'length', 'get').and.returnValue(3);
+    component.goBack();
+    expect(locationSpy.back).toHaveBeenCalled();
+  });
+
+  it('goBack invoca router.navigate cuando window.history.length <= 1', () => {
+    spyOnProperty(window.history, 'length', 'get').and.returnValue(1);
+    component.goBack();
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/app/dashboard']);
+  });
+
   it('getRoleBadgeVariant retorna la variante visual esperada', () => {
     expect(component.getRoleBadgeVariant('DOCENTE')).toBe('info');
     expect(component.getRoleBadgeVariant('ESTUDIANTE')).toBe('success');
     expect(component.getRoleBadgeVariant('ADMINISTRADOR')).toBe('danger');
+    expect(component.getRoleBadgeVariant('COORDINADOR')).toBe('warning');
+    expect(component.getRoleBadgeVariant('DECANO')).toBe('info');
   });
 });

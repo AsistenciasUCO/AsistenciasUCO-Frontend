@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { RegisterComponent } from './register.component';
 import { CatalogService } from '../../../core/services/catalog.service';
 import { UserService } from '../../../core/services/user.service';
@@ -106,5 +106,34 @@ describe('RegisterComponent', () => {
 
     expect(component.toastType()).toBe('error');
     expect(component.toastMessage()).toBe('El usuario ya existe');
+  });
+
+  it('maneja error HTTP de red en createUser', () => {
+    userService.createUser.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          exitoso: false,
+          mensajeUsuario: 'Error de validación',
+          errores: { correo: 'Correo duplicado' },
+        },
+      }))
+    );
+
+    const fixture = TestBed.createComponent(RegisterComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    component.tipoIdentificacionId = 'tipo-1';
+    component.numeroIdentificacion = '1017123456';
+    component.primerNombre = 'Alan';
+    component.primerApellido = 'Turing';
+    component.email = 'alan.turing@uco.edu.co';
+    component.password = 'Segura123*';
+
+    component.onRegister(new Event('submit'));
+
+    expect(component.toastType()).toBe('error');
+    expect(component.isLoading()).toBeFalse();
   });
 });
