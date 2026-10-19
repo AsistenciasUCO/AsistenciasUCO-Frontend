@@ -48,7 +48,7 @@ import { Course } from '../../../../core/models/course.model';
       </div>
 
       <!-- Resumen de Métricas Bento -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div class="p-4 rounded-2xl bg-white border border-warm-200 shadow-warm-sm flex items-center gap-4">
           <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center shrink-0">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -70,18 +70,6 @@ import { Course } from '../../../../core/models/course.model';
           <div>
             <span class="text-xs text-warm-500 font-medium">Estudiantes Registrados</span>
             <p class="text-2xl font-serif font-bold text-warm-900">{{ totalEstudiantes() }}</p>
-          </div>
-        </div>
-
-        <div class="p-4 rounded-2xl bg-white border border-warm-200 shadow-warm-sm flex items-center gap-4">
-          <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div>
-            <span class="text-xs text-warm-500 font-medium">Cupo Total Ofertado</span>
-            <p class="text-2xl font-serif font-bold text-emerald-700">{{ totalCupos() }} cupos</p>
           </div>
         </div>
       </div>
@@ -115,7 +103,6 @@ import { Course } from '../../../../core/models/course.model';
               padding="md"
               (click)="seleccionarGrupo.emit(course)"
               class="cursor-pointer transition-all hover:border-primary-300 group block"
-              title="Haz clic para ver el detalle y sesiones de este grupo"
             >
               <div class="flex flex-col h-full justify-between gap-4">
                 <div>
@@ -127,9 +114,15 @@ import { Course } from '../../../../core/models/course.model';
                       <app-badge variant="neutral">{{ course.section }}</app-badge>
                     </div>
 
-                    <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      {{ course.enrolledStudentsCount }} / {{ course.cupoMaximo || 35 }} cupos
-                    </span>
+                    @if (course.cupoMaximo) {
+                      <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        {{ course.enrolledStudentsCount }} / {{ course.cupoMaximo }} cupos
+                      </span>
+                    } @else {
+                      <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-warm-100 text-warm-700 border border-warm-200">
+                        {{ course.enrolledStudentsCount }} inscritos
+                      </span>
+                    }
                   </div>
 
                   <h3 class="font-serif font-bold text-xl text-warm-900 group-hover:text-primary-950 transition-colors leading-snug">
@@ -190,10 +183,6 @@ export class TeacherGruposListComponent {
 
   totalEstudiantes = computed(() =>
     this.courses().reduce((acc, c) => acc + (c.enrolledStudentsCount || 0), 0)
-  );
-
-  totalCupos = computed(() =>
-    this.courses().reduce((acc, c) => acc + (c.cupoMaximo || 35), 0)
   );
 
   filteredCourses = computed(() => {

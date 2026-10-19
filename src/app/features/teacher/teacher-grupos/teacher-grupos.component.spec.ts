@@ -5,6 +5,7 @@ import { TeacherGruposComponent } from './teacher-grupos.component';
 import { CourseService } from '../../../core/services/course.service';
 import { SessionService } from '../../../core/services/session.service';
 import { StudentService } from '../../../core/services/student.service';
+import { GroupService } from '../../../core/services/group.service';
 import { AttendanceClaimService } from '../../../core/services/attendance-claim.service';
 import { Course } from '../../../core/models/course.model';
 import { ClassSession } from '../../../core/models/attendance.model';
@@ -73,11 +74,20 @@ describe('TeacherGruposComponent', () => {
       of({ exitoso: true, datos: [], total: 0 } as any)
     );
 
+    let groupService = jasmine.createSpyObj<GroupService>('GroupService', [
+      'getStudentsByGroup',
+      'getAllGroups',
+    ]);
+    groupService.getAllGroups.and.returnValue(
+      of({ exitoso: true, total: 1, datos: [{ id: 'crs-1', capacidadMaximaPermitida: 35 }] } as any)
+    );
+
     TestBed.configureTestingModule({
       imports: [TeacherGruposComponent],
       providers: [
         { provide: CourseService, useValue: courseService },
         { provide: SessionService, useValue: sessionService },
+        { provide: GroupService, useValue: groupService },
         { provide: StudentService, useValue: studentService },
         { provide: AttendanceClaimService, useValue: claimService },
         { provide: Router, useValue: router },
@@ -219,5 +229,18 @@ describe('TeacherGruposComponent', () => {
 
     const detalle = component.sesionDetalle();
     expect(detalle?.records ?? []).toEqual([]);
+  });
+
+  it('al seleccionar un grupo de la lista, navega a la vista de asistencia del curso', () => {
+    spyOn(component, 'tomarAsistenciaGrupo').and.callThrough();
+    const listElement = fixture.nativeElement.querySelector('app-teacher-grupos-list');
+    expect(listElement).toBeTruthy();
+
+    component.tomarAsistenciaGrupo(course);
+
+    expect(component.tomarAsistenciaGrupo).toHaveBeenCalledWith(course);
+    expect(router.navigate).toHaveBeenCalledWith(['/app/asistencia'], {
+      queryParams: { courseId: course.id },
+    });
   });
 });

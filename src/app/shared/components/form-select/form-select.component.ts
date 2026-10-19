@@ -24,7 +24,7 @@ export interface SelectOption {
           <option value="" disabled [selected]="!value()">{{ placeholder() }}</option>
         }
         @for (opt of options(); track opt.value) {
-          <option [value]="opt.value" [disabled]="opt.disabled">{{ opt.label }}</option>
+          <option [value]="opt.value" [selected]="opt.value === value()" [disabled]="opt.disabled">{{ opt.label }}</option>
         }
       </select>
       <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-warm-500">

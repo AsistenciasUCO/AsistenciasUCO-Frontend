@@ -71,7 +71,11 @@ describe('AttendanceControlComponent contract corrections', () => {
     ]);
     groupService = jasmine.createSpyObj<GroupService>('GroupService', [
       'getStudentsByGroup',
+      'getAllGroups',
     ]);
+    groupService.getAllGroups.and.returnValue(
+      of({ exitoso: true, total: 1, datos: [{ id: 'group-1', capacidadMaximaPermitida: 40 }] } as any)
+    );
     studentService = jasmine.createSpyObj<StudentService>('StudentService', [
       'enrollStudentInGroup',
     ]);

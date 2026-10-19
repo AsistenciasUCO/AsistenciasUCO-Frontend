@@ -13,8 +13,8 @@ import { MOCK_ESTUDIANTES_DIRECTORIO } from '../mocks/role-management.mock';
 export class GroupService {
   constructor(private http: HttpClient) {}
 
-  getAllGroups(): Observable<GrupoApiDto[]> {
-    return this.http.get<GrupoApiDto[]>(`${environment.apiUrl}/grupos`);
+  getAllGroups(): Observable<ApiListResponse<GrupoApiDto>> {
+    return this.http.get<ApiListResponse<GrupoApiDto>>(`${environment.apiUrl}/grupos`);
   }
 
   getStudentsByGroup(

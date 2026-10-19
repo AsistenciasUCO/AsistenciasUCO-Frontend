@@ -11,6 +11,9 @@ import { ClassSession } from '../../../../core/models/attendance.model';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, BadgeComponent, ButtonComponent, FormSelectComponent],
+  host: {
+    class: 'block w-full'
+  },
   template: `
     <div class="space-y-4">
       @if (!sessionsEnabled() || !attendanceEnabled()) {
