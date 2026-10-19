@@ -93,6 +93,11 @@ describe('AdminDecanosComponent', () => {
     const reqDecanos = http.expectOne(`${environment.apiUrl}/admin/decanos`);
     reqDecanos.flush({ exitoso: true, datos: mockDecanos });
 
+    http.match(`${environment.apiUrl}/coordinador/planes-estudio`).forEach((r) => r.flush({ exitoso: true, datos: [] }));
+    http.match(`${environment.apiUrl}/coordinador/periodos-academicos`).forEach((r) => r.flush({ exitoso: true, datos: [] }));
+    http.match(`${environment.apiUrl}/docentes`).forEach((r) => r.flush([]));
+    http.match(`${environment.apiUrl}/coordinador/docentes`).forEach((r) => r.flush({ exitoso: true, datos: [] }));
+
     fixture.detectChanges();
   }
 
@@ -106,6 +111,7 @@ describe('AdminDecanosComponent', () => {
   it('filteredDecanos filtra por término de búsqueda', () => {
     flushInitialRequests();
     component.searchQuery = 'roberto';
+    component.decanos.set([...component.decanos()]);
     fixture.detectChanges();
 
     expect(component.filteredDecanos().length).toBe(1);
@@ -115,6 +121,7 @@ describe('AdminDecanosComponent', () => {
   it('filteredDecanos filtra por estado', () => {
     flushInitialRequests();
     component.selectedEstado = 'INACTIVO';
+    component.decanos.set([...component.decanos()]);
     fixture.detectChanges();
 
     expect(component.filteredDecanos().length).toBe(1);
@@ -134,9 +141,9 @@ describe('AdminDecanosComponent', () => {
     expect(component.vistaActual()).toBe('LISTA');
   });
 
-  it('toggleEstadoDecano envía solicitud para cambiar estado y muestra notificación', () => {
+  it('toggleEstado envía solicitud para cambiar estado y muestra notificación', () => {
     flushInitialRequests();
-    component.toggleEstadoDecano(mockDecanos[0]);
+    component.toggleEstado(mockDecanos[0]);
 
     const req = http.expectOne(`${environment.apiUrl}/admin/decanos/dec-1/toggle`);
     expect(req.request.method).toBe('PATCH');

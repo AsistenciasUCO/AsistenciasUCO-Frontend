@@ -16,12 +16,8 @@ describe('TeacherService', () => {
   const mockTeacher: DocenteApiDto = {
     id: 'doc-1',
     idUsuario: 'usr-1',
-    tipoIdentificacionId: 'tipo-1',
     numeroIdentificacion: 1017001,
-    primerNombre: 'Pedro',
-    primerApellido: 'Pérez',
     nombreCompleto: 'Pedro Pérez',
-    correo: 'pperez@uco.edu.co',
     estaActivoUsuario: true,
   };
 
@@ -59,7 +55,7 @@ describe('TeacherService', () => {
   it('getAllTeachers realiza GET a /docentes', () => {
     service.getAllTeachers().subscribe((docentes) => {
       expect(docentes.length).toBe(1);
-      expect(docentes[0].primerNombre).toBe('Pedro');
+      expect(docentes[0].nombreCompleto).toBe('Pedro Pérez');
     });
 
     const req = http.expectOne(`${environment.apiUrl}/docentes`);

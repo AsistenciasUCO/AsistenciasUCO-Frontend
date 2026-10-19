@@ -1,13 +1,13 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { of } from 'rxjs';
 import { signal } from '@angular/core';
 import { AdminSystemComponent } from './admin-system.component';
 import { AdminManagementService } from '../../../core/services/admin-management.service';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
 import { ToastService } from '../../../shared/components/toast/toast.component';
-import { environment } from '../../../../environments/environment';
+import { ParametroInstitucionalItem, RegistroAuditoriaItem } from '../../../core/models/role-management.model';
 
 describe('AdminSystemComponent', () => {
   let fixture: ComponentFixture<AdminSystemComponent>;
@@ -15,37 +15,38 @@ describe('AdminSystemComponent', () => {
   let adminServiceSpy: jasmine.SpyObj<AdminManagementService>;
   let coordServiceSpy: jasmine.SpyObj<CoordinatorManagementService>;
   let toastServiceSpy: jasmine.SpyObj<ToastService>;
+  let auditoriaSignal = signal<RegistroAuditoriaItem[]>([]);
 
-  const mockParametros = [
+  const mockParametros: ParametroInstitucionalItem[] = [
     {
       id: 'param-1',
       clave: 'asistencias.limite.inasistencia',
       nombre: 'Límite de Inasistencia',
       valor: '20',
       descripcion: 'Porcentaje máximo permitido',
-      categoria: 'ACADEMICO' as const,
-      tipoDato: 'NUMBER' as const,
-      esEditable: true,
-      ultimaActualizacion: '2026-01-01',
-      actualizadoPor: 'Admin',
+      categoria: 'ASISTENCIA',
+      tipo: 'PORCENTAJE',
+      ultimaModificacion: '2026-01-01',
     },
   ];
 
-  const mockAuditoria = [
+  const mockAuditoria: RegistroAuditoriaItem[] = [
     {
       id: 'aud-1',
+      timestamp: '2026-02-01T10:00:00Z',
       usuarioId: 'usr-1',
       usuarioNombre: 'Carlos Admin',
       rol: 'ADMINISTRADOR',
       accion: 'ACTUALIZAR',
-      modulo: 'CONFIGURACION',
+      modulo: 'SISTEMA',
       descripcion: 'Cambio de parámetro institucional',
-      fechaHora: '2026-02-01 10:00:00',
-      ip: '127.0.0.1',
+      direccionIp: '127.0.0.1',
+      nivel: 'INFO',
     },
   ];
 
   beforeEach(async () => {
+    auditoriaSignal = signal<RegistroAuditoriaItem[]>(mockAuditoria);
     toastServiceSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info', 'warning']);
 
     adminServiceSpy = jasmine.createSpyObj(
@@ -53,7 +54,7 @@ describe('AdminSystemComponent', () => {
       ['cargarParametros', 'cargarAuditoria', 'actualizarParametro', 'ejecutarCierreMasivo'],
       {
         parametros: signal(mockParametros).asReadonly(),
-        auditoria: signal(mockAuditoria).asReadonly(),
+        auditoria: auditoriaSignal.asReadonly(),
         reportesCierre: signal([]).asReadonly(),
       }
     );
@@ -69,7 +70,6 @@ describe('AdminSystemComponent', () => {
           fechaInicio: '2026-08-01',
           fechaFin: '2026-12-15',
           estado: 'ACTIVO' as const,
-          semanasLectivas: 16,
         },
       ]).asReadonly(),
     });
@@ -108,12 +108,15 @@ describe('AdminSystemComponent', () => {
 
   it('auditoriaFiltrada filtra por módulo y texto', () => {
     component.filtroAuditoria = 'carlos';
+    auditoriaSignal.set([...mockAuditoria]);
     expect(component.auditoriaFiltrada().length).toBe(1);
 
-    component.moduloAuditoriaFiltro = 'ASISTENCIAS';
+    component.moduloAuditoriaFiltro = 'ASISTENCIA';
+    auditoriaSignal.set([...mockAuditoria]);
     expect(component.auditoriaFiltrada().length).toBe(0);
 
-    component.moduloAuditoriaFiltro = 'CONFIGURACION';
+    component.moduloAuditoriaFiltro = 'SISTEMA';
+    auditoriaSignal.set([...mockAuditoria]);
     expect(component.auditoriaFiltrada().length).toBe(1);
   });
 

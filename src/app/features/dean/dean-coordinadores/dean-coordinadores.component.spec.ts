@@ -23,9 +23,8 @@ describe('DeanCoordinadoresComponent', () => {
       nombres: 'Carlos',
       apellidos: 'Ramírez',
       correo: 'cramirez@uco.edu.co',
+      facultad: 'Facultad de Ingeniería',
       programaAcademico: 'Ingeniería de Sistemas',
-      telefono: '5698000',
-      fechaAsignacion: '2026-01-01',
       estado: 'ACTIVO',
       totalDocentes: 10,
       totalGrupos: 15,
@@ -36,9 +35,8 @@ describe('DeanCoordinadoresComponent', () => {
       nombres: 'Ana',
       apellidos: 'Gómez',
       correo: 'agomez@uco.edu.co',
+      facultad: 'Facultad de Ingeniería',
       programaAcademico: 'Ingeniería Industrial',
-      telefono: '5698001',
-      fechaAsignacion: '2026-01-15',
       estado: 'INACTIVO',
       totalDocentes: 8,
       totalGrupos: 12,
@@ -71,14 +69,26 @@ describe('DeanCoordinadoresComponent', () => {
   function flushInitialRequests() {
     fixture.detectChanges();
 
-    const reqTipos = http.expectOne(`${environment.apiUrl}/tipos-identificacion`);
-    reqTipos.flush({
-      exitoso: true,
-      datos: [{ id: 'tipo-1', tipoIdentificacion: 'CC', nombre: 'Cédula de Ciudadanía' }],
-    });
-
     const reqCoords = http.expectOne(`${environment.apiUrl}/decano/coordinadores`);
     reqCoords.flush({ exitoso: true, datos: mockCoordinadores });
+
+    http.match(`${environment.apiUrl}/tipos-identificacion`).forEach((r) =>
+      r.flush({
+        exitoso: true,
+        datos: [{ id: 'tipo-1', tipoIdentificacion: 'CC', nombre: 'Cédula de Ciudadanía' }],
+      })
+    );
+    http.match(`${environment.apiUrl}/programas-academicos`).forEach((r) =>
+      r.flush({
+        exitoso: true,
+        datos: [{ id: 'prog-1', codigo: 'IS', nombre: 'Ingeniería de Sistemas' }],
+      })
+    );
+
+    http.match(`${environment.apiUrl}/coordinador/planes-estudio`).forEach((r) => r.flush({ exitoso: true, datos: [] }));
+    http.match(`${environment.apiUrl}/coordinador/periodos-academicos`).forEach((r) => r.flush({ exitoso: true, datos: [] }));
+    http.match(`${environment.apiUrl}/docentes`).forEach((r) => r.flush([]));
+    http.match(`${environment.apiUrl}/coordinador/docentes`).forEach((r) => r.flush({ exitoso: true, datos: [] }));
 
     fixture.detectChanges();
   }
@@ -93,6 +103,7 @@ describe('DeanCoordinadoresComponent', () => {
   it('filteredCoordinadores filtra por texto de búsqueda', () => {
     flushInitialRequests();
     component.searchQuery = 'carlos';
+    component.coordinadores.set([...component.coordinadores()]);
     fixture.detectChanges();
 
     expect(component.filteredCoordinadores().length).toBe(1);
@@ -102,6 +113,7 @@ describe('DeanCoordinadoresComponent', () => {
   it('filteredCoordinadores filtra por estado', () => {
     flushInitialRequests();
     component.selectedEstado = 'INACTIVO';
+    component.coordinadores.set([...component.coordinadores()]);
     fixture.detectChanges();
 
     expect(component.filteredCoordinadores().length).toBe(1);
@@ -121,9 +133,9 @@ describe('DeanCoordinadoresComponent', () => {
     expect(component.vistaActual()).toBe('LISTA');
   });
 
-  it('toggleEstadoCoordinador envía PATCH para alternar estado y notifica', () => {
+  it('toggleEstado envía PATCH para alternar estado y notifica', () => {
     flushInitialRequests();
-    component.toggleEstadoCoordinador(mockCoordinadores[0]);
+    component.toggleEstado(mockCoordinadores[0]);
 
     const req = http.expectOne(`${environment.apiUrl}/decano/coordinadores/coord-1/toggle`);
     expect(req.request.method).toBe('PATCH');

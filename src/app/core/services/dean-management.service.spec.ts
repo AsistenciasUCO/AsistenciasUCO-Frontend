@@ -31,9 +31,8 @@ describe('DeanManagementService', () => {
         nombres: 'Carlos',
         apellidos: 'Ramírez',
         correo: 'cramirez@uco.edu.co',
+        facultad: 'Facultad de Ingeniería',
         programaAcademico: 'Ingeniería de Sistemas',
-        telefono: '5698000',
-        fechaAsignacion: '2026-01-15',
         estado: 'ACTIVO',
         totalDocentes: 12,
         totalGrupos: 18,
@@ -52,15 +51,14 @@ describe('DeanManagementService', () => {
   });
 
   it('createCoordinador envía POST con los datos del nuevo coordinador', () => {
-    const nuevo = {
+    const nuevo: Omit<CoordinadorItem, 'id' | 'totalDocentes' | 'totalGrupos'> = {
       numeroIdentificacion: '10170002',
       nombres: 'Ana',
       apellidos: 'Gómez',
       correo: 'agomez@uco.edu.co',
+      facultad: 'Facultad de Ingeniería',
       programaAcademico: 'Ingeniería Industrial',
-      telefono: '5698001',
-      fechaAsignacion: '2026-02-01',
-      estado: 'ACTIVO' as const,
+      estado: 'ACTIVO',
     };
 
     service.createCoordinador(nuevo).subscribe((res) => {
@@ -90,9 +88,8 @@ describe('DeanManagementService', () => {
         nombres: 'Carlos',
         apellidos: 'Ramírez',
         correo: 'cramirez@uco.edu.co',
+        facultad: 'Facultad de Ingeniería',
         programaAcademico: 'Ingeniería de Sistemas',
-        telefono: '5698000',
-        fechaAsignacion: '2026-01-15',
         estado: 'INACTIVO',
         totalDocentes: 12,
         totalGrupos: 18,

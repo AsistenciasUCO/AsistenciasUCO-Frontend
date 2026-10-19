@@ -22,11 +22,12 @@ describe('DashboardLayoutComponent', () => {
 
     authServiceSpy = jasmine.createSpyObj('AuthService', ['logout', 'loginAsMockUser'], {
       currentUser: mockUserSignal.asReadonly(),
+      isMockMode: signal(false).asReadonly(),
     });
     authServiceSpy.logout.and.returnValue(Promise.resolve());
 
     toastServiceSpy = jasmine.createSpyObj('ToastService', ['dismiss'], {
-      toastState: signal({ visible: false, message: '', type: 'info' as const }).asReadonly(),
+      currentToast: signal({ visible: false, message: '', type: 'info' as const }).asReadonly(),
     });
 
     await TestBed.configureTestingModule({
@@ -62,10 +63,10 @@ describe('DashboardLayoutComponent', () => {
 
   it('getRoleBadgeVariant retorna variantes de color coherentes con el rol', () => {
     expect(component.getRoleBadgeVariant('ADMINISTRADOR')).toBe('danger');
-    expect(component.getRoleBadgeVariant('DOCENTE')).toBe('info');
-    expect(component.getRoleBadgeVariant('ESTUDIANTE')).toBe('success');
-    expect(component.getRoleBadgeVariant('COORDINADOR')).toBe('warning');
-    expect(component.getRoleBadgeVariant('DECANO')).toBe('neutral');
+    expect(component.getRoleBadgeVariant('DECANO')).toBe('warning');
+    expect(component.getRoleBadgeVariant('COORDINADOR')).toBe('info');
+    expect(component.getRoleBadgeVariant('DOCENTE')).toBe('success');
+    expect(component.getRoleBadgeVariant('ESTUDIANTE')).toBe('neutral');
   });
 
   it('filteredNavItems incluye únicamente rutas permitidas para el rol activo', () => {

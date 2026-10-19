@@ -6,7 +6,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../shared/components/toast/toast.component';
 import { Location } from '@angular/common';
 import { Router } from '@angular/router';
-import { UserRole } from '../../core/models/user.model';
+import { User, UserRole } from '../../core/models/user.model';
 
 describe('ProfileComponent', () => {
   let fixture: ComponentFixture<ProfileComponent>;
@@ -16,23 +16,28 @@ describe('ProfileComponent', () => {
   let routerSpy: jasmine.SpyObj<Router>;
   let locationSpy: jasmine.SpyObj<Location>;
 
-  const mockUser = {
+  const mockUser: User = {
     id: 'usr-1',
     name: 'Roberto Gómez',
     email: 'rgomez@uco.edu.co',
-    role: 'DOCENTE' as UserRole,
+    role: 'DOCENTE',
     primerNombre: 'Roberto',
     segundoNombre: '',
     primerApellido: 'Gómez',
     segundoApellido: '',
+    institutionName: 'Universidad Católica de Oriente',
+    status: 'active',
   };
 
   beforeEach(async () => {
     authServiceSpy = jasmine.createSpyObj('AuthService', ['fetchProfileFromBackend', 'updateUserProfile'], {
       currentUser: signal(mockUser).asReadonly(),
+      isMockMode: signal(true).asReadonly(),
     });
     authServiceSpy.fetchProfileFromBackend.and.returnValue(Promise.resolve(mockUser));
-    authServiceSpy.updateUserProfile.and.returnValue(of({ exitoso: true, mensajeUsuario: 'Ok', datos: null }));
+    authServiceSpy.updateUserProfile.and.returnValue(
+      of({ exitoso: true, mensajeUsuario: 'Ok', datos: mockUser })
+    );
 
     toastServiceSpy = jasmine.createSpyObj('ToastService', ['show', 'success', 'error', 'info', 'warning']);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
@@ -64,13 +69,11 @@ describe('ProfileComponent', () => {
   });
 
   it('enableEditing activa el modo edición cuando canEditProfile es true', () => {
-    component.canEditProfile.set(true);
     component.enableEditing();
     expect(component.isEditing()).toBeTrue();
   });
 
   it('cancelEditing restablece formulario y apaga modo edición', () => {
-    component.canEditProfile.set(true);
     component.enableEditing();
     component.formModel.primerNombre = 'Modificado';
     component.cancelEditing();
@@ -80,7 +83,6 @@ describe('ProfileComponent', () => {
   });
 
   it('saveProfile valida campos obligatorios y envía actualización', () => {
-    component.canEditProfile.set(true);
     component.enableEditing();
     component.formModel.primerNombre = 'Roberto';
     component.formModel.primerApellido = 'Gómez';

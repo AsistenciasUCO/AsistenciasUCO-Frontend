@@ -25,7 +25,7 @@ describe('UserService', () => {
 
   it('createUser realiza petición POST a /usuarios', () => {
     const request: CrearUsuarioRequest = {
-      tipoIdentificacionId: 'tipo-1',
+      tipoIdIdentificacion: 'tipo-1',
       numeroIdentificacion: 1017001,
       primerNombre: 'Carlos',
       segundoNombre: 'Andrés',

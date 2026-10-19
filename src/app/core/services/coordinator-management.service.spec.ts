@@ -21,12 +21,14 @@ describe('CoordinatorManagementService', () => {
       id: 'plan-1',
       codigo: 'ISI-2026',
       nombre: 'Ingeniería de Sistemas',
-      version: 'v2',
-      fechaAprobacion: '2026-01-01',
-      estado: 'ACTIVO',
-      totalAsignaturas: 50,
+      anioVigencia: 2026,
+      programa: 'Ingeniería de Sistemas',
+      facultad: 'Facultad de Ingeniería',
+      totalCreditos: 160,
       totalSemestres: 10,
-      creditosTotales: 160,
+      totalAsignaturas: 50,
+      estado: 'VIGENTE',
+      descripcion: 'Plan de estudios vigente',
     },
   ];
 
@@ -38,7 +40,6 @@ describe('CoordinatorManagementService', () => {
       fechaInicio: '2026-02-01',
       fechaFin: '2026-06-30',
       estado: 'ACTIVO',
-      semanasLectivas: 16,
     },
   ];
 
@@ -74,9 +75,8 @@ describe('CoordinatorManagementService', () => {
           nombres: 'Pedro',
           apellidos: 'Pérez',
           correo: 'pperez@uco.edu.co',
-          telefono: '5698000',
           departamento: 'Ingeniería',
-          tipoContrato: 'TIEMPO_COMPLETO',
+          especialidad: 'Software',
           estado: 'ACTIVO',
           totalGruposAsignados: 3,
         },
@@ -93,15 +93,14 @@ describe('CoordinatorManagementService', () => {
     });
 
     it('createDocente envía POST y retorna el nuevo docente', () => {
-      const nuevo = {
+      const nuevo: Omit<DocenteItem, 'id' | 'totalGruposAsignados'> = {
         numeroIdentificacion: '1017002',
         nombres: 'Luisa',
         apellidos: 'Castro',
         correo: 'lcastro@uco.edu.co',
-        telefono: '5698001',
         departamento: 'Ingeniería',
-        tipoContrato: 'CATEDRA' as const,
-        estado: 'ACTIVO' as const,
+        especialidad: 'Inteligencia Artificial',
+        estado: 'ACTIVO',
       };
 
       service.createDocente(nuevo).subscribe((res) => {
@@ -130,8 +129,7 @@ describe('CoordinatorManagementService', () => {
       const nuevoPlan: Partial<PlanEstudioItem> = {
         codigo: 'MED-2026',
         nombre: 'Medicina',
-        version: 'v1',
-        estado: 'ACTIVO',
+        estado: 'VIGENTE',
         totalAsignaturas: 60,
       };
 
@@ -175,13 +173,15 @@ describe('CoordinatorManagementService', () => {
       const mockAsigs: AsignaturaPlanItem[] = [
         {
           id: 'asig-1',
+          planEstudioId: 'plan-1',
           codigo: 'MAT101',
           nombre: 'Cálculo Diferencial',
           semestre: 1,
           creditos: 3,
           horasSemanales: 4,
           componente: 'Obligatoria',
-          areaFormacion: 'Ciencias Básicas',
+          area: 'Ciencias Básicas',
+          prerrequisitos: [],
         },
       ];
 
@@ -236,11 +236,12 @@ describe('CoordinatorManagementService', () => {
         {
           id: 'est-1',
           documento: '1017009',
+          codigo: 'EST001',
           nombreCompleto: 'Laura Restrepo',
           correo: 'lrestrepo@uco.edu.co',
           programa: 'Ingeniería de Sistemas',
-          semestre: 4,
-          promedio: 4.5,
+          semestreActual: 4,
+          promedioAcumulado: 4.5,
           estadoMatricula: 'ACTIVO',
           gruposInscritos: ['grp-1'],
         },
@@ -286,10 +287,12 @@ describe('CoordinatorManagementService', () => {
           id: 'sol-1',
           estudianteId: 'est-1',
           estudianteNombre: 'Laura Restrepo',
-          estudianteDocumento: '1017009',
+          estudianteCodigo: '1017009',
+          estudianteCorreo: 'lrestrepo@uco.edu.co',
           cursoId: 'cur-1',
-          materiaNombre: 'Cálculo',
-          grupoCodigo: 'G01',
+          cursoCodigo: 'CUR1',
+          cursoNombre: 'Cálculo',
+          grupo: 'G01',
           fechaSolicitud: '2026-02-05',
           estado: 'PENDIENTE',
           motivo: 'Cruce de horario',
@@ -320,10 +323,12 @@ describe('CoordinatorManagementService', () => {
           id: 'sol-1',
           estudianteId: 'est-1',
           estudianteNombre: 'Laura Restrepo',
-          estudianteDocumento: '1017009',
+          estudianteCodigo: '1017009',
+          estudianteCorreo: 'lrestrepo@uco.edu.co',
           cursoId: 'cur-1',
-          materiaNombre: 'Cálculo',
-          grupoCodigo: 'G01',
+          cursoCodigo: 'CUR1',
+          cursoNombre: 'Cálculo',
+          grupo: 'G01',
           fechaSolicitud: '2026-02-05',
           estado: 'APROBADA',
           motivo: 'Cruce de horario',

@@ -114,12 +114,14 @@ describe('CoordinatorDocentesComponent', () => {
 
   it('filteredDocentes filtra por término de búsqueda', () => {
     component.searchQuery = 'roberto';
+    component.docentes.set([...component.docentes()]);
     expect(component.filteredDocentes().length).toBe(1);
     expect(component.filteredDocentes()[0].nombres).toBe('Roberto');
   });
 
   it('filteredDocentes filtra por estado', () => {
     component.selectedEstado = 'INACTIVO';
+    component.docentes.set([...component.docentes()]);
     expect(component.filteredDocentes().length).toBe(1);
     expect(component.filteredDocentes()[0].nombres).toBe('Luisa');
   });

@@ -25,6 +25,7 @@ describe('AttendanceEnrollmentModalComponent', () => {
 
     fixture = TestBed.createComponent(AttendanceEnrollmentModalComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('isOpen', true);
     fixture.detectChanges();
   });
 
