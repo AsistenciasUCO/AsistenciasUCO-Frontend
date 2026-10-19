@@ -155,7 +155,7 @@ export class AuthService implements OnDestroy {
         this.storeRefreshToken(null);
         const currentUrl: string = this.router.url ?? '';
         if (!currentUrl.startsWith('/login')) {
-          this.router.navigate(['/login']);
+          void this.router.navigate(['/login']);
         }
       }
     };
@@ -433,22 +433,22 @@ export class AuthService implements OnDestroy {
     switch (role) {
       case 'ADMINISTRADOR':
       case 'ADMIN':
-        this.router.navigate(['/app/admin/decanos']);
+        void this.router.navigate(['/app/admin/decanos']);
         break;
       case 'DECANO':
-        this.router.navigate(['/app/decano/coordinadores']);
+        void this.router.navigate(['/app/decano/coordinadores']);
         break;
       case 'COORDINADOR':
-        this.router.navigate(['/app/coordinador/docentes']);
+        void this.router.navigate(['/app/coordinador/docentes']);
         break;
       case 'DOCENTE':
-        this.router.navigate(['/app/docente/grupos']);
+        void this.router.navigate(['/app/docente/grupos']);
         break;
       case 'ESTUDIANTE':
-        this.router.navigate(['/app/estudiante/horarios']);
+        void this.router.navigate(['/app/estudiante/horarios']);
         break;
       default:
-        this.router.navigate(['/app/dashboard']);
+        void this.router.navigate(['/app/dashboard']);
         break;
     }
   }
@@ -464,7 +464,7 @@ export class AuthService implements OnDestroy {
 
   async logout(): Promise<void> {
     this.clearSession(true);
-    this.router.navigate(['/login']);
+    void this.router.navigate(['/login']);
   }
 
   clearSession(broadcast = false): void {
@@ -497,7 +497,7 @@ export class AuthService implements OnDestroy {
       // Ignorar si el canal no está disponible.
     }
     if (!(this.router.url ?? '').startsWith('/login')) {
-      this.router.navigate(['/login'], {
+      void this.router.navigate(['/login'], {
         queryParams: { returnUrl: this.router.url ?? '/' },
       });
     }
