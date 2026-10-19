@@ -40,7 +40,7 @@ jobs:
         run: npm run coverage:realtime:check
 
       - name: Trivy filesystem inventory
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -98,7 +98,7 @@ jobs:
         run: docker build -t asistencias-uco-frontend-ci .
 
       - name: Trivy image inventory
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: asistencias-uco-frontend-ci
