@@ -167,4 +167,44 @@ describe('CourseService', () => {
     expect(request.request.body.docenteName).toBeUndefined();
     request.flush({ exitoso: true, datos: {} });
   });
+
+  it('getTeacherCourses consulta y mapea la respuesta enriquecida', () => {
+    let courses: Course[] = [];
+    service.getTeacherCourses().subscribe((res) => (courses = res.datos));
+
+    http.expectOne(`${environment.apiUrl}/docente/horarios`).flush({
+      exitoso: true,
+      total: 1,
+      datos: [
+        {
+          id: 'h1',
+          idDocente: 'd1',
+          idGrupo: 'g1',
+          codigoMateria: 'IS-001',
+          nombreMateria: 'Arquitectura',
+          seccion: 'Grupo 1',
+          dia: 'Lunes',
+          horaInicio: '08:00:00',
+          horaFin: '10:00:00',
+          totalEstudiantes: 20,
+        },
+      ],
+    });
+
+    expect(courses.length).toBe(1);
+    expect(courses[0].id).toBe('g1');
+  });
+
+  it('getAsignaturasDocente consulta asignaturas del docente', () => {
+    let asignaturas: unknown[] = [];
+    service.getAsignaturasDocente().subscribe((res) => (asignaturas = res.datos));
+
+    http.expectOne(`${environment.apiUrl}/docente/asignaturas`).flush({
+      exitoso: true,
+      datos: [{ id: 'asig-1', nombre: 'Ingeniería de Software' }],
+    });
+
+    expect(asignaturas.length).toBe(1);
+  });
 });
+
