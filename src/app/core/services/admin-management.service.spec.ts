@@ -201,4 +201,169 @@ describe('AdminManagementService', () => {
     expect(service.decanos().length).toBe(1);
     expect(service.decanos()[0].nombreCompleto).toBe('Juan Carlos Gomez Perez');
   });
+
+  it('cargarAreas, crearArea, actualizarArea y cambiarEstadoArea interactúan correctamente con el backend', () => {
+    service.cargarAreas().subscribe((res) => {
+      expect(res.exitoso).toBeTrue();
+      expect(res.datos?.length).toBe(1);
+    });
+
+    const getReq = http.expectOne(`${environment.apiUrl}/admin/areas`);
+    expect(getReq.request.method).toBe('GET');
+    getReq.flush({
+      exitoso: true,
+      datos: [{ id: 'area-1', codigo: 'IS', nombre: 'Ingeniería de Software', facultadId: 'fac-1', estado: 'ACTIVO' }],
+    });
+
+    expect(service.areas().length).toBe(1);
+
+    // crearArea
+    service.crearArea({ codigo: 'IA', nombre: 'Inteligencia Artificial', facultadId: 'fac-1', estado: 'ACTIVO' });
+    const postReq = http.expectOne(`${environment.apiUrl}/admin/areas`);
+    expect(postReq.request.method).toBe('POST');
+    postReq.flush({
+      exitoso: true,
+      datos: { id: 'area-2', codigo: 'IA', nombre: 'Inteligencia Artificial', facultadId: 'fac-1', estado: 'ACTIVO' },
+    });
+    expect(service.areas().length).toBe(2);
+
+    // actualizarArea
+    service.actualizarArea('area-1', { nombre: 'Ingeniería de Software Avanzada' });
+    const putReq = http.expectOne(`${environment.apiUrl}/admin/areas/area-1`);
+    expect(putReq.request.method).toBe('PUT');
+    putReq.flush({
+      exitoso: true,
+      datos: { id: 'area-1', codigo: 'IS', nombre: 'Ingeniería de Software Avanzada', facultadId: 'fac-1', estado: 'ACTIVO' },
+    });
+    expect(service.areas().find((a) => a.id === 'area-1')?.nombre).toBe('Ingeniería de Software Avanzada');
+
+    // cambiarEstadoArea
+    service.cambiarEstadoArea('area-1');
+    const patchReq = http.expectOne(`${environment.apiUrl}/admin/areas/area-1/estado`);
+    expect(patchReq.request.method).toBe('PATCH');
+    patchReq.flush({
+      exitoso: true,
+      datos: { id: 'area-1', nombre: 'Ingeniería de Software Avanzada', descripcion: 'Área técnica', estado: 'INACTIVO' },
+    });
+    expect(service.areas().find((a) => a.id === 'area-1')?.estado).toBe('INACTIVO');
+  });
+
+  it('cargarParametros y actualizarParametro gestionan parámetros institucionales', () => {
+    service.cargarParametros().subscribe((res) => {
+      expect(res.exitoso).toBeTrue();
+      expect(res.datos?.length).toBe(1);
+    });
+
+    const getReq = http.expectOne(`${environment.apiUrl}/admin/parametros`);
+    expect(getReq.request.method).toBe('GET');
+    getReq.flush({
+      exitoso: true,
+      datos: [
+        {
+          id: 'param-1',
+          clave: 'limite.inasistencia',
+          nombre: 'Límite Inasistencia',
+          valor: '20',
+          descripcion: 'Porcentaje',
+          categoria: 'ASISTENCIA',
+          tipo: 'PORCENTAJE',
+          ultimaModificacion: '2026-01-01',
+        },
+      ],
+    });
+
+    expect(service.parametros().length).toBe(1);
+
+    service.actualizarParametro('param-1', '25');
+    const patchReq = http.expectOne(`${environment.apiUrl}/admin/parametros/param-1`);
+    expect(patchReq.request.method).toBe('PATCH');
+    expect(patchReq.request.body).toEqual({ valor: '25' });
+    patchReq.flush({
+      exitoso: true,
+      datos: {
+        id: 'param-1',
+        clave: 'limite.inasistencia',
+        nombre: 'Límite Inasistencia',
+        valor: '25',
+        descripcion: 'Porcentaje',
+        categoria: 'ASISTENCIA',
+        tipo: 'PORCENTAJE',
+        ultimaModificacion: '2026-02-01',
+      },
+    });
+
+    expect(service.parametros()[0].valor).toBe('25');
+  });
+
+  it('cargarAuditoria y ejecutarCierreMasivo funcionan correctamente', () => {
+    service.cargarAuditoria().subscribe((res) => {
+      expect(res.exitoso).toBeTrue();
+      expect(res.datos?.length).toBe(1);
+    });
+
+    const getReq = http.expectOne(`${environment.apiUrl}/admin/auditoria`);
+    expect(getReq.request.method).toBe('GET');
+    getReq.flush({
+      exitoso: true,
+      datos: [
+        {
+          id: 'aud-1',
+          timestamp: '2026-01-01T00:00:00Z',
+          usuarioId: 'usr-1',
+          usuarioNombre: 'Admin',
+          rol: 'ADMINISTRADOR',
+          accion: 'LOGIN',
+          modulo: 'AUTH',
+          descripcion: 'Inicio de sesión',
+          direccionIp: '127.0.0.1',
+          nivel: 'INFO',
+        },
+      ],
+    });
+
+    expect(service.auditoria().length).toBe(1);
+
+    service.ejecutarCierreMasivo('per-1', '2026-1').subscribe((res) => {
+      expect(res.exitoso).toBeTrue();
+    });
+
+    const postReq = http.expectOne(`${environment.apiUrl}/admin/cierre-masivo`);
+    expect(postReq.request.method).toBe('POST');
+    expect(postReq.request.body).toEqual({ idPeriodoAcademico: 'per-1', periodoCodigo: '2026-1' });
+    postReq.flush({ exitoso: true, datos: null });
+  });
+
+  it('getInstituciones, crearInstitucion, actualizarInstitucion y toggleEstadoInstitucion interactúan con API', () => {
+    service.getInstituciones().subscribe((res) => {
+      expect(res.exitoso).toBeTrue();
+    });
+
+    const getReq = http.expectOne(`${environment.apiUrl}/admin/instituciones`);
+    expect(getReq.request.method).toBe('GET');
+    getReq.flush({
+      exitoso: true,
+      datos: [{ id: 'inst-1', nombre: 'UCO', nit: '890.980.040', direccion: 'Rionegro', telefono: '5698000', estado: 'ACTIVO' }],
+    });
+
+    service.crearInstitucion({ nombre: 'UCO Nueva' }).subscribe((res) => {
+      expect(res.exitoso).toBeTrue();
+    });
+    const postReq = http.expectOne(`${environment.apiUrl}/admin/instituciones`);
+    expect(postReq.request.method).toBe('POST');
+    postReq.flush({ exitoso: true, datos: { id: 'inst-2', nombre: 'UCO Nueva' } });
+
+    service.actualizarInstitucion('inst-1', { direccion: 'Sector Llanogrande' }).subscribe((res) => {
+      expect(res.exitoso).toBeTrue();
+    });
+    const putReq = http.expectOne(`${environment.apiUrl}/admin/instituciones/inst-1`);
+    expect(putReq.request.method).toBe('PUT');
+    putReq.flush({ exitoso: true, datos: { id: 'inst-1', nombre: 'UCO', direccion: 'Sector Llanogrande' } });
+
+    service.toggleEstadoInstitucion('inst-1').subscribe((res) => {
+      expect(res.exitoso).toBeTrue();
+    });
+    const patchReq = http.expectOne(`${environment.apiUrl}/admin/instituciones/inst-1/toggle-estado`);
+    expect(patchReq.request.method).toBe('PATCH');
+    patchReq.flush({ exitoso: true, datos: { id: 'inst-1' } });
+  });
 });

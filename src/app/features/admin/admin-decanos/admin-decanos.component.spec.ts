@@ -159,4 +159,118 @@ describe('AdminDecanosComponent', () => {
 
     expect(component.formData.numeroIdentificacion).toBe('1017888');
   });
+
+  it('guardarDecano valida campos obligatorios antes de enviar', () => {
+    flushInitialRequests();
+    component.abrirFormularioRegistro();
+
+    // Sin documento
+    component.formData.numeroIdentificacion = '';
+    component.guardarDecano();
+    expect(toastService.warning).toHaveBeenCalled();
+
+    // Documento válido pero sin nombres
+    component.formData.numeroIdentificacion = '1017123456';
+    component.formData.primerNombre = '';
+    component.guardarDecano();
+    expect(toastService.warning).toHaveBeenCalled();
+
+    // Con nombre pero sin apellido
+    component.formData.primerNombre = 'Fernando';
+    component.formData.primerApellido = '';
+    component.guardarDecano();
+    expect(toastService.warning).toHaveBeenCalled();
+
+    // Con apellido pero correo inválido
+    component.formData.primerApellido = 'Ochoa';
+    component.formData.correo = 'correo-invalido';
+    component.guardarDecano();
+    expect(toastService.warning).toHaveBeenCalled();
+  });
+
+  it('guardarDecano envía POST y registra el nuevo decano', () => {
+    flushInitialRequests();
+    component.abrirFormularioRegistro();
+    component.formData.numeroIdentificacion = '1017999888';
+    component.formData.primerNombre = 'Fernando';
+    component.formData.primerApellido = 'Ochoa';
+    component.formData.correo = 'fernando.ochoa@uco.edu.co';
+    component.formData.facultad = 'Facultad de Ingeniería';
+
+    component.guardarDecano();
+
+    const req = http.expectOne(`${environment.apiUrl}/admin/decanos`);
+    expect(req.request.method).toBe('POST');
+    req.flush({
+      exitoso: true,
+      mensajeUsuario: 'Decano creado con éxito.',
+      datos: {
+        id: 'dec-nuevo',
+        ...component.formData,
+      },
+    });
+
+    expect(component.decanos().length).toBe(3);
+    expect(component.vistaActual()).toBe('LISTA');
+    expect(toastService.success).toHaveBeenCalled();
+  });
+
+  it('abrirModalSeleccionarDecano y onSolicitarRegistroNuevo gestionan estado del modal', () => {
+    flushInitialRequests();
+    expect(component.isPickerModalOpen()).toBeFalse();
+    component.abrirModalSeleccionarDecano();
+    expect(component.isPickerModalOpen()).toBeTrue();
+    component.onSolicitarRegistroNuevo();
+    expect(component.isPickerModalOpen()).toBeFalse();
+    expect(component.vistaActual()).toBe('REGISTRO');
+  });
+
+  it('onDecanoSeleccionadoDelDirectorio avisa si el usuario ya es decano', () => {
+    flushInitialRequests();
+    component.onDecanoSeleccionadoDelDirectorio({
+      id: 'dec-1',
+      numeroIdentificacion: '1017001',
+      nombres: 'Roberto',
+      apellidos: 'Gómez',
+      correo: 'rgomez@uco.edu.co',
+    });
+
+    expect(toastService.info).toHaveBeenCalled();
+  });
+
+  it('onDecanoSeleccionadoDelDirectorio nombra al usuario como nuevo decano', () => {
+    flushInitialRequests();
+    component.onDecanoSeleccionadoDelDirectorio({
+      id: 'usr-nuevo-dec',
+      numeroIdentificacion: '1017333222',
+      nombres: 'Elena',
+      apellidos: 'Castro',
+      correo: 'elena.castro@uco.edu.co',
+      tipoIdentificacion: 'CC',
+    });
+
+    const req = http.expectOne(`${environment.apiUrl}/admin/decanos`);
+    expect(req.request.method).toBe('POST');
+    req.flush({
+      exitoso: true,
+      datos: {
+        id: 'usr-nuevo-dec',
+        tipoIdentificacionId: 'tipo-1',
+        tipoIdentificacion: 'CC',
+        numeroIdentificacion: '1017333222',
+        primerNombre: 'Elena',
+        primerApellido: 'Castro',
+        nombres: 'Elena',
+        apellidos: 'Castro',
+        correo: 'elena.castro@uco.edu.co',
+        facultad: 'Facultad de Ingeniería',
+        telefono: '5698000',
+        fechaAsignacion: '2026-02-01',
+        estado: 'ACTIVO',
+      },
+    });
+
+    expect(component.decanos().some((d) => d.id === 'usr-nuevo-dec')).toBeTrue();
+    expect(toastService.success).toHaveBeenCalled();
+  });
 });

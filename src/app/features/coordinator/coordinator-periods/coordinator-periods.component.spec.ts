@@ -101,6 +101,50 @@ describe('CoordinatorPeriodsComponent', () => {
     expect(toastSpy.success).toHaveBeenCalled();
   });
 
+  it('permite editar un período existente y recargar la lista', () => {
+    component.guardarPeriodo({
+      modo: 'EDITAR',
+      id: 'per-2026-2',
+      datos: {
+        nombre: 'Segundo Semestre 2026 Editado',
+      },
+    });
+
+    const putReq = http.expectOne(`${environment.apiUrl}/coordinador/periodos-academicos/per-2026-2`);
+    expect(putReq.request.method).toBe('PUT');
+    putReq.flush({
+      exitoso: true,
+      mensajeUsuario: 'Período académico actualizado.',
+      datos: { ...mockPeriodos[0], nombre: 'Segundo Semestre 2026 Editado' },
+    });
+
+    http.expectOne(`${environment.apiUrl}/coordinador/periodos-academicos`).flush({
+      exitoso: true,
+      datos: mockPeriodos,
+    });
+
+    expect(toastSpy.success).toHaveBeenCalledWith('Período académico actualizado.');
+  });
+
+  it('permite alternar el estado de un período académico', () => {
+    component.alternarEstadoPeriodo(mockPeriodos[0]);
+
+    const patchReq = http.expectOne(`${environment.apiUrl}/coordinador/periodos-academicos/per-2026-2/estado`);
+    expect(patchReq.request.method).toBe('PATCH');
+    patchReq.flush({
+      exitoso: true,
+      mensajeUsuario: 'Estado del período académico actualizado.',
+      datos: { ...mockPeriodos[0], estado: 'INACTIVO' },
+    });
+
+    http.expectOne(`${environment.apiUrl}/coordinador/periodos-academicos`).flush({
+      exitoso: true,
+      datos: mockPeriodos,
+    });
+
+    expect(toastSpy.success).toHaveBeenCalledWith('Estado del período académico actualizado.');
+  });
+
   it('navega de regreso a planes de estudio', () => {
     component.irAPlanes();
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/app/coordinador/planes-estudio']);

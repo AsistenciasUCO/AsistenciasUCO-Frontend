@@ -143,4 +143,134 @@ describe('DeanCoordinadoresComponent', () => {
 
     expect(toastService.success).toHaveBeenCalled();
   });
+
+  it('onNumeroIdentificacionInput limpia caracteres no numéricos', () => {
+    flushInitialRequests();
+    const event = { target: { value: '1017-abc-999' } } as unknown as Event;
+    component.onNumeroIdentificacionInput(event);
+    expect(component.formData.numeroIdentificacion).toBe('1017999');
+  });
+
+  it('guardarCoordinador valida campos obligatorios antes de enviar', () => {
+    flushInitialRequests();
+    component.abrirFormularioRegistro();
+
+    // Sin documento
+    component.formData.numeroIdentificacion = '';
+    component.guardarCoordinador();
+    expect(toastService.warning).toHaveBeenCalled();
+
+    // Documento válido pero sin nombres
+    component.formData.numeroIdentificacion = '1017123456';
+    component.formData.primerNombre = '';
+    component.guardarCoordinador();
+    expect(toastService.warning).toHaveBeenCalled();
+
+    // Con nombre pero sin apellido
+    component.formData.primerNombre = 'Jorge';
+    component.formData.primerApellido = '';
+    component.guardarCoordinador();
+    expect(toastService.warning).toHaveBeenCalled();
+
+    // Con apellido pero correo inválido
+    component.formData.primerApellido = 'Henao';
+    component.formData.correo = 'invalido';
+    component.guardarCoordinador();
+    expect(toastService.warning).toHaveBeenCalled();
+
+    // Con correo válido pero sin programa
+    component.formData.correo = 'jorge.henao@uco.edu.co';
+    component.formData.programaAcademico = '';
+    component.guardarCoordinador();
+    expect(toastService.warning).toHaveBeenCalled();
+  });
+
+  it('guardarCoordinador envía POST y agrega el nuevo coordinador a la lista', () => {
+    flushInitialRequests();
+    component.abrirFormularioRegistro();
+    component.formData.numeroIdentificacion = '1017555444';
+    component.formData.primerNombre = 'Jorge';
+    component.formData.primerApellido = 'Henao';
+    component.formData.correo = 'jorge.henao@uco.edu.co';
+    component.formData.programaAcademico = 'Ingeniería de Sistemas';
+
+    component.guardarCoordinador();
+
+    const req = http.expectOne(`${environment.apiUrl}/decano/coordinadores`);
+    expect(req.request.method).toBe('POST');
+    req.flush({
+      exitoso: true,
+      mensajeUsuario: 'Coordinador creado.',
+      datos: {
+        id: 'coord-nuevo',
+        ...component.formData,
+        totalDocentes: 0,
+        totalGrupos: 0,
+      },
+    });
+
+    expect(component.coordinadores().length).toBe(3);
+    expect(component.vistaActual()).toBe('LISTA');
+    expect(toastService.success).toHaveBeenCalled();
+  });
+
+  it('abrirModalSeleccionarCoordinador y onSolicitarRegistroNuevo gestionan estado del modal', () => {
+    flushInitialRequests();
+    expect(component.isPickerModalOpen()).toBeFalse();
+    component.abrirModalSeleccionarCoordinador();
+    expect(component.isPickerModalOpen()).toBeTrue();
+    component.onSolicitarRegistroNuevo();
+    expect(component.isPickerModalOpen()).toBeFalse();
+    expect(component.vistaActual()).toBe('REGISTRO');
+  });
+
+  it('onCoordinadorSeleccionadoDelDirectorio avisa si el usuario ya coordina un programa', () => {
+    flushInitialRequests();
+    component.onCoordinadorSeleccionadoDelDirectorio({
+      id: 'coord-1',
+      numeroIdentificacion: '1017001',
+      nombres: 'Carlos',
+      apellidos: 'Aristizábal',
+      correo: 'caristizabal@uco.edu.co',
+    });
+
+    expect(toastService.info).toHaveBeenCalled();
+  });
+
+  it('onCoordinadorSeleccionadoDelDirectorio vincula a un docente nuevo como coordinador', () => {
+    flushInitialRequests();
+    component.onCoordinadorSeleccionadoDelDirectorio({
+      id: 'usr-nuevo-directorio',
+      numeroIdentificacion: '1017998877',
+      nombres: 'Valeria',
+      apellidos: 'Restrepo',
+      correo: 'valeria.restrepo@uco.edu.co',
+      tipoIdentificacion: 'CC',
+    });
+
+    const req = http.expectOne(`${environment.apiUrl}/decano/coordinadores`);
+    expect(req.request.method).toBe('POST');
+    req.flush({
+      exitoso: true,
+      datos: {
+        id: 'usr-nuevo-directorio',
+        tipoIdentificacionId: 'tipo-1',
+        tipoIdentificacion: 'CC',
+        numeroIdentificacion: '1017998877',
+        primerNombre: 'Valeria',
+        primerApellido: 'Restrepo',
+        nombres: 'Valeria',
+        apellidos: 'Restrepo',
+        correo: 'valeria.restrepo@uco.edu.co',
+        facultad: 'Facultad de Ingeniería',
+        programaAcademico: 'Ingeniería de Sistemas',
+        totalDocentes: 0,
+        totalGrupos: 0,
+        estado: 'ACTIVO',
+      },
+    });
+
+    expect(component.coordinadores().some((c) => c.id === 'usr-nuevo-directorio')).toBeTrue();
+    expect(toastService.success).toHaveBeenCalled();
+  });
 });
