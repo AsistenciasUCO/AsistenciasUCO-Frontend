@@ -404,5 +404,29 @@ describe('CoordinatorManagementService', () => {
         },
       });
     });
+    it('getEstudiantesDirectorioPagina y getEstudiantesPorGrupo funcionan', () => {
+      service.getEstudiantesDirectorioPagina({ page: 0, size: 10, nombre: 'Laura', activo: true }).subscribe((res) => {
+        expect(res.items.length).toBe(1);
+        expect(res.totalItems).toBe(1);
+      });
+
+      const getReq = http.expectOne((req) => req.url.includes('/estudiantes'));
+      getReq.flush({
+        items: [{ id: '1', nombreCompleto: 'Laura Restrepo', estaActivoUsuario: true }],
+        totalItems: 1,
+        totalPages: 1,
+        page: 0,
+        size: 10,
+      });
+
+      service.getEstudiantesPorGrupo('grp-1').subscribe((res) => {
+        expect(res.exitoso).toBeTrue();
+      });
+      const reqGrp = http.expectOne(`${environment.apiUrl}/grupos/grp-1/estudiantes`);
+      expect(reqGrp.request.method).toBe('GET');
+      reqGrp.flush({ exitoso: true, datos: [] });
+
+      expect(service.getAsignaturasPlan('plan-inexistente')).toEqual([]);
+    });
   });
 });

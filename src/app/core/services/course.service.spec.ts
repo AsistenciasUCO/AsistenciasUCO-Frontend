@@ -206,5 +206,22 @@ describe('CourseService', () => {
 
     expect(asignaturas.length).toBe(1);
   });
+
+  it('crearGrupo y actualizarGrupo interactúan con endpoints /grupos', () => {
+    service.crearGrupo({ code: 'IS-101', name: 'Arquitectura', section: 'G1', cupoMaximo: 30 }).subscribe((res) => {
+      expect(res.exitoso).toBeTrue();
+    });
+    const postReq = http.expectOne(`${environment.apiUrl}/grupos`);
+    expect(postReq.request.method).toBe('POST');
+    postReq.flush({ exitoso: true, datos: { id: 'grp-nuevo', code: 'IS-101' } });
+
+    service.actualizarGrupo('grp-nuevo', { name: 'Arquitectura Actualizada', docenteName: 'Profesor X' } as any).subscribe((res) => {
+      expect(res.exitoso).toBeTrue();
+    });
+    const putReq = http.expectOne(`${environment.apiUrl}/grupos/grp-nuevo`);
+    expect(putReq.request.method).toBe('PUT');
+    expect(putReq.request.body).toEqual({ name: 'Arquitectura Actualizada' });
+    putReq.flush({ exitoso: true, datos: { id: 'grp-nuevo', name: 'Arquitectura Actualizada' } });
+  });
 });
 

@@ -105,4 +105,25 @@ describe('TeacherService', () => {
     expect(req.request.body).toEqual({ docente: 'doc-1', grupo: 'grp-1' });
     req.flush({ exitoso: true, mensajeUsuario: 'Asignación creada' });
   });
+
+  it('getTeacherAssignments y getCurrentTeacherAssignments realizan peticiones correspondientes', () => {
+    service.getTeacherAssignments('doc-1').subscribe((res) => {
+      expect(res.exitoso).toBeTrue();
+      expect(res.datos.length).toBe(1);
+    });
+
+    const req = http.expectOne(`${environment.apiUrl}/docentes/doc-1/asignaciones`);
+    expect(req.request.method).toBe('GET');
+    req.flush({ exitoso: true, total: 1, datos: [{ idAsignacion: 'asig-1', idGrupo: 'grp-1', idDocente: 'doc-1' }] });
+
+    service.getCurrentTeacherAssignments().subscribe((res) => {
+      expect(res.exitoso).toBeTrue();
+    });
+
+    const reqDocentes = http.expectOne(`${environment.apiUrl}/docentes`);
+    reqDocentes.flush([mockTeacher]);
+
+    const reqAsig = http.expectOne(`${environment.apiUrl}/docentes/doc-1/asignaciones`);
+    reqAsig.flush({ exitoso: true, total: 1, datos: [{ idAsignacion: 'asig-1', idGrupo: 'grp-1', idDocente: 'doc-1' }] });
+  });
 });

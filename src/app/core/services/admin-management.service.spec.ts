@@ -366,4 +366,53 @@ describe('AdminManagementService', () => {
     expect(patchReq.request.method).toBe('PATCH');
     patchReq.flush({ exitoso: true, datos: { id: 'inst-1' } });
   });
+
+  it('actualizarFacultad, cambiarEstadoFacultad, asignarDecanoFacultad y desvincularDecanoFacultad funcionan', () => {
+    service.actualizarFacultad('fac-1', { nombre: 'Ingeniería Actualizada' });
+    const putReq = http.expectOne(`${environment.apiUrl}/admin/facultades/fac-1`);
+    expect(putReq.request.method).toBe('PUT');
+    putReq.flush({ exitoso: true, datos: { id: 'fac-1', nombre: 'Ingeniería Actualizada' } });
+
+    service.cambiarEstadoFacultad('fac-1');
+    const patchReq = http.expectOne(`${environment.apiUrl}/admin/facultades/fac-1/estado`);
+    expect(patchReq.request.method).toBe('PATCH');
+    patchReq.flush({ exitoso: true, datos: { id: 'fac-1', estaActivaFacultad: false } });
+
+    service.asignarDecanoFacultad('fac-1', 'dec-1', 'Dr. Roberto').subscribe((res) => {
+      expect(res).toBeTrue();
+    });
+    const reqAsignar = http.expectOne(`${environment.apiUrl}/admin/facultades/fac-1`);
+    expect(reqAsignar.request.method).toBe('PUT');
+    reqAsignar.flush({ exitoso: true, datos: null });
+
+    service.desvincularDecanoFacultad('fac-1').subscribe((res) => {
+      expect(res).toBeTrue();
+    });
+    const reqDesvincular = http.expectOne(`${environment.apiUrl}/admin/facultades/fac-1`);
+    expect(reqDesvincular.request.method).toBe('PUT');
+    reqDesvincular.flush({ exitoso: true, datos: null });
+  });
+
+  it('crearArea, actualizarArea, cambiarEstadoArea y actualizarParametro funcionan', () => {
+    service.crearArea({ codigo: 'A1', nombre: 'Ciencias Básicas', facultadId: 'fac-1', estado: 'ACTIVO' });
+    const postArea = http.expectOne(`${environment.apiUrl}/admin/areas`);
+    expect(postArea.request.method).toBe('POST');
+    postArea.flush({ exitoso: true, datos: { id: 'area-1', codigo: 'A1', nombre: 'Ciencias Básicas' } });
+
+    service.actualizarArea('area-1', { nombre: 'Ciencias Básicas y Aplicadas' });
+    const putArea = http.expectOne(`${environment.apiUrl}/admin/areas/area-1`);
+    expect(putArea.request.method).toBe('PUT');
+    putArea.flush({ exitoso: true, datos: { id: 'area-1', nombre: 'Ciencias Básicas y Aplicadas' } });
+
+    service.cambiarEstadoArea('area-1');
+    const patchArea = http.expectOne(`${environment.apiUrl}/admin/areas/area-1/estado`);
+    expect(patchArea.request.method).toBe('PATCH');
+    patchArea.flush({ exitoso: true, datos: { id: 'area-1', estado: 'INACTIVO' } });
+
+    service.actualizarParametro('param-1', '25');
+    const patchParam = http.expectOne(`${environment.apiUrl}/admin/parametros/param-1`);
+    expect(patchParam.request.method).toBe('PATCH');
+    expect(patchParam.request.body).toEqual({ valor: '25' });
+    patchParam.flush({ exitoso: true, datos: { id: 'param-1', valor: '25' } });
+  });
 });
