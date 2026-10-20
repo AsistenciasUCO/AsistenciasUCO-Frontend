@@ -181,6 +181,19 @@ describe('AttendanceClaimService', () => {
     request.flush({ exitoso: true });
   });
 
+  it('crearReclamo propaga el intentoId como X-Correlation-Id y sin él no fija el encabezado', () => {
+    const intentoId = '0b6f3a3e-6f5e-4a53-9f55-0f1f4f1d2a10';
+    service.crearReclamo({ sesionId: 'ses-3', categoria: 'Otro', justificacionSolicitud: 'x' } as never, intentoId).subscribe();
+    const conIntento = http.expectOne(`${environment.apiUrl}/asistencias/revisiones`);
+    expect(conIntento.request.headers.get('X-Correlation-Id')).toBe(intentoId);
+    conIntento.flush({ exitoso: true });
+
+    service.crearReclamo({ sesionId: 'ses-3', categoria: 'Otro', justificacionSolicitud: 'x' } as never).subscribe();
+    const sinIntento = http.expectOne(`${environment.apiUrl}/asistencias/revisiones`);
+    expect(sinIntento.request.headers.has('X-Correlation-Id')).toBeFalse();
+    sinIntento.flush({ exitoso: true });
+  });
+
   it('sube el soporte como multipart bajo el campo archivo', () => {
     const file = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d])], 'a.pdf', { type: 'application/pdf' });
     service.subirSoporte(file).subscribe();

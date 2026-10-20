@@ -6,6 +6,7 @@ import { StudentCoursesComponent } from './student-courses.component';
 import { StudentManagementService } from '../../../core/services/student-management.service';
 import { AttendanceClaimService } from '../../../core/services/attendance-claim.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { SessionTimeZoneService } from '../../../core/services/session-timezone.service';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
 import { CourseService } from '../../../core/services/course.service';
 import { SessionService } from '../../../core/services/session.service';
@@ -91,6 +92,21 @@ describe('StudentCoursesComponent — soporte y radicación (LB-004D FE-01..FE-0
     expect(component.errorSoporte()).toBeNull();
   });
 
+  it('UTC: la fecha de adjunción se presenta como día civil de la zona seleccionada, no como día UTC (cerca de medianoche)', () => {
+    claims.subirSoporte.and.returnValue(of({ exitoso: true, datos: { fileId: 'f-9', nombre: 'a.pdf', url: '/u', tamanio: 10 } }) as never);
+    TestBed.inject(SessionTimeZoneService).setManualTimeZone('America/Bogota');
+    jasmine.clock().install();
+    try {
+      // 22:30 del 20-oct en Bogotá (UTC-5) = 03:30 UTC del 21-oct.
+      jasmine.clock().mockDate(new Date('2026-10-21T03:30:00Z'));
+      component.onFileSelected(evento(archivo('a.pdf', 10, 'application/pdf')).event);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+
+    expect(component.archivoAdjunto()?.fechaSubida).toBe('2026-10-20');
+  });
+
   it('mientras sube, ignora una segunda selección y bloquea la radicación', () => {
     const pendiente = new Subject<never>();
     claims.subirSoporte.and.returnValue(pendiente.asObservable() as never);
@@ -152,6 +168,65 @@ describe('StudentCoursesComponent — soporte y radicación (LB-004D FE-01..FE-0
 
     expect(claims.subirSoporte).not.toHaveBeenCalled();
     expect(claims.crearReclamo.calls.mostRecent().args[0].soporteAdjunto).toBeUndefined();
+  });
+
+  describe('idempotencia de la radicación (P0-DUP)', () => {
+    const intentoDe = (llamada: number): string | undefined => claims.crearReclamo.calls.argsFor(llamada)[1];
+
+    it('cinco clics consecutivos mientras la petición está en curso emiten una sola radicación', () => {
+      claims.crearReclamo.and.returnValue(new Subject<never>().asObservable() as never);
+      for (let i = 0; i < 5; i++) component.enviarReclamo({ categoria: 'Otro', justificacion: 'motivo' });
+
+      expect(claims.crearReclamo).toHaveBeenCalledTimes(1);
+      expect(intentoDe(0)).toMatch(/^[0-9a-f-]{36}$/);
+    });
+
+    it('un reintento tras timeout del mismo contenido reutiliza la misma correlación y refresca las sesiones', () => {
+      claims.crearReclamo.and.returnValue(throwError(() => new HttpErrorResponse({ status: 0 })));
+      component.enviarReclamo({ categoria: 'Otro', justificacion: 'motivo' });
+      expect(component.enviandoReclamo()).toBeFalse();
+      expect(claims.getSesionesPorMateria).toHaveBeenCalledTimes(1);
+
+      component.enviarReclamo({ categoria: 'Otro', justificacion: 'motivo' });
+      expect(claims.crearReclamo).toHaveBeenCalledTimes(2);
+      expect(intentoDe(1)).toBe(intentoDe(0));
+    });
+
+    it('un 400 no refresca sesiones, pero conserva la correlación mientras el contenido no cambie', () => {
+      claims.crearReclamo.and.returnValue(throwError(() => new HttpErrorResponse({ status: 400 })));
+      component.enviarReclamo({ categoria: 'Otro', justificacion: 'motivo' });
+      component.enviarReclamo({ categoria: 'Otro', justificacion: 'motivo' });
+
+      expect(claims.getSesionesPorMateria).not.toHaveBeenCalled();
+      expect(intentoDe(1)).toBe(intentoDe(0));
+    });
+
+    it('un contenido distinto es una solicitud nueva y usa otra correlación', () => {
+      claims.crearReclamo.and.returnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+      component.enviarReclamo({ categoria: 'Otro', justificacion: 'motivo A' });
+      component.enviarReclamo({ categoria: 'Otro', justificacion: 'motivo B' });
+
+      expect(intentoDe(1)).not.toBe(intentoDe(0));
+    });
+
+    it('tras una radicación exitosa la siguiente solicitud legítima usa una correlación nueva', () => {
+      claims.crearReclamo.and.returnValue(of({ exitoso: true, mensajeUsuario: 'ok' }) as never);
+      component.enviarReclamo({ categoria: 'Otro', justificacion: 'motivo' });
+      component.sesionReclamar.set(
+        crearSesion({ id: 's-1', numeroSesion: 3, fecha: '2026-10-19', estadoAsistencia: 'AUSENTE', reclamable: true })
+      );
+      component.enviarReclamo({ categoria: 'Otro', justificacion: 'motivo' });
+
+      expect(claims.crearReclamo).toHaveBeenCalledTimes(2);
+      expect(intentoDe(1)).not.toBe(intentoDe(0));
+    });
+
+    it('el error libera el bloqueo para que el estudiante pueda reintentar', () => {
+      claims.crearReclamo.and.returnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
+      component.enviarReclamo({ categoria: 'Otro', justificacion: 'motivo' });
+
+      expect(component.enviandoReclamo()).toBeFalse();
+    });
   });
 
   it('un 404 al radicar con soporte descarta el adjunto y pide adjuntarlo de nuevo', () => {

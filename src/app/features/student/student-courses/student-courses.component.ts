@@ -12,6 +12,8 @@ import { ToastService } from '../../../shared/components/toast/toast.component';
 import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
 import { LoadErrorState, classifyLoadError, loadErrorState } from '../../../core/api/errors/load-error.util';
 import { isUuid } from '../../../core/utils/uuid.util';
+import { RadicacionIntento, huellaRadicacion } from '../../../core/utils/radicacion-intento.util';
+import { SessionTimeZoneService } from '../../../core/services/session-timezone.service';
 import { validateSoporteFile } from '../../../core/files/soporte-file.validator';
 import {
   MateriaEstudianteItem,
@@ -128,6 +130,7 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
   private courseService = inject(CourseService);
   private sessionService = inject(SessionService);
   private toast = inject(ToastService);
+  private sessionTimeZone = inject(SessionTimeZoneService);
 
   vistaActual = signal<VistaEstudiante>('LISTA');
   materias = signal<MateriaEstudianteItem[]>([]);
@@ -158,6 +161,8 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
   enviandoReclamo = signal<boolean>(false);
   errorSoporte = signal<string | null>(null);
   private subidaEnCurso: Subscription | null = null;
+  /** Un reintento tecnico del mismo contenido reutiliza la correlacion; solo un exito la renueva. */
+  private readonly intentoRadicacion = new RadicacionIntento();
 
   // Prerrequisitos de Materia
   modalPrerrequisitosVisible = signal<boolean>(false);
@@ -313,8 +318,8 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
               tipo: file.type,
               tamanioKb: Math.max(1, Math.round(file.size / 1024)),
               tamanioBytes: res.datos.tamanio,
-              // Fecha local de presentacion; el instante autoritativo (UTC) lo conserva el backend.
-              fechaSubida: new Date().toISOString().split('T')[0],
+              // Fecha civil en la zona de presentacion (no el dia UTC); el instante autoritativo (UTC) lo conserva el backend.
+              fechaSubida: this.sessionTimeZone.currentDate(),
               urlSimulada: res.datos.url,
             });
             this.toast.success(`Archivo "${file.name}" cargado y analizado correctamente.`);
@@ -422,34 +427,53 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
     // Sin doble envio: ni mientras sube el soporte (aun no hay fileId) ni mientras otra radicacion esta en curso.
     if (this.enviandoReclamo() || this.subiendoSoporte()) return;
 
+    const justificacion = event.justificacion.trim();
+    const soporte = this.archivoAdjunto() || undefined;
+    const intentoId = this.intentoRadicacion.idPara(
+      huellaRadicacion({
+        sesionId: sesion.id,
+        categoria: event.categoria,
+        justificacion,
+        soporteId: soporte?.fileId,
+      })
+    );
+
     this.enviandoReclamo.set(true);
     this.claimService
-      .crearReclamo({
-        estudianteId: currentUser?.id || 'estudiante-current',
-        estudianteNombre: currentUser?.name || 'Estudiante UCO',
-        estudianteCorreo: currentUser?.email || 'estudiante@uco.edu.co',
-        materiaId: materia.id,
-        materiaCodigo: materia.codigo ?? '',
-        materiaNombre: materia.nombre,
-        grupo: materia.grupo,
-        sesionId: sesion.id,
-        sesionNumero: sesion.numeroSesion,
-        fechaSesion: sesion.fecha,
-        estadoOriginal,
-        categoria: event.categoria,
-        soporteAdjunto: this.archivoAdjunto() || undefined,
-        justificacionSolicitud: event.justificacion.trim(),
-      })
+      .crearReclamo(
+        {
+          estudianteId: currentUser?.id || 'estudiante-current',
+          estudianteNombre: currentUser?.name || 'Estudiante UCO',
+          estudianteCorreo: currentUser?.email || 'estudiante@uco.edu.co',
+          materiaId: materia.id,
+          materiaCodigo: materia.codigo ?? '',
+          materiaNombre: materia.nombre,
+          grupo: materia.grupo,
+          sesionId: sesion.id,
+          sesionNumero: sesion.numeroSesion,
+          fechaSesion: sesion.fecha,
+          estadoOriginal,
+          categoria: event.categoria,
+          soporteAdjunto: soporte,
+          justificacionSolicitud: justificacion,
+        },
+        intentoId
+      )
       .pipe(finalize(() => this.enviandoReclamo.set(false)))
       .subscribe({
         next: (res) => {
           if (res.exitoso) {
+            this.intentoRadicacion.reiniciar();
             this.toast.success(res.mensajeUsuario || 'Reclamo enviado.');
             this.volverADetalle();
             this.cargarSesiones(materia);
           }
         },
         error: (err) => {
+          if (this.resultadoIncierto(err)) {
+            // El servidor pudo haber persistido la solicitud: se refresca el estado real y el reintento conserva la correlacion.
+            this.cargarSesiones(materia);
+          }
           if ((err as { status?: number })?.status === 404 && this.archivoAdjunto()) {
             // El soporte ya no esta disponible para radicar (inexistente, ajeno o ya usado): hay que volver a adjuntarlo.
             this.archivoAdjunto.set(null);
@@ -460,6 +484,12 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
           this.toast.error(getApiErrorMessage(err));
         },
       });
+  }
+
+  /** Sin respuesta del servidor (red/timeout) o 5xx: no se sabe si la radicacion quedo persistida. */
+  private resultadoIncierto(err: unknown): boolean {
+    const status = (err as { status?: number })?.status;
+    return status === 0 || status === 408 || (typeof status === 'number' && status >= 500);
   }
 
   abrirPrerrequisitos(materia: MateriaEstudianteItem): void {

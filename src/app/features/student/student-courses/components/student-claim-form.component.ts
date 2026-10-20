@@ -171,6 +171,7 @@ import {
               variant="primary"
               size="md"
               [disabled]="!justificacion().trim() || submitting() || subiendo()"
+              [loading]="submitting()"
               (clicked)="onSubmit()"
             >
               <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

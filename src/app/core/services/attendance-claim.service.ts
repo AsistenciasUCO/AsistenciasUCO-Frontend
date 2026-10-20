@@ -107,8 +107,15 @@ export class AttendanceClaimService {
       );
   }
 
+  /**
+   * Radica un reclamo. `intentoId` (UUID) identifica el intento logico de radicacion y viaja como `X-Correlation-Id`,
+   * la correlacion que el SP v2 usa para tratar como exito idempotente el reintento de una radicacion con soporte ya
+   * persistida. Un reintento tecnico debe reutilizarlo; una solicitud nueva usa otro (sin el, el interceptor genera uno
+   * por peticion).
+   */
   crearReclamo(
-    solicitud: Omit<SolicitudRevisionItem, 'id' | 'fechaSolicitud' | 'estadoSolicitud'>
+    solicitud: Omit<SolicitudRevisionItem, 'id' | 'fechaSolicitud' | 'estadoSolicitud'>,
+    intentoId?: string
   ): Observable<ApiResponse<SolicitudRevisionItem>> {
     // El unico dato de soporte que viaja es el fileId opaco generado por el backend (nunca nombre ni URL).
     const payload: {
@@ -126,7 +133,8 @@ export class AttendanceClaimService {
     }
     return this.http.post<ApiResponse<SolicitudRevisionItem>>(
       `${environment.apiUrl}/asistencias/revisiones`,
-      payload
+      payload,
+      intentoId ? { headers: { 'X-Correlation-Id': intentoId } } : undefined
     );
   }
 
