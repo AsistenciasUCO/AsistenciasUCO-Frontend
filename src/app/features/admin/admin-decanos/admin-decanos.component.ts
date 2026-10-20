@@ -200,7 +200,7 @@ type VistaAdmin = 'LISTA' | 'REGISTRO';
               Registrar Nuevo Decano
             </h2>
             <p class="text-sm text-warm-600 mt-1">
-              Ingresa los datos personales y asigna la facultad correspondiente para la nueva autoridad académica.
+              Ingresa los datos personales para dar de alta la autoridad académica institucional. La facultad se asigna posteriormente desde el módulo de Gestión de Facultades.
             </p>
           </div>
 
@@ -301,13 +301,23 @@ type VistaAdmin = 'LISTA' | 'REGISTRO';
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <app-form-field label="Teléfono de Contacto">
+              <app-form-field label="Teléfono de Contacto (Opcional)">
                 <input
                   type="text"
                   [(ngModel)]="formData.telefono"
                   name="telefono"
-                  placeholder="+57 (604) 569-8000"
+                  placeholder="ej. +57 300 123 4567"
                   class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                />
+              </app-form-field>
+              <app-form-field label="Contraseña Inicial de Acceso" [required]="true" [helperText]="'Mínimo 12 caracteres (mayúscula, minúscula, número y símbolo).'">
+                <input
+                  type="text"
+                  [(ngModel)]="formData.password"
+                  name="password"
+                  required
+                  placeholder="ej. UcoDecano2026!"
+                  class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500/20"
                 />
               </app-form-field>
             </div>
@@ -321,26 +331,6 @@ type VistaAdmin = 'LISTA' | 'REGISTRO';
                 required
                 class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
               />
-            </app-form-field>
-
-            <app-form-field label="Facultad Asignada" [required]="true">
-              <select
-                [(ngModel)]="formData.facultad"
-                name="facultad"
-                required
-                class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              >
-                @if (facultades().length > 0) {
-                  @for (fac of facultades(); track fac.id) {
-                    <option [value]="fac.nombre">{{ fac.nombre }}</option>
-                  }
-                } @else {
-                  <option value="Facultad de Ingeniería">Facultad de Ingeniería</option>
-                  <option value="Facultad de Ciencias de la Salud">Facultad de Ciencias de la Salud</option>
-                  <option value="Facultad de Ciencias de la Educación">Facultad de Ciencias de la Educación</option>
-                  <option value="Facultad de Ciencias Económicas y Administrativas">Facultad de Ciencias Económicas y Administrativas</option>
-                }
-              </select>
             </app-form-field>
 
             <div class="flex items-center justify-end gap-3 pt-5 border-t border-warm-100">
@@ -382,7 +372,7 @@ export class AdminDecanosComponent implements OnInit {
   searchQuery = '';
   selectedEstado = 'TODOS';
 
-  formData: Omit<DecanoItem, 'id'> = {
+  formData: Omit<DecanoItem, 'id'> & { password?: string } = {
     tipoIdentificacionId: 'A1B2C3D4-0000-0000-0000-000000000001',
     tipoIdentificacion: 'CC',
     numeroIdentificacion: '',
@@ -393,10 +383,12 @@ export class AdminDecanosComponent implements OnInit {
     nombres: '',
     apellidos: '',
     correo: '',
-    facultad: 'Facultad de Ingeniería',
-    telefono: '+57 (604) 569-8000',
+    facultad: 'Sin Facultad Asignada',
+    idFacultad: null,
+    telefono: '',
     fechaAsignacion: new Date().toISOString().split('T')[0],
     estado: 'ACTIVO',
+    password: 'UcoDecano2026!',
   };
 
   filteredDecanos = computed(() => {
@@ -502,10 +494,12 @@ export class AdminDecanosComponent implements OnInit {
       nombres: '',
       apellidos: '',
       correo: '',
-      facultad: 'Facultad de Ingeniería',
-      telefono: '+57 (604) 569-8000',
+      facultad: 'Sin Facultad Asignada',
+      idFacultad: null,
+      telefono: '',
       fechaAsignacion: new Date().toISOString().split('T')[0],
       estado: 'ACTIVO',
+      password: 'UcoDecano2026!',
     };
     this.vistaActual.set('REGISTRO');
   }
@@ -549,19 +543,48 @@ export class AdminDecanosComponent implements OnInit {
       return;
     }
 
-    if (!this.formData.facultad || !this.formData.facultad.trim()) {
-      this.toast.warning('El campo Facultad Asignada es obligatorio.');
+    const pwd = (this.formData.password || 'UcoDecano2026!').trim();
+    if (pwd.length < 12) {
+      this.toast.warning('La contraseña inicial debe tener mínimo 12 caracteres según las políticas de Keycloak.');
       return;
     }
+    const hasUpper = /[A-Z]/.test(pwd);
+    const hasLower = /[a-z]/.test(pwd);
+    const hasDigit = /[0-9]/.test(pwd);
+    const hasSpecial = /[!@#$%^&*()_+\-=%]/.test(pwd);
+    if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+      this.toast.warning('La contraseña debe incluir al menos una mayúscula, una minúscula, un número y un símbolo (!@#$%^&*()_+-=%).');
+      return;
+    }
+    if (pwd === String(idResult.value) || pwd.toLowerCase() === this.formData.correo.trim().toLowerCase()) {
+      this.toast.warning('La contraseña no puede coincidir con el documento de identidad ni con el correo.');
+      return;
+    }
+
+    this.formData.idFacultad = null;
+    this.formData.facultad = 'Sin Facultad Asignada';
 
     this.formData.nombres = [pn, (this.formData.segundoNombre || '').trim()].filter(Boolean).join(' ');
     this.formData.apellidos = [pa, (this.formData.segundoApellido || '').trim()].filter(Boolean).join(' ');
 
-    this.adminService.createDecano(this.formData).subscribe({
+    const payload = {
+      tipoIdentificacionId: this.formData.tipoIdentificacionId,
+      numeroIdentificacion: Number(this.formData.numeroIdentificacion),
+      primerNombre: pn,
+      segundoNombre: (this.formData.segundoNombre || '').trim(),
+      primerApellido: pa,
+      segundoApellido: (this.formData.segundoApellido || '').trim(),
+      correo: this.formData.correo.trim(),
+      password: pwd,
+      idFacultad: null,
+    };
+
+    this.adminService.createDecano(payload).subscribe({
       next: (res) => {
-        if (res.exitoso && res.datos) {
-          this.decanos.set([res.datos, ...this.decanos()]);
+        if (res.exitoso) {
           this.toast.success(res.mensajeUsuario || 'Decano registrado exitosamente.');
+          this.cargarDecanos();
+          this.cargarFacultades();
           this.volverALista();
         }
       },
@@ -593,48 +616,34 @@ export class AdminDecanosComponent implements OnInit {
       return;
     }
 
-    const facultadAsignada =
-      this.formData.facultad ||
-      (this.facultades().length > 0
-        ? this.facultades()[0].nombre
-        : 'Facultad de Ingeniería');
-
-    const nuevoDecano: DecanoItem = {
-      id: user.id,
+    const payload = {
       tipoIdentificacionId:
         this.tiposIdentificacion().find((t) => t.tipoIdentificacion === user.tipoIdentificacion)?.id ||
         (this.tiposIdentificacion().length > 0
           ? this.tiposIdentificacion()[0].id
           : 'A1B2C3D4-0000-0000-0000-000000000001'),
-      tipoIdentificacion: user.tipoIdentificacion || 'CC',
-      numeroIdentificacion: user.numeroIdentificacion,
+      numeroIdentificacion: Number(user.numeroIdentificacion),
       primerNombre: user.primerNombre || user.nombres.split(' ')[0] || '',
       segundoNombre: user.segundoNombre || '',
       primerApellido: user.primerApellido || user.apellidos.split(' ')[0] || '',
       segundoApellido: user.segundoApellido || '',
-      nombres: user.nombres,
-      apellidos: user.apellidos,
       correo: user.correo,
-      facultad: facultadAsignada,
-      telefono: '+57 (604) 569-8000',
-      fechaAsignacion: new Date().toISOString().split('T')[0],
-      estado: 'ACTIVO',
+      password: 'UcoDecano2026!',
+      idFacultad: null,
     };
 
-    this.adminService.createDecano(nuevoDecano).subscribe({
+    this.adminService.createDecano(payload).subscribe({
       next: (res) => {
-        const creado = res.datos || nuevoDecano;
-        this.decanos.set([creado, ...this.decanos()]);
-        this.toast.success(
-          res.mensajeUsuario || `Decano ${user.nombres} ${user.apellidos} nombrado exitosamente.`
-        );
-        this.volverALista();
+        if (res.exitoso) {
+          this.toast.success(
+            res.mensajeUsuario || `Decano ${user.nombres} ${user.apellidos} nombrado exitosamente.`
+          );
+          this.cargarDecanos();
+          this.cargarFacultades();
+          this.volverALista();
+        }
       },
-      error: () => {
-        this.decanos.set([nuevoDecano, ...this.decanos()]);
-        this.toast.success(`Decano ${user.nombres} ${user.apellidos} nombrado exitosamente.`);
-        this.volverALista();
-      },
+      error: (err) => this.toast.error(getApiErrorMessage(err)),
     });
   }
 }

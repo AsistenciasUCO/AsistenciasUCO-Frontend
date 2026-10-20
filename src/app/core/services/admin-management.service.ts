@@ -113,7 +113,7 @@ export class AdminManagementService {
     );
   }
 
-  createDecano(nuevoDecano: Omit<DecanoItem, 'id'>): Observable<ApiResponse<DecanoItem>> {
+  createDecano(nuevoDecano: Omit<DecanoItem, 'id'> | Record<string, unknown>): Observable<ApiResponse<DecanoItem>> {
     return this.http.post<ApiResponse<DecanoItem>>(`${environment.apiUrl}/admin/decanos`, nuevoDecano);
   }
 

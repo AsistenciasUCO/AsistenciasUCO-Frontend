@@ -295,6 +295,62 @@ describe('AdminManagementService', () => {
     expect(service.parametros()[0].valor).toBe('25');
   });
 
+  it('createDecano envía petición al endpoint de administración sin facultad asignada', () => {
+    const payload = {
+      tipoIdentificacionId: 'tipo-1',
+      numeroIdentificacion: '1017000001',
+      primerNombre: 'Carlos',
+      segundoNombre: '',
+      primerApellido: 'Zapata',
+      segundoApellido: '',
+      correo: 'carlos.zapata@uco.edu.co',
+      idFacultad: null,
+    };
+
+    service.createDecano(payload as any).subscribe((res) => {
+      expect(res.exitoso).toBeTrue();
+    });
+
+    const req = http.expectOne(`${environment.apiUrl}/admin/decanos`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body.primerNombre).toBe('Carlos');
+    expect(req.request.body.idFacultad).toBeNull();
+
+    req.flush({
+      exitoso: true,
+      mensaje: 'Decano creado correctamente.',
+    });
+  });
+
+  it('getDecanos asigna etiqueta por defecto cuando el decano no tiene facultad asignada', () => {
+    service.getDecanos().subscribe((res) => {
+      expect(res.exitoso).toBeTrue();
+      expect(res.datos?.length).toBe(1);
+      expect(res.datos?.[0].idFacultad).toBeUndefined();
+      expect(res.datos?.[0].nombreFacultad).toBe('Sin Facultad Asignada');
+    });
+
+    const req = http.expectOne(`${environment.apiUrl}/admin/decanos`);
+    expect(req.request.method).toBe('GET');
+    req.flush({
+      exitoso: true,
+      datos: [
+        {
+          id: 'dec-sin-fac',
+          idUsuario: 'usr-2',
+          numeroIdentificacion: '10203040',
+          nombreCompleto: 'Marta Lucia Restrepo',
+          idFacultad: null,
+          nombreFacultad: null,
+          estaActivoDecano: true,
+        },
+      ],
+    });
+  });
+
+    expect(service.parametros()[0].valor).toBe('25');
+  });
+
   it('cargarAuditoria y ejecutarCierreMasivo funcionan correctamente', () => {
     service.cargarAuditoria().subscribe((res) => {
       expect(res.exitoso).toBeTrue();
@@ -414,5 +470,9 @@ describe('AdminManagementService', () => {
     expect(patchParam.request.method).toBe('PATCH');
     expect(patchParam.request.body).toEqual({ valor: '25' });
     patchParam.flush({ exitoso: true, datos: { id: 'param-1', valor: '25' } });
+=======
+    expect(service.decanos().length).toBe(1);
+    expect(service.decanos()[0].facultad).toBe('Sin Facultad Asignada');
+>>>>>>> feature/HU117-B-registrar-decano-titular-aprovisionamiento-iam
   });
 });
