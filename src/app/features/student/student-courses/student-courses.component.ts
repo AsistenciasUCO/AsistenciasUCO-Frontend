@@ -263,8 +263,8 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
   }
 
   iniciarReclamo(sesion: SesionMateriaDetalle): void {
-    // Sin estado autoritativo de asistencia (o con una sesion no reclamable) no se abre la radicacion.
-    if (sesion.estadoAsistencia !== 'AUSENTE' && sesion.estadoAsistencia !== 'RETARDO') return;
+    // Sin ausencia/retardo confirmado, o con una solicitud ya existente, no se abre la radicacion.
+    if (!sesion.reclamable || sesion.estadoAsistencia === 'NO_DISPONIBLE') return;
     this.sesionReclamar.set(sesion);
     this.limpiarSoporte();
     this.vistaActual.set('RECLAMO');
@@ -417,7 +417,8 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
     const currentUser = this.authService.currentUser();
 
     if (!sesion || !materia || !event.justificacion.trim()) return;
-    if (sesion.estadoAsistencia !== 'AUSENTE' && sesion.estadoAsistencia !== 'RETARDO') return;
+    const estadoOriginal = sesion.estadoAsistencia;
+    if (!sesion.reclamable || estadoOriginal === 'NO_DISPONIBLE') return;
     // Sin doble envio: ni mientras sube el soporte (aun no hay fileId) ni mientras otra radicacion esta en curso.
     if (this.enviandoReclamo() || this.subiendoSoporte()) return;
 
@@ -434,7 +435,7 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
         sesionId: sesion.id,
         sesionNumero: sesion.numeroSesion,
         fechaSesion: sesion.fecha,
-        estadoOriginal: sesion.estadoAsistencia,
+        estadoOriginal,
         categoria: event.categoria,
         soporteAdjunto: this.archivoAdjunto() || undefined,
         justificacionSolicitud: event.justificacion.trim(),

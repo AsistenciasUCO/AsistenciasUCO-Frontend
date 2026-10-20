@@ -51,7 +51,7 @@ export function mockHorariosToDto(horarios: HorarioItem[]): HorarioEstudianteApi
   }));
 }
 
-/** Sesion mock -> `SesionMateriaEstudianteDTO` (con `estadoAsistencia`, extension tolerada solo para mocks). */
+/** Sesion mock -> `SesionMateriaEstudianteDTO` (el mock si conoce RETARDO, que el backend real no distingue). */
 export function mockSesionesToDto(
   sesiones: MockSesionMateria[],
   materia: MockMateriaEstudiante | undefined
@@ -73,6 +73,8 @@ export function mockSesionesToDto(
       fechaHoraInicio: `${s.fecha}T${inicio}:00Z`,
       fechaHoraFin: `${s.fecha}T${fin}:00Z`,
       estadoAsistencia: s.estadoAsistencia,
+      estadoSolicitudRevision: null,
+      reclamable: s.estadoAsistencia === 'AUSENTE' || s.estadoAsistencia === 'RETARDO',
     };
   });
 }

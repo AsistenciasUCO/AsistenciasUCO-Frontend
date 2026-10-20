@@ -94,7 +94,8 @@ describe('AttendanceClaimService', () => {
       expect(sesiones.length).toBe(1);
       expect(sesiones[0].materiaId).toBe(ASIGNATURA);
       expect(sesiones[0].grupoId).toBe(GRUPO);
-      expect(sesiones[0].estadoAsistencia).toBeNull();
+      expect(sesiones[0].estadoAsistencia).toBe('NO_DISPONIBLE');
+      expect(sesiones[0].reclamable).toBeFalse();
       expect(sesiones[0].temporalidad).toBe('SIN_ZONA');
     });
 

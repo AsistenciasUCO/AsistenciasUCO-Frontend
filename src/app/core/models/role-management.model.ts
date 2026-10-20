@@ -148,9 +148,14 @@ export interface SoporteAdjuntoItem {
   fechaSubidaUtc?: string;
 }
 
+/** Estado de asistencia de una sesion vista por el estudiante; `NO_DISPONIBLE` jamas equivale a `AUSENTE`. */
+export type EstadoAsistenciaSesionEstudiante = EstadoAsistenciaSesion | 'NO_DISPONIBLE';
+
 /**
- * Sesion de una materia del estudiante. `estadoAsistencia` es `null` mientras el backend no entregue un estado
- * autoritativo del estudiante autenticado: nunca se infiere AUSENTE para habilitar radicaciones.
+ * Sesion de una materia del estudiante. `estadoAsistencia` proviene del backend para el estudiante autenticado y es
+ * `NO_DISPONIBLE` cuando no hay un registro confirmable: nunca se infiere AUSENTE para habilitar radicaciones.
+ * `reclamable` solo es verdadero si el backend lo indica Y el estado es AUSENTE/RETARDO; no sustituye la validacion
+ * del backend al radicar.
  */
 export interface SesionMateriaDetalle {
   id: string;
@@ -167,7 +172,10 @@ export interface SesionMateriaDetalle {
   /** Instante UTC normalizado (RFC 3339 con `Z`) cuando fue confirmable. */
   fechaHoraInicioUtc?: string;
   tema: string;
-  estadoAsistencia: EstadoAsistenciaSesion | null;
+  estadoAsistencia: EstadoAsistenciaSesionEstudiante;
+  /** El backend ya tiene una solicitud de revision para la asistencia de esta sesion (estado informado). */
+  solicitudRevision: EstadoSolicitudRevision | 'DESCONOCIDA' | null;
+  reclamable: boolean;
   reclamoId?: string;
   estadoReclamo?: EstadoSolicitudRevision;
   categoriaReclamo?: CategoriaJustificacion;

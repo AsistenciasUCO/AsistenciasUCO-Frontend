@@ -26,7 +26,7 @@ export function crearMateria(overrides: Partial<MateriaEstudianteItem> = {}): Ma
   };
 }
 
-/** Sesion sin estado autoritativo de asistencia (lo que entrega hoy el backend). */
+/** Sesion sin registro de asistencia confirmable (`NO_DISPONIBLE`, no reclamable). */
 export function crearSesion(overrides: Partial<SesionMateriaDetalle> = {}): SesionMateriaDetalle {
   return {
     id: 'd1d2d3d4-0000-4000-8000-000000000001',
@@ -37,7 +37,9 @@ export function crearSesion(overrides: Partial<SesionMateriaDetalle> = {}): Sesi
     horario: '13:00 - 15:00',
     temporalidad: 'UTC',
     tema: 'Introducción',
-    estadoAsistencia: null,
+    estadoAsistencia: 'NO_DISPONIBLE',
+    solicitudRevision: null,
+    reclamable: false,
     ...overrides,
   };
 }

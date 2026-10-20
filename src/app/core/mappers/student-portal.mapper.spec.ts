@@ -126,6 +126,24 @@ describe('StudentPortalMapper', () => {
       expect(horarios.length).toBe(1);
     });
 
+    it('mapea las sesiones de lunes a sabado en el formato real del backend, sin NaN ni undefined', () => {
+      const dias = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO'];
+      const horarios = StudentPortalMapper.toHorarios(
+        dias.map((dia, i) => ({ ...dto, id: `b1b2b3b4-0000-4000-8000-00000000010${i}`, dia, horaInicio: '07:00:00', horaFin: '09:30:00' }))
+      );
+
+      expect(horarios.map((h) => h.dia)).toEqual(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']);
+      horarios.forEach((h) => {
+        expect(h.horaInicio).toBe('07:00');
+        expect(h.horaFin).toBe('09:30');
+        expect(JSON.stringify(h)).not.toMatch(/NaN|undefined/);
+      });
+    });
+
+    it('sin filas devuelve una lista vacia y no inventa horarios', () => {
+      expect(StudentPortalMapper.toHorarios([])).toEqual([]);
+    });
+
     it('un docente vacio queda null (no se inventa)', () => {
       expect(StudentPortalMapper.toHorario({ ...dto, docente: ' ' })!.docente).toBeNull();
     });
@@ -188,18 +206,65 @@ describe('StudentPortalMapper', () => {
       expect(s.horario).toBe(NO_INFORMADO);
     });
 
-    it('el DTO vigente no trae estado de asistencia: queda null y jamas se asume AUSENTE', () => {
+    it('un DTO sin campos de asistencia (backend anterior) queda NO_DISPONIBLE y jamas se asume AUSENTE ni reclamable', () => {
       const s = StudentPortalMapper.toSesion(dto, ASIGNATURA, formato)!;
-      expect(s.estadoAsistencia).toBeNull();
+      expect(s.estadoAsistencia).toBe('NO_DISPONIBLE');
+      expect(s.solicitudRevision).toBeNull();
+      expect(s.reclamable).toBeFalse();
     });
 
-    it('solo acepta un estado de asistencia explicito y valido', () => {
-      expect(StudentPortalMapper.toSesion({ ...dto, estadoAsistencia: 'AUSENTE' }, ASIGNATURA, formato)!.estadoAsistencia)
-        .toBe('AUSENTE');
-      expect(StudentPortalMapper.toSesion({ ...dto, estadoAsistencia: 'ausente' }, ASIGNATURA, formato)!.estadoAsistencia)
-        .toBeNull();
-      expect(StudentPortalMapper.toSesion({ ...dto, estadoAsistencia: 'XYZ' }, ASIGNATURA, formato)!.estadoAsistencia)
-        .toBeNull();
+    it('solo acepta un estado de asistencia explicito y conocido; lo demas es NO_DISPONIBLE', () => {
+      const estado = (valor: string | null | undefined) =>
+        StudentPortalMapper.toSesion({ ...dto, estadoAsistencia: valor }, ASIGNATURA, formato)!.estadoAsistencia;
+      expect(estado('PRESENTE')).toBe('PRESENTE');
+      expect(estado('AUSENTE')).toBe('AUSENTE');
+      expect(estado('JUSTIFICADA')).toBe('JUSTIFICADA');
+      expect(estado('RETARDO')).toBe('RETARDO');
+      expect(estado('NO_DISPONIBLE')).toBe('NO_DISPONIBLE');
+      expect(estado('ausente')).toBe('NO_DISPONIBLE');
+      expect(estado('XYZ')).toBe('NO_DISPONIBLE');
+      expect(estado(null)).toBe('NO_DISPONIBLE');
+    });
+
+    it('NO_DISPONIBLE no es AUSENTE aunque el backend marque reclamable', () => {
+      const s = StudentPortalMapper.toSesion(
+        { ...dto, estadoAsistencia: 'NO_DISPONIBLE', reclamable: true }, ASIGNATURA, formato)!;
+      expect(s.estadoAsistencia).toBe('NO_DISPONIBLE');
+      expect(s.reclamable).toBeFalse();
+    });
+
+    it('reclamable exige la pista del backend, un estado AUSENTE/RETARDO y ninguna solicitud previa', () => {
+      const sesion = (parcial: Partial<SesionMateriaEstudianteApiDto>) =>
+        StudentPortalMapper.toSesion({ ...dto, ...parcial }, ASIGNATURA, formato)!;
+      expect(sesion({ estadoAsistencia: 'AUSENTE', reclamable: true }).reclamable).toBeTrue();
+      expect(sesion({ estadoAsistencia: 'RETARDO', reclamable: true }).reclamable).toBeTrue();
+      expect(sesion({ estadoAsistencia: 'AUSENTE', reclamable: false }).reclamable).toBeFalse();
+      expect(sesion({ estadoAsistencia: 'AUSENTE' }).reclamable).toBeFalse();
+      expect(sesion({ estadoAsistencia: 'PRESENTE', reclamable: true }).reclamable).toBeFalse();
+      expect(sesion({ estadoAsistencia: 'JUSTIFICADA', reclamable: true }).reclamable).toBeFalse();
+      expect(sesion({ estadoAsistencia: 'AUSENTE', reclamable: true, estadoSolicitudRevision: 'pendiente' }).reclamable)
+        .toBeFalse();
+    });
+
+    it('traduce el estado de solicitud del catalogo y no oculta uno desconocido', () => {
+      const solicitud = (valor: string | null | undefined) =>
+        StudentPortalMapper.toSesion({ ...dto, estadoSolicitudRevision: valor }, ASIGNATURA, formato)!.solicitudRevision;
+      expect(solicitud('pendiente')).toBe('PENDIENTE');
+      expect(solicitud('Aceptada')).toBe('APROBADA');
+      expect(solicitud('rechazada')).toBe('RECHAZADA');
+      expect(solicitud('DESCONOCIDO')).toBe('DESCONOCIDA');
+      expect(solicitud(null)).toBeNull();
+      expect(solicitud('   ')).toBeNull();
+    });
+
+    it('el aviso de filas descartadas no registra valores de las filas', () => {
+      const warn = spyOn(console, 'warn');
+      StudentPortalMapper.toSesiones([{ ...dto, id: 'undefined', nombre: 'DATO PRIVADO' }, dto], ASIGNATURA, formato);
+      expect(warn).toHaveBeenCalledTimes(1);
+      const serializado = JSON.stringify(warn.calls.mostRecent().args);
+      expect(serializado).toContain('1 de 2 sesiones');
+      expect(serializado).toContain('nombre');
+      expect(serializado).not.toContain('DATO PRIVADO');
     });
 
     it('descarta sesiones sin UUID valido', () => {

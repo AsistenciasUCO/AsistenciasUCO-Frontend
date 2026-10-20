@@ -145,9 +145,9 @@ describe('StudentCourseDetailComponent', () => {
       expect(texto()).toContain('Patrones GoF');
     });
 
-    it('sin estado autoritativo muestra "Estado no disponible" y NO ofrece Radicar Reclamo', () => {
+    it('NO_DISPONIBLE muestra "Estado no disponible" y NO ofrece Radicar Reclamo', () => {
       fixture.componentRef.setInput('materia', crearMateria());
-      fixture.componentRef.setInput('sesiones', [crearSesion({ estadoAsistencia: null })]);
+      fixture.componentRef.setInput('sesiones', [crearSesion({ estadoAsistencia: 'NO_DISPONIBLE' })]);
       fixture.detectChanges();
 
       expect(fixture.nativeElement.querySelector('[data-testid="estado-no-disponible"]')).not.toBeNull();
@@ -155,14 +155,42 @@ describe('StudentCourseDetailComponent', () => {
       expect(texto()).not.toContain('AUSENTE');
     });
 
-    it('con estado AUSENTE o RETARDO autoritativo ofrece Radicar Reclamo; con PRESENTE no', () => {
+    it('una ausencia reclamable ofrece Radicar Reclamo; PRESENTE y JUSTIFICADA no', () => {
       fixture.componentRef.setInput('materia', crearMateria());
-      fixture.componentRef.setInput('sesiones', [crearSesion({ id: 'a', estadoAsistencia: 'AUSENTE' })]);
+      fixture.componentRef.setInput('sesiones', [crearSesion({ id: 'a', estadoAsistencia: 'AUSENTE', reclamable: true })]);
+      fixture.detectChanges();
+      expect(texto()).toContain('Radicar Reclamo');
+      expect(fixture.nativeElement.querySelector('[data-testid="estado-no-disponible"]')).toBeNull();
+
+      fixture.componentRef.setInput('sesiones', [crearSesion({ id: 'r', estadoAsistencia: 'RETARDO', reclamable: true })]);
       fixture.detectChanges();
       expect(texto()).toContain('Radicar Reclamo');
 
       fixture.componentRef.setInput('sesiones', [crearSesion({ id: 'b', estadoAsistencia: 'PRESENTE' })]);
       fixture.detectChanges();
+      expect(texto()).not.toContain('Radicar Reclamo');
+
+      fixture.componentRef.setInput('sesiones', [crearSesion({ id: 'j', estadoAsistencia: 'JUSTIFICADA' })]);
+      fixture.detectChanges();
+      expect(texto()).not.toContain('Radicar Reclamo');
+    });
+
+    it('una ausencia no reclamable (sin pista del backend) no ofrece Radicar Reclamo', () => {
+      fixture.componentRef.setInput('materia', crearMateria());
+      fixture.componentRef.setInput('sesiones', [crearSesion({ estadoAsistencia: 'AUSENTE', reclamable: false })]);
+      fixture.detectChanges();
+      expect(texto()).not.toContain('Radicar Reclamo');
+    });
+
+    it('una ausencia con solicitud existente muestra su estado y NO ofrece un reclamo duplicado', () => {
+      fixture.componentRef.setInput('materia', crearMateria());
+      fixture.componentRef.setInput('sesiones', [
+        crearSesion({ estadoAsistencia: 'AUSENTE', reclamable: false, solicitudRevision: 'PENDIENTE' }),
+      ]);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('[data-testid="solicitud-existente"]').textContent)
+        .toContain('pendiente');
       expect(texto()).not.toContain('Radicar Reclamo');
     });
 

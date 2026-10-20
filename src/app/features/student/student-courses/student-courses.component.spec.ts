@@ -61,7 +61,9 @@ describe('StudentCoursesComponent — soporte y radicación (LB-004D FE-01..FE-0
     });
     component = TestBed.createComponent(StudentCoursesComponent).componentInstance;
     component.selectedMateria.set(crearMateria({ codigo: 'MAT1', nombre: 'Mate', grupo: 'G1' }));
-    component.sesionReclamar.set(crearSesion({ id: 's-1', numeroSesion: 3, fecha: '2026-10-19', estadoAsistencia: 'AUSENTE' }));
+    component.sesionReclamar.set(
+      crearSesion({ id: 's-1', numeroSesion: 3, fecha: '2026-10-19', estadoAsistencia: 'AUSENTE', reclamable: true })
+    );
   });
 
   it('FE-01/02: rechaza un tipo no permitido y un archivo > 5 MiB sin llamar al backend', () => {
@@ -178,7 +180,7 @@ describe('StudentCoursesComponent', () => {
   const mockMaterias: MateriaEstudianteItem[] = [crearMateria({ nombre: 'Arquitectura de Software' })];
 
   const mockSesiones: SesionMateriaDetalle[] = [
-    crearSesion({ id: 'ses-1', numeroSesion: 1, tema: 'Clean Architecture', estadoAsistencia: 'AUSENTE', reclamoId: 'rec-1' }),
+    crearSesion({ id: 'ses-1', numeroSesion: 1, tema: 'Clean Architecture', estadoAsistencia: 'AUSENTE', reclamable: true, reclamoId: 'rec-1' }),
   ];
 
   beforeEach(async () => {
@@ -483,7 +485,8 @@ describe('StudentCoursesComponent — contrato real y estados de carga (HTTP)', 
     http.expectOne(sesionesUrl(ASIGNATURA_ID)).flush({ exitoso: true, datos: [sesionApi()], total: 1 });
     fixture.detectChanges();
 
-    expect(component.sesiones()[0].estadoAsistencia).toBeNull();
+    expect(component.sesiones()[0].estadoAsistencia).toBe('NO_DISPONIBLE');
+    expect(component.sesiones()[0].reclamable).toBeFalse();
     component.iniciarReclamo(component.sesiones()[0]);
     expect(component.vistaActual()).toBe('DETALLE');
     expect(component.sesionReclamar()).toBeNull();
@@ -492,6 +495,58 @@ describe('StudentCoursesComponent — contrato real y estados de carga (HTTP)', 
     component.sesionReclamar.set(component.sesiones()[0]);
     component.enviarReclamo({ categoria: 'Otro', justificacion: 'motivo' });
     http.expectNone((r) => r.url.includes('/asistencias/revisiones'));
+  });
+
+  it('una ausencia confirmada y reclamable por el backend habilita Radicar Reclamo y abre el formulario', () => {
+    cargar([materiaApi()]);
+    component.verDetalleCompleto(component.materias()[0]);
+    http.expectOne(sesionesUrl(ASIGNATURA_ID)).flush({
+      exitoso: true,
+      datos: [sesionApi({ estadoAsistencia: 'AUSENTE', estadoSolicitudRevision: null, reclamable: true })],
+      total: 1,
+    });
+    fixture.detectChanges();
+
+    expect(component.sesiones()[0].estadoAsistencia).toBe('AUSENTE');
+    expect(texto()).toContain('Radicar Reclamo');
+    component.iniciarReclamo(component.sesiones()[0]);
+    expect(component.vistaActual()).toBe('RECLAMO');
+    expect(component.sesionReclamar()?.id).toBe('d1d2d3d4-0000-4000-8000-000000000001');
+  });
+
+  it('una ausencia con solicitud ya radicada no abre un segundo formulario', () => {
+    cargar([materiaApi()]);
+    component.verDetalleCompleto(component.materias()[0]);
+    http.expectOne(sesionesUrl(ASIGNATURA_ID)).flush({
+      exitoso: true,
+      datos: [sesionApi({ estadoAsistencia: 'AUSENTE', estadoSolicitudRevision: 'pendiente', reclamable: false })],
+      total: 1,
+    });
+    fixture.detectChanges();
+
+    expect(component.sesiones()[0].solicitudRevision).toBe('PENDIENTE');
+    expect(texto()).not.toContain('Radicar Reclamo');
+    expect(texto()).toContain('Solicitud de revisión: pendiente');
+    component.iniciarReclamo(component.sesiones()[0]);
+    expect(component.vistaActual()).toBe('DETALLE');
+    expect(component.sesionReclamar()).toBeNull();
+  });
+
+  it('una sesion JUSTIFICADA o PRESENTE no ofrece reclamo aunque el backend enviara reclamable', () => {
+    cargar([materiaApi()]);
+    component.verDetalleCompleto(component.materias()[0]);
+    http.expectOne(sesionesUrl(ASIGNATURA_ID)).flush({
+      exitoso: true,
+      datos: [
+        sesionApi({ id: 'd1d2d3d4-0000-4000-8000-0000000000b1', estadoAsistencia: 'JUSTIFICADA', reclamable: true }),
+        sesionApi({ id: 'd1d2d3d4-0000-4000-8000-0000000000b2', estadoAsistencia: 'PRESENTE', reclamable: true }),
+      ],
+      total: 2,
+    });
+    fixture.detectChanges();
+
+    component.sesiones().forEach((sesion) => expect(sesion.reclamable).toBeFalse());
+    expect(texto()).not.toContain('Radicar Reclamo');
   });
 
   it('un estudiante no dispara ninguna peticion /coordinador/** ni /admin/** al cargar el portal', () => {

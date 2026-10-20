@@ -5,7 +5,7 @@ import { ButtonComponent } from '../../../../shared/components/button/button.com
 import {
   MateriaEstudianteItem,
   SesionMateriaDetalle,
-  EstadoAsistenciaSesion,
+  EstadoAsistenciaSesionEstudiante,
 } from '../../../../core/models/role-management.model';
 import { LoadErrorState } from '../../../../core/api/errors/load-error.util';
 
@@ -178,7 +178,7 @@ import { LoadErrorState } from '../../../../core/api/errors/load-error.util';
 
                   <!-- Estado y Botón de Reclamación / Retiro -->
                   <div class="flex flex-wrap items-center gap-2 shrink-0 sm:self-center">
-                    @if (sesion.estadoAsistencia) {
+                    @if (sesion.estadoAsistencia !== 'NO_DISPONIBLE') {
                       <app-badge [variant]="getAsistenciaBadgeVariant(sesion.estadoAsistencia)" size="md">
                         {{ sesion.estadoAsistencia }}
                       </app-badge>
@@ -186,7 +186,7 @@ import { LoadErrorState } from '../../../../core/api/errors/load-error.util';
                       <span
                         class="text-xs font-medium px-2.5 py-1 rounded-lg border border-warm-200 bg-warm-50 text-warm-500"
                         data-testid="estado-no-disponible"
-                        title="El sistema aún no expone tu estado de asistencia para esta sesión; no se puede radicar revisión."
+                        title="Aún no hay un registro de asistencia confirmado para esta sesión; no se puede radicar revisión."
                       >Estado no disponible</span>
                     }
 
@@ -211,7 +211,12 @@ import { LoadErrorState } from '../../../../core/api/errors/load-error.util';
                           Retirar
                         </button>
                       }
-                    } @else if (sesion.estadoAsistencia === 'AUSENTE' || sesion.estadoAsistencia === 'RETARDO') {
+                    } @else if (sesion.solicitudRevision) {
+                      <span
+                        class="text-xs font-bold px-2.5 py-1 rounded-lg border border-warm-200 bg-warm-50 text-warm-700"
+                        data-testid="solicitud-existente"
+                      >Solicitud de revisión: {{ etiquetaSolicitud(sesion.solicitudRevision) }}</span>
+                    } @else if (sesion.reclamable) {
                       <app-button
                         variant="primary"
                         size="sm"
@@ -257,7 +262,20 @@ export class StudentCourseDetailComponent {
     }
   }
 
-  getAsistenciaBadgeVariant(estado: EstadoAsistenciaSesion): BadgeVariant {
+  etiquetaSolicitud(estado: NonNullable<SesionMateriaDetalle['solicitudRevision']>): string {
+    switch (estado) {
+      case 'PENDIENTE':
+        return 'pendiente';
+      case 'APROBADA':
+        return 'aprobada';
+      case 'RECHAZADA':
+        return 'rechazada';
+      default:
+        return 'en trámite';
+    }
+  }
+
+  getAsistenciaBadgeVariant(estado: EstadoAsistenciaSesionEstudiante): BadgeVariant {
     switch (estado) {
       case 'PRESENTE':
         return 'success';

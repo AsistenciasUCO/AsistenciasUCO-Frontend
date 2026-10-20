@@ -29,9 +29,16 @@ export interface HorarioEstudianteApiDto {
  * `SesionMateriaEstudianteDTO`. Las fechas son `LocalDateTime` del backend: persisten en UTC pero el wire format
  * actual no incluye zona (BACKEND_GOLDEN_PATH_CONTRACT §I); si algun despliegue las emite con offset, se respeta.
  *
- * `estadoAsistencia` NO forma parte del contrato vigente: el backend no lo entrega. Se declara opcional solo como
- * lector tolerante para el contrato adicional propuesto (docs/work-items/LB-004D-student-attendance-contract.md);
- * mientras no llegue, el frontend lo trata como "no disponible".
+ * Campos de asistencia (contrato LB-004D, backend `SesionMateriaEstudianteDTO`), todos derivados en el servidor
+ * para el estudiante autenticado:
+ * - `estadoAsistencia`: `PRESENTE | AUSENTE | JUSTIFICADA | NO_DISPONIBLE`. `NO_DISPONIBLE` = sin registro o con una
+ *   combinacion que la DB no define; nunca equivale a ausencia. La DB no distingue retardo, asi que no llega `RETARDO`.
+ * - `estadoSolicitudRevision`: nombre del estado de la solicitud de revision existente (`pendiente`, `aceptada`,
+ *   `rechazada`, `DESCONOCIDO`) o `null`.
+ * - `reclamable`: pista de presentacion (ausencia confirmada y sin solicitud previa). La autorizacion definitiva
+ *   sigue siendo del backend/DB al radicar.
+ *
+ * Los tres son opcionales por compatibilidad con despliegues anteriores: si faltan, la sesion es "no disponible".
  */
 export interface SesionMateriaEstudianteApiDto {
   id: string;
@@ -45,4 +52,6 @@ export interface SesionMateriaEstudianteApiDto {
   fechaHoraInicio: string;
   fechaHoraFin: string;
   estadoAsistencia?: string | null;
+  estadoSolicitudRevision?: string | null;
+  reclamable?: boolean | null;
 }

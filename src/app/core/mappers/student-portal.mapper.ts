@@ -5,7 +5,8 @@ import {
 } from '../api/models/estudiante-portal-api-dto.model';
 import {
   DiaSemana,
-  EstadoAsistenciaSesion,
+  EstadoAsistenciaSesionEstudiante,
+  EstadoSolicitudRevision,
   HorarioItem,
   MateriaEstudianteItem,
   SesionMateriaDetalle,
@@ -30,7 +31,23 @@ const DIAS: Record<string, DiaSemana> = {
 
 const COLORES: HorarioItem['colorCategory'][] = ['emerald', 'amber', 'blue', 'purple'];
 
-const ESTADOS_ASISTENCIA: readonly EstadoAsistenciaSesion[] = ['PRESENTE', 'AUSENTE', 'RETARDO', 'JUSTIFICADA'];
+const ESTADOS_ASISTENCIA: readonly EstadoAsistenciaSesionEstudiante[] = [
+  'PRESENTE',
+  'AUSENTE',
+  'RETARDO',
+  'JUSTIFICADA',
+  'NO_DISPONIBLE',
+];
+
+/** Estados con los que el estudiante puede pedir revision; `NO_DISPONIBLE` jamas habilita un reclamo. */
+const ESTADOS_RECLAMABLES: readonly EstadoAsistenciaSesionEstudiante[] = ['AUSENTE', 'RETARDO'];
+
+/** Nombres de estado de solicitud que entrega el catalogo de la DB (`pendiente`, `aceptada`, `rechazada`). */
+const SOLICITUD_POR_NOMBRE: Record<string, EstadoSolicitudRevision> = {
+  pendiente: 'PENDIENTE',
+  aceptada: 'APROBADA',
+  rechazada: 'RECHAZADA',
+};
 
 const NAIVE_LOCAL_DATE_TIME = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2}(?:\.\d{1,9})?)?$/;
 const HAS_OFFSET = /(Z|[+-]\d{2}:\d{2})$/;
@@ -74,6 +91,26 @@ export function normalizeDia(value: unknown): DiaSemana | null {
 }
 
 /**
+ * Avisa cuando el backend entrego filas que el contrato no permite mostrar. Solo registra conteos y los NOMBRES de los
+ * campos de la primera fila descartada, nunca sus valores (identificadores, nombres o correos).
+ */
+function descartadas(recurso: string, crudos: readonly unknown[], validos: number, descartada?: unknown): void {
+  if (crudos.length <= validos) return;
+  const campos =
+    descartada && typeof descartada === 'object' ? Object.keys(descartada as Record<string, unknown>).sort() : [];
+  console.warn(
+    `[student-portal] ${crudos.length - validos} de ${crudos.length} ${recurso} descartadas por no cumplir el contrato.`,
+    { campos }
+  );
+}
+
+function estadoSolicitud(value: unknown): SesionMateriaDetalle['solicitudRevision'] {
+  const raw = texto(value);
+  if (!raw) return null;
+  return SOLICITUD_POR_NOMBRE[raw.toLowerCase()] ?? 'DESCONOCIDA';
+}
+
+/**
  * Adaptadores tipados entre los DTO HTTP del portal estudiantil y los modelos de UI.
  * Reglas: nunca inventan datos (codigos, docentes, indicadores); lo ausente es `null`; las filas sin identidad
  * valida se descartan para que ninguna ruta se construya con `undefined`/`null`.
@@ -98,9 +135,12 @@ export class StudentPortalMapper {
   }
 
   static toMaterias(dtos: readonly MateriaEstudianteApiDto[] | null | undefined): MateriaEstudianteItem[] {
-    return (dtos ?? [])
+    const crudos = dtos ?? [];
+    const validas = crudos
       .map((dto) => StudentPortalMapper.toMateria(dto))
       .filter((item): item is MateriaEstudianteItem => item !== null);
+    descartadas('materias', crudos, validas.length, crudos.find((dto) => StudentPortalMapper.toMateria(dto) === null));
+    return validas;
   }
 
   static toHorario(dto: HorarioEstudianteApiDto): HorarioItem | null {
@@ -125,15 +165,20 @@ export class StudentPortalMapper {
   }
 
   static toHorarios(dtos: readonly HorarioEstudianteApiDto[] | null | undefined): HorarioItem[] {
-    return (dtos ?? [])
+    const crudos = dtos ?? [];
+    const validos = crudos
       .map((dto) => StudentPortalMapper.toHorario(dto))
       .filter((item): item is HorarioItem => item !== null);
+    descartadas('horarios', crudos, validos.length, crudos.find((dto) => StudentPortalMapper.toHorario(dto) === null));
+    return validos;
   }
 
   /**
    * Una sesion con offset/`Z` se convierte a la zona del usuario. Una hora sin zona (wire format actual de
    * `LocalDateTime`) NO se reinterpreta: se muestra tal cual y se marca `SIN_ZONA` (el frontend no asume zona).
-   * `estadoAsistencia` solo se acepta si el backend lo envia con un valor valido; si no, queda `null`.
+   * `estadoAsistencia` solo se acepta si el backend lo envia con un valor conocido; si falta o es desconocido queda
+   * `NO_DISPONIBLE` (nunca AUSENTE). `reclamable` exige la pista del backend Y un estado AUSENTE/RETARDO y ninguna
+   * solicitud previa; la decision definitiva sigue siendo del backend al radicar.
    */
   static toSesion(
     dto: SesionMateriaEstudianteApiDto,
@@ -146,7 +191,8 @@ export class StudentPortalMapper {
     const fin = StudentPortalMapper.presentarInstante(dto.fechaHoraFin, format);
     const fecha = inicio?.date ?? NO_INFORMADO;
     const horario = inicio ? (fin ? `${inicio.time} - ${fin.time}` : inicio.time) : NO_INFORMADO;
-    const estado = ESTADOS_ASISTENCIA.find((valor) => valor === dto.estadoAsistencia) ?? null;
+    const estado = ESTADOS_ASISTENCIA.find((valor) => valor === dto.estadoAsistencia) ?? 'NO_DISPONIBLE';
+    const solicitudRevision = estadoSolicitud(dto.estadoSolicitudRevision);
 
     return {
       id: dto.id,
@@ -159,6 +205,8 @@ export class StudentPortalMapper {
       fechaHoraInicioUtc: inicio?.utc,
       tema: texto(dto.nombre) ?? texto(dto.codigo) ?? `Sesión ${dto.numero}`,
       estadoAsistencia: estado,
+      solicitudRevision,
+      reclamable: dto.reclamable === true && ESTADOS_RECLAMABLES.includes(estado) && solicitudRevision === null,
     };
   }
 
@@ -167,9 +215,17 @@ export class StudentPortalMapper {
     materiaId: string,
     format: InstantFormatter
   ): SesionMateriaDetalle[] {
-    return (dtos ?? [])
+    const crudos = dtos ?? [];
+    const validas = crudos
       .map((dto) => StudentPortalMapper.toSesion(dto, materiaId, format))
       .filter((item): item is SesionMateriaDetalle => item !== null);
+    descartadas(
+      'sesiones',
+      crudos,
+      validas.length,
+      crudos.find((dto) => StudentPortalMapper.toSesion(dto, materiaId, format) === null)
+    );
+    return validas;
   }
 
   private static presentarInstante(
