@@ -21,12 +21,14 @@ describe('CoordinatorManagementService', () => {
       id: 'plan-1',
       codigo: 'ISI-2026',
       nombre: 'Ingeniería de Sistemas',
-      version: 'v2',
-      fechaAprobacion: '2026-01-01',
-      estado: 'ACTIVO',
-      totalAsignaturas: 50,
+      anioVigencia: 2026,
+      programa: 'Ingeniería de Sistemas',
+      facultad: 'Facultad de Ingeniería',
+      totalCreditos: 160,
       totalSemestres: 10,
-      creditosTotales: 160,
+      totalAsignaturas: 50,
+      estado: 'VIGENTE',
+      descripcion: 'Plan de estudios vigente',
     },
   ];
 
@@ -38,7 +40,6 @@ describe('CoordinatorManagementService', () => {
       fechaInicio: '2026-02-01',
       fechaFin: '2026-06-30',
       estado: 'ACTIVO',
-      semanasLectivas: 16,
     },
   ];
 
@@ -74,9 +75,8 @@ describe('CoordinatorManagementService', () => {
           nombres: 'Pedro',
           apellidos: 'Pérez',
           correo: 'pperez@uco.edu.co',
-          telefono: '5698000',
           departamento: 'Ingeniería',
-          tipoContrato: 'TIEMPO_COMPLETO',
+          especialidad: 'Software',
           estado: 'ACTIVO',
           totalGruposAsignados: 3,
         },
@@ -93,15 +93,14 @@ describe('CoordinatorManagementService', () => {
     });
 
     it('createDocente envía POST y retorna el nuevo docente', () => {
-      const nuevo = {
+      const nuevo: Omit<DocenteItem, 'id' | 'totalGruposAsignados'> = {
         numeroIdentificacion: '1017002',
         nombres: 'Luisa',
         apellidos: 'Castro',
         correo: 'lcastro@uco.edu.co',
-        telefono: '5698001',
         departamento: 'Ingeniería',
-        tipoContrato: 'CATEDRA' as const,
-        estado: 'ACTIVO' as const,
+        especialidad: 'Inteligencia Artificial',
+        estado: 'ACTIVO',
       };
 
       service.createDocente(nuevo).subscribe((res) => {
@@ -130,8 +129,7 @@ describe('CoordinatorManagementService', () => {
       const nuevoPlan: Partial<PlanEstudioItem> = {
         codigo: 'MED-2026',
         nombre: 'Medicina',
-        version: 'v1',
-        estado: 'ACTIVO',
+        estado: 'VIGENTE',
         totalAsignaturas: 60,
       };
 
@@ -175,13 +173,15 @@ describe('CoordinatorManagementService', () => {
       const mockAsigs: AsignaturaPlanItem[] = [
         {
           id: 'asig-1',
+          planEstudioId: 'plan-1',
           codigo: 'MAT101',
           nombre: 'Cálculo Diferencial',
           semestre: 1,
           creditos: 3,
           horasSemanales: 4,
           componente: 'Obligatoria',
-          areaFormacion: 'Ciencias Básicas',
+          area: 'Ciencias Básicas',
+          prerrequisitos: [],
         },
       ];
 
@@ -236,11 +236,12 @@ describe('CoordinatorManagementService', () => {
         {
           id: 'est-1',
           documento: '1017009',
+          codigo: 'EST001',
           nombreCompleto: 'Laura Restrepo',
           correo: 'lrestrepo@uco.edu.co',
           programa: 'Ingeniería de Sistemas',
-          semestre: 4,
-          promedio: 4.5,
+          semestreActual: 4,
+          promedioAcumulado: 4.5,
           estadoMatricula: 'ACTIVO',
           gruposInscritos: ['grp-1'],
         },
@@ -286,10 +287,12 @@ describe('CoordinatorManagementService', () => {
           id: 'sol-1',
           estudianteId: 'est-1',
           estudianteNombre: 'Laura Restrepo',
-          estudianteDocumento: '1017009',
+          estudianteCodigo: '1017009',
+          estudianteCorreo: 'lrestrepo@uco.edu.co',
           cursoId: 'cur-1',
-          materiaNombre: 'Cálculo',
-          grupoCodigo: 'G01',
+          cursoCodigo: 'CUR1',
+          cursoNombre: 'Cálculo',
+          grupo: 'G01',
           fechaSolicitud: '2026-02-05',
           estado: 'PENDIENTE',
           motivo: 'Cruce de horario',
@@ -320,16 +323,110 @@ describe('CoordinatorManagementService', () => {
           id: 'sol-1',
           estudianteId: 'est-1',
           estudianteNombre: 'Laura Restrepo',
-          estudianteDocumento: '1017009',
+          estudianteCodigo: '1017009',
+          estudianteCorreo: 'lrestrepo@uco.edu.co',
           cursoId: 'cur-1',
-          materiaNombre: 'Cálculo',
-          grupoCodigo: 'G01',
+          cursoCodigo: 'CUR1',
+          cursoNombre: 'Cálculo',
+          grupo: 'G01',
           fechaSolicitud: '2026-02-05',
           estado: 'APROBADA',
           motivo: 'Cruce de horario',
           respuestaCoordinador: 'Aprobado sin conflicto',
         },
       });
+    });
+
+    it('agregarSemestrePlan y eliminarSemestrePlan ejecutan endpoints correspondientes', () => {
+      service.agregarSemestrePlan('plan-1').subscribe((res) => {
+        expect(res.exitoso).toBeTrue();
+      });
+      const postReq = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/plan-1/semestres`);
+      expect(postReq.request.method).toBe('POST');
+      postReq.flush({ exitoso: true, datos: { planEstudioId: 'plan-1' } });
+
+      service.eliminarSemestrePlan('plan-1', 10).subscribe((res) => {
+        expect(res.exitoso).toBeTrue();
+      });
+      const delReq = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/plan-1/semestres/10`);
+      expect(delReq.request.method).toBe('DELETE');
+      delReq.flush({ exitoso: true, datos: { planEstudioId: 'plan-1', semestreEliminado: 10 } });
+    });
+
+    it('matricularEstudianteGrupo y retirarEstudianteGrupo gestionan grupos de estudiantes', () => {
+      service.matricularEstudianteGrupo('grp-1', 'est-1').subscribe((res) => {
+        expect(res.exitoso).toBeTrue();
+      });
+      const postReq = http.expectOne(`${environment.apiUrl}/grupos/grp-1/estudiantes`);
+      expect(postReq.request.method).toBe('POST');
+      postReq.flush({ exitoso: true, datos: true });
+
+      service.retirarEstudianteGrupo('grp-1', 'est-1').subscribe((res) => {
+        expect(res.exitoso).toBeTrue();
+      });
+      const delReq = http.expectOne(`${environment.apiUrl}/grupos/grp-1/estudiantes/est-1`);
+      expect(delReq.request.method).toBe('DELETE');
+      delReq.flush({ exitoso: true, datos: true });
+    });
+
+    it('crearSolicitudMatricula envía POST y actualiza la lista', () => {
+      service.crearSolicitudMatricula({
+        estudianteId: 'est-1',
+        estudianteNombre: 'Laura',
+        estudianteCodigo: '1017009',
+        estudianteCorreo: 'laura@uco.edu.co',
+        cursoId: 'cur-1',
+        cursoCodigo: 'SIS-101',
+        cursoNombre: 'Algoritmos',
+        grupo: 'G01',
+        motivo: 'Inscripción tardía',
+      }).subscribe((res) => {
+        expect(res.exitoso).toBeTrue();
+      });
+
+      const req = http.expectOne(`${environment.apiUrl}/estudiante/solicitudes-matricula`);
+      expect(req.request.method).toBe('POST');
+      req.flush({
+        exitoso: true,
+        datos: {
+          id: 'sol-nueva',
+          estudianteId: 'est-1',
+          estudianteNombre: 'Laura',
+          estudianteCodigo: '1017009',
+          estudianteCorreo: 'laura@uco.edu.co',
+          cursoId: 'cur-1',
+          cursoCodigo: 'SIS-101',
+          cursoNombre: 'Algoritmos',
+          grupo: 'G01',
+          fechaSolicitud: '2026-02-10',
+          estado: 'PENDIENTE',
+          motivo: 'Inscripción tardía',
+        },
+      });
+    });
+    it('getEstudiantesDirectorioPagina y getEstudiantesPorGrupo funcionan', () => {
+      service.getEstudiantesDirectorioPagina({ page: 0, size: 10, nombre: 'Laura', activo: true }).subscribe((res) => {
+        expect(res.items.length).toBe(1);
+        expect(res.totalItems).toBe(1);
+      });
+
+      const getReq = http.expectOne((req) => req.url.includes('/estudiantes'));
+      getReq.flush({
+        items: [{ id: '1', nombreCompleto: 'Laura Restrepo', estaActivoUsuario: true }],
+        totalItems: 1,
+        totalPages: 1,
+        page: 0,
+        size: 10,
+      });
+
+      service.getEstudiantesPorGrupo('grp-1').subscribe((res) => {
+        expect(res.exitoso).toBeTrue();
+      });
+      const reqGrp = http.expectOne(`${environment.apiUrl}/grupos/grp-1/estudiantes`);
+      expect(reqGrp.request.method).toBe('GET');
+      reqGrp.flush({ exitoso: true, datos: [] });
+
+      expect(service.getAsignaturasPlan('plan-inexistente')).toEqual([]);
     });
   });
 });

@@ -44,7 +44,41 @@ describe('AttendanceClaimService', () => {
     expect(request.request.responseType).toBe('blob');
     request.flush(new Blob(['contenido'], { type: 'application/pdf' }));
   });
-  it('LB-004D FE-05: radica con soporte enviando solo soporteArchivoId (nunca nombre ni URL)', () => {
+
+  it('subirSoporte envía el FormData con el archivo adjunto', () => {
+    const file = new File(['dummy'], 'prueba.pdf', { type: 'application/pdf' });
+    service.subirSoporte(file).subscribe();
+
+    const request = http.expectOne(`${environment.apiUrl}/archivos/subir`);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body instanceof FormData).toBeTrue();
+    expect((request.request.body as FormData).get('archivo')).toBeTruthy();
+    request.flush({ exitoso: true, datos: { fileId: 'f1', nombre: 'prueba.pdf', url: '/api/v1/archivos/f1', tamanio: 5 } });
+  });
+
+  it('getReclamosDocente consulta la lista y conserva el fallback 501', () => {
+    let reclamos: any[] = [];
+    service.getReclamosDocente().subscribe((res) => (reclamos = res.datos || []));
+
+    const request = http.expectOne(`${environment.apiUrl}/docente/reclamos`);
+    expect(request.request.method).toBe('GET');
+    request.flush({ exitoso: true, datos: [{ id: 'rec-1', materia: 'Cálculo' }] });
+    expect(reclamos.length).toBe(1);
+
+    service.getReclamosDocente().subscribe((res) => (reclamos = res.datos || []));
+    http.expectOne(`${environment.apiUrl}/docente/reclamos`).flush({}, { status: 501, statusText: 'Not Implemented' });
+    expect(reclamos).toEqual([]);
+  });
+
+  it('getSesionesPorMateria y getHorarioDocente consultan las rutas respectivas', () => {
+    service.getSesionesPorMateria('mat-123').subscribe();
+    http.expectOne(`${environment.apiUrl}/estudiante/materias/mat-123/sesiones`).flush({ exitoso: true, datos: [] });
+
+    service.getHorarioDocente().subscribe();
+    http.expectOne(`${environment.apiUrl}/docente/horarios`).flush({ exitoso: true, datos: [] });
+  });
+
+  it('crearReclamo envía solo soporteArchivoId y eliminarReclamo conserva su ruta', () => {
     service
       .crearReclamo({
         sesionId: 'ses-1',
@@ -61,20 +95,25 @@ describe('AttendanceClaimService', () => {
       } as never)
       .subscribe();
 
-    const request = http.expectOne(`${environment.apiUrl}/asistencias/revisiones`);
-    expect(request.request.method).toBe('POST');
-    expect(request.request.body).toEqual({
+    const postRequest = http.expectOne(`${environment.apiUrl}/asistencias/revisiones`);
+    expect(postRequest.request.method).toBe('POST');
+    expect(postRequest.request.body).toEqual({
       sesionId: 'ses-1',
       categoria: 'Médico / Salud',
       justificacion: 'Cita médica',
       soporteArchivoId: 'a1b2c3d4-0000-4000-8000-000000000001',
     });
-    expect(JSON.stringify(request.request.body)).not.toContain('soporteUrl');
-    expect(JSON.stringify(request.request.body)).not.toContain('soporteNombre');
-    request.flush({ exitoso: true });
+    expect(JSON.stringify(postRequest.request.body)).not.toContain('soporteUrl');
+    expect(JSON.stringify(postRequest.request.body)).not.toContain('soporteNombre');
+    postRequest.flush({ exitoso: true, datos: {} });
+
+    service.eliminarReclamo('rec-99', 'mat-1', 'ses-1').subscribe();
+    const deleteRequest = http.expectOne(`${environment.apiUrl}/estudiante/reclamos/rec-99`);
+    expect(deleteRequest.request.method).toBe('DELETE');
+    deleteRequest.flush({ exitoso: true, datos: true });
   });
 
-  it('LB-004D FE-05: radica sin soporte sin enviar ningún campo de soporte', () => {
+  it('crearReclamo sin soporte no envía ningún campo de soporte', () => {
     service
       .crearReclamo({ sesionId: 'ses-2', categoria: 'Otro', justificacionSolicitud: 'Sin archivo' } as never)
       .subscribe();
@@ -84,12 +123,11 @@ describe('AttendanceClaimService', () => {
     request.flush({ exitoso: true });
   });
 
-  it('LB-004D FE-03: sube el soporte como multipart bajo el campo "archivo" (el Bearer lo agrega el interceptor)', () => {
+  it('sube el soporte como multipart bajo el campo archivo', () => {
     const file = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d])], 'a.pdf', { type: 'application/pdf' });
     service.subirSoporte(file).subscribe();
 
     const request = http.expectOne(`${environment.apiUrl}/archivos/subir`);
-    expect(request.request.method).toBe('POST');
     expect((request.request.body as FormData).get('archivo')).toBeTruthy();
     request.flush({ exitoso: true, datos: { fileId: 'f', nombre: 'a.pdf', url: '/api/v1/archivos/f', tamanio: 5 } });
   });
@@ -134,7 +172,6 @@ describe('AttendanceClaimService', () => {
 
     it('mapea reclamo y soporte, conserva el instante UTC y no inventa el correo', () => {
       TestBed.inject(SessionTimeZoneService).setManualTimeZone('America/Bogota');
-
       const [item] = cargar([reclamo()]);
 
       expect(item['id']).toBe('rec-1');
@@ -155,14 +192,13 @@ describe('AttendanceClaimService', () => {
       expect(item['soporteAdjunto']).toBeUndefined();
     });
 
-    it('sesión histórica sin procedencia (instante nulo) no muestra una fecha inventada', () => {
+    it('sesión histórica sin procedencia no muestra una fecha inventada', () => {
       const [item] = cargar([reclamo({ fechaSesionUtc: null, procedenciaTemporalSesion: null })]);
       expect(item['fechaSesion']).toBe('');
       expect(item['fechaSesionUtc']).toBeUndefined();
     });
 
-    // El instante no cambia: solo cambia su presentación al cambiar la zona IANA (cruce de medianoche, offset no entero).
-    it('presenta el mismo instante UTC en la zona elegida (Bogotá, Londres, Berlín, Kolkata)', () => {
+    it('presenta el mismo instante UTC en la zona elegida', () => {
       const zone = TestBed.inject(SessionTimeZoneService);
       const instante = '2026-10-19T22:45:00.0000000Z';
       const dias: Record<string, string> = {};
@@ -180,7 +216,7 @@ describe('AttendanceClaimService', () => {
       });
     });
 
-    it('respeta el cambio de horario (DST): 01:30Z del 2026-03-29 es 02:30 en Londres (ya en horario de verano)', () => {
+    it('respeta el cambio de horario DST en Londres', () => {
       const zone = TestBed.inject(SessionTimeZoneService);
       zone.setManualTimeZone('Europe/London');
       const [item] = cargar([reclamo({ fechaSesionUtc: '2026-03-29T01:30:00.0000000Z' })]);

@@ -1,11 +1,21 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { LoginComponent } from './login.component';
 import { AuthService } from '../../../core/services/auth.service';
+import { User } from '../../../core/models/user.model';
 
 describe('LoginComponent', () => {
   let fixture: ComponentFixture<LoginComponent>;
   let component: LoginComponent;
   let authServiceSpy: jasmine.SpyObj<AuthService>;
+
+  const mockUser: User = {
+    id: 'usr-1',
+    name: 'Docente UCO',
+    email: 'docente@uco.edu.co',
+    role: 'DOCENTE',
+    institutionName: 'Universidad Católica de Oriente',
+    status: 'active',
+  };
 
   beforeEach(async () => {
     authServiceSpy = jasmine.createSpyObj('AuthService', ['loginWithCredentials']);
@@ -51,7 +61,7 @@ describe('LoginComponent', () => {
   });
 
   it('onSubmit ejecuta loginWithCredentials con credenciales válidas', async () => {
-    authServiceSpy.loginWithCredentials.and.returnValue(Promise.resolve());
+    authServiceSpy.loginWithCredentials.and.returnValue(Promise.resolve(mockUser));
     component.username = 'docente@uco.edu.co';
     component.password = 'Temporal2026*';
 

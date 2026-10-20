@@ -27,13 +27,15 @@ describe('StudentManagementService', () => {
     const mockHorarios: HorarioItem[] = [
       {
         id: 'hor-1',
-        dia: 'LUNES',
+        dia: 'Lunes',
         horaInicio: '08:00',
         horaFin: '10:00',
-        materia: 'Cálculo I',
+        codigoMateria: 'MAT101',
+        nombreMateria: 'Cálculo I',
         grupo: 'G01',
         aula: 'A-201',
         docente: 'Dr. Roberto Gómez',
+        colorCategory: 'blue',
       },
     ];
 
@@ -56,9 +58,13 @@ describe('StudentManagementService', () => {
         creditos: 3,
         docente: 'Dr. Roberto Gómez',
         grupo: 'G01',
-        porcentajeInasistencia: 5,
-        totalFallas: 1,
-        estado: 'REGULAR',
+        aula: 'A-201',
+        horario: 'Lun 08:00 - 10:00',
+        totalClases: 20,
+        asistencias: 19,
+        inasistencias: 1,
+        porcentajeAsistencia: 95,
+        estado: 'Al día',
       },
     ];
 

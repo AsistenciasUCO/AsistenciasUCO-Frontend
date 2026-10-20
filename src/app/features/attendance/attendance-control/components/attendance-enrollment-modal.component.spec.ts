@@ -25,6 +25,7 @@ describe('AttendanceEnrollmentModalComponent', () => {
 
     fixture = TestBed.createComponent(AttendanceEnrollmentModalComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('isOpen', true);
     fixture.detectChanges();
   });
 
@@ -140,11 +141,98 @@ describe('AttendanceEnrollmentModalComponent', () => {
     expect(payloadEmitido.correo).toBe('carlos.ramirez@uco.edu.co');
   });
 
-  it('onClose emite evento closed', () => {
+  it('onFieldInput actualiza el valor y limpia los errores de confirmPassword', () => {
+    let campoLimpio = '';
+    component.clearFieldError.subscribe((f) => (campoLimpio = f));
+
+    component.confirmPasswordError.set('Error previo');
+    component.password.set('Secret123*');
+    component.onFieldInput('confirmPassword', 'Secret123*', component.confirmPassword);
+
+    expect(component.confirmPassword()).toBe('Secret123*');
+    expect(component.confirmPasswordError()).toBe('');
+    expect(campoLimpio).toBe('confirmPassword');
+  });
+
+  it('desplegarFormularioNuevoEstudiante limpia formulario y muestra campos', () => {
+    component.firstName.set('Previo');
+    component.desplegarFormularioNuevoEstudiante();
+
+    expect(component.isExistingStudent()).toBeFalse();
+    expect(component.firstName()).toBe('');
+    expect(component.showRegistrationForm()).toBeTrue();
+    expect(component.searchStatus()).toBe('NOT_FOUND');
+  });
+
+  it('onCodeBlur y onCodeEnter invocan buscarEstudiante si no es estudiante existente ni nuevo registro', () => {
+    spyOn(component, 'buscarEstudiante');
+
+    component.onCodeBlur();
+    expect(component.buscarEstudiante).toHaveBeenCalledTimes(1);
+
+    const event = new KeyboardEvent('keydown', { key: 'Enter' });
+    component.onCodeEnter(event);
+    expect(component.buscarEstudiante).toHaveBeenCalledTimes(2);
+  });
+
+  it('buscarEstudiante no ejecuta búsqueda si falta tipo o el código tiene menos de 5 caracteres', () => {
+    component.docType.set('');
+    component.code.set('123');
+    component.buscarEstudiante();
+    expect(studentServiceSpy.searchStudentByIdentification).not.toHaveBeenCalled();
+
+    component.docType.set('tipo-cc');
+    component.code.set('abcde');
+    component.buscarEstudiante();
+    expect(studentServiceSpy.searchStudentByIdentification).not.toHaveBeenCalled();
+  });
+
+  it('onSubmit valida contraseñas al registrar nuevo estudiante', () => {
+    let payloadEmitido: any = null;
+    component.submitted.subscribe((p) => (payloadEmitido = p));
+
+    component.showRegistrationForm.set(true);
+    component.docType.set('tipo-cc');
+    component.code.set('1017123456');
+    component.firstName.set('Nuevo');
+    component.lastName.set('Alumno');
+    component.email.set('nuevo@uco.edu.co');
+    component.password.set('Pass1234*');
+    component.confirmPassword.set('');
+
+    const event = new Event('submit');
+    component.onSubmit(event);
+
+    expect(component.confirmPasswordError()).toBe('Debe confirmar la contraseña.');
+    expect(payloadEmitido.hasLocalConfirmError).toBeTrue();
+
+    // Contraseñas no coinciden
+    component.confirmPassword.set('PassDistinta*');
+    component.onSubmit(event);
+    expect(component.confirmPasswordError()).toBe('Las contraseñas no coinciden.');
+    expect(payloadEmitido.hasLocalConfirmError).toBeTrue();
+
+    // Contraseñas coinciden
+    component.confirmPassword.set('Pass1234*');
+    component.onSubmit(event);
+    expect(component.confirmPasswordError()).toBe('');
+    expect(payloadEmitido.hasLocalConfirmError).toBeFalse();
+  });
+
+  it('onClose resetea el formulario y emite evento closed', () => {
     let cerrado = false;
     component.closed.subscribe(() => (cerrado = true));
 
+    component.docType.set('tipo-cc');
+    component.code.set('1017123456');
+    component.firstName.set('Nombre');
+
     component.onClose();
+
+    expect(component.docType()).toBe('');
+    expect(component.code()).toBe('');
+    expect(component.firstName()).toBe('');
     expect(cerrado).toBeTrue();
   });
 });
+

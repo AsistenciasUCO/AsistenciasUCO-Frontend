@@ -114,12 +114,14 @@ describe('CoordinatorDocentesComponent', () => {
 
   it('filteredDocentes filtra por término de búsqueda', () => {
     component.searchQuery = 'roberto';
+    component.docentes.set([...component.docentes()]);
     expect(component.filteredDocentes().length).toBe(1);
     expect(component.filteredDocentes()[0].nombres).toBe('Roberto');
   });
 
   it('filteredDocentes filtra por estado', () => {
     component.selectedEstado = 'INACTIVO';
+    component.docentes.set([...component.docentes()]);
     expect(component.filteredDocentes().length).toBe(1);
     expect(component.filteredDocentes()[0].nombres).toBe('Luisa');
   });
@@ -161,5 +163,126 @@ describe('CoordinatorDocentesComponent', () => {
     const event = { target: { value: '1017-999-ABC' } } as unknown as Event;
     component.onNumeroIdentificacionInput(event);
     expect(component.formData.numeroIdentificacion).toBe('1017999');
+  });
+
+  it('guardarDocente valida campos obligatorios antes de enviar', () => {
+    component.abrirFormularioRegistro();
+
+    // Sin documento
+    component.formData.numeroIdentificacion = '';
+    component.guardarDocente();
+    expect(toastService.warning).toHaveBeenCalled();
+
+    // Sin primer nombre
+    component.formData.numeroIdentificacion = '1017123456';
+    component.formData.primerNombre = '';
+    component.guardarDocente();
+    expect(toastService.warning).toHaveBeenCalled();
+
+    // Sin primer apellido
+    component.formData.primerNombre = 'Jorge';
+    component.formData.primerApellido = '';
+    component.guardarDocente();
+    expect(toastService.warning).toHaveBeenCalled();
+
+    // Correo inválido
+    component.formData.primerApellido = 'Gómez';
+    component.formData.correo = 'correo-no-valido';
+    component.guardarDocente();
+    expect(toastService.warning).toHaveBeenCalled();
+
+    // Sin especialidad
+    component.formData.correo = 'jorge.gomez@uco.edu.co';
+    component.formData.especialidad = '';
+    component.guardarDocente();
+    expect(toastService.warning).toHaveBeenCalled();
+  });
+
+  it('guardarDocente registra un nuevo docente exitosamente', () => {
+    component.abrirFormularioRegistro();
+    component.formData.numeroIdentificacion = '1017888777';
+    component.formData.primerNombre = 'Esteban';
+    component.formData.primerApellido = 'Quintero';
+    component.formData.correo = 'esteban.quintero@uco.edu.co';
+    component.formData.especialidad = 'Inteligencia Artificial';
+    component.formData.departamento = 'Departamento de Ciencias Computacionales';
+
+    coordinatorService.createDocente.and.returnValue(
+      of({
+        exitoso: true,
+        mensajeUsuario: 'Docente registrado exitosamente.',
+        datos: {
+          id: 'doc-nuevo',
+          ...component.formData,
+          totalGruposAsignados: 0,
+        },
+      })
+    );
+
+    component.guardarDocente();
+
+    expect(coordinatorService.createDocente).toHaveBeenCalled();
+    expect(component.docentes().length).toBe(3);
+    expect(component.vistaActual()).toBe('LISTA');
+    expect(toastService.success).toHaveBeenCalled();
+  });
+
+  it('abrirModalSeleccionarDocente y onSolicitarRegistroNuevo manejan estado del modal', () => {
+    expect(component.isPickerModalOpen()).toBeFalse();
+    component.abrirModalSeleccionarDocente();
+    expect(component.isPickerModalOpen()).toBeTrue();
+    component.onSolicitarRegistroNuevo();
+    expect(component.isPickerModalOpen()).toBeFalse();
+    expect(component.vistaActual()).toBe('REGISTRO');
+  });
+
+  it('onDocenteSeleccionadoDelDirectorio avisa si el docente ya está en el claustro', () => {
+    component.onDocenteSeleccionadoDelDirectorio({
+      id: 'doc-1',
+      numeroIdentificacion: '12345678',
+      nombres: 'Roberto',
+      apellidos: 'Gómez',
+      correo: 'roberto.gomez@uco.edu.co',
+    });
+
+    expect(toastService.info).toHaveBeenCalled();
+  });
+
+  it('onDocenteSeleccionadoDelDirectorio vincula un nuevo docente del directorio', () => {
+    const userPicker = {
+      id: 'usr-nuevo-dir',
+      numeroIdentificacion: '1017444555',
+      nombres: 'Laura',
+      apellidos: 'Cardona',
+      correo: 'laura.cardona@uco.edu.co',
+      tipoIdentificacion: 'CC',
+    };
+
+    coordinatorService.createDocente.and.returnValue(
+      of({
+        exitoso: true,
+        datos: {
+          id: 'usr-nuevo-dir',
+          tipoIdentificacionId: 'tipo-1',
+          tipoIdentificacion: 'CC',
+          numeroIdentificacion: '1017444555',
+          primerNombre: 'Laura',
+          primerApellido: 'Cardona',
+          nombres: 'Laura',
+          apellidos: 'Cardona',
+          correo: 'laura.cardona@uco.edu.co',
+          departamento: 'Departamento de Ciencias Computacionales',
+          especialidad: 'Docencia Universitaria',
+          totalGruposAsignados: 0,
+          estado: 'ACTIVO',
+        },
+      })
+    );
+
+    component.onDocenteSeleccionadoDelDirectorio(userPicker);
+
+    expect(coordinatorService.createDocente).toHaveBeenCalled();
+    expect(component.docentes().some((d) => d.id === 'usr-nuevo-dir')).toBeTrue();
+    expect(toastService.success).toHaveBeenCalled();
   });
 });

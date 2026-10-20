@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { CatalogService, MOCK_DOCUMENT_TYPES } from './catalog.service';
+import { CatalogService } from './catalog.service';
 import { environment } from '../../../environments/environment';
 
 describe('CatalogService', () => {
@@ -23,8 +23,7 @@ describe('CatalogService', () => {
   });
 
   it('getIdentityDocumentTypes retorna tipos desde HTTP cuando no usa mocks', () => {
-    const originalMock = environment.useFrontendMocks;
-    environment.useFrontendMocks = false;
+    spyOnProperty(environment, 'useFrontendMocks', 'get').and.returnValue(false);
 
     service.getIdentityDocumentTypes().subscribe((tipos) => {
       expect(tipos.length).toBe(2);
@@ -37,13 +36,10 @@ describe('CatalogService', () => {
       { id: '1', tipoIdentificacion: 'CC', nombre: 'Cédula de Ciudadanía' },
       { id: '2', tipoIdentificacion: 'TI', nombre: 'Tarjeta de Identidad' },
     ]);
-
-    environment.useFrontendMocks = originalMock;
   });
 
   it('getTiposIdentificacion retorna respuesta encapsulada desde HTTP', () => {
-    const originalMock = environment.useFrontendMocks;
-    environment.useFrontendMocks = false;
+    spyOnProperty(environment, 'useFrontendMocks', 'get').and.returnValue(false);
 
     service.getTiposIdentificacion().subscribe((res) => {
       expect(res.exitoso).toBeTrue();
@@ -54,13 +50,10 @@ describe('CatalogService', () => {
     const req = http.expectOne(`${environment.apiUrl}/tipos-identificacion`);
     expect(req.request.method).toBe('GET');
     req.flush([{ id: '1', tipoIdentificacion: 'CC', nombre: 'Cédula de Ciudadanía' }]);
-
-    environment.useFrontendMocks = originalMock;
   });
 
   it('getFacultades retorna datos desde HTTP cuando el backend responde', () => {
-    const originalMock = environment.useFrontendMocks;
-    environment.useFrontendMocks = false;
+    spyOnProperty(environment, 'useFrontendMocks', 'get').and.returnValue(false);
 
     service.getFacultades().subscribe((res) => {
       expect(res.exitoso).toBeTrue();
@@ -71,8 +64,6 @@ describe('CatalogService', () => {
     const req = http.expectOne(`${environment.apiUrl}/admin/facultades`);
     expect(req.request.method).toBe('GET');
     req.flush({ datos: [{ id: 'fac-1', nombre: 'Facultad de Ingeniería' }] });
-
-    environment.useFrontendMocks = originalMock;
   });
 
   it('getProgramasAcademicos retorna el catálogo institucional por defecto', (done) => {

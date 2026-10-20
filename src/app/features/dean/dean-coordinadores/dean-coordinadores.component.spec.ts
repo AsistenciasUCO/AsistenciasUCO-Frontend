@@ -23,9 +23,8 @@ describe('DeanCoordinadoresComponent', () => {
       nombres: 'Carlos',
       apellidos: 'Ramírez',
       correo: 'cramirez@uco.edu.co',
+      facultad: 'Facultad de Ingeniería',
       programaAcademico: 'Ingeniería de Sistemas',
-      telefono: '5698000',
-      fechaAsignacion: '2026-01-01',
       estado: 'ACTIVO',
       totalDocentes: 10,
       totalGrupos: 15,
@@ -36,9 +35,8 @@ describe('DeanCoordinadoresComponent', () => {
       nombres: 'Ana',
       apellidos: 'Gómez',
       correo: 'agomez@uco.edu.co',
+      facultad: 'Facultad de Ingeniería',
       programaAcademico: 'Ingeniería Industrial',
-      telefono: '5698001',
-      fechaAsignacion: '2026-01-15',
       estado: 'INACTIVO',
       totalDocentes: 8,
       totalGrupos: 12,
@@ -71,14 +69,26 @@ describe('DeanCoordinadoresComponent', () => {
   function flushInitialRequests() {
     fixture.detectChanges();
 
-    const reqTipos = http.expectOne(`${environment.apiUrl}/tipos-identificacion`);
-    reqTipos.flush({
-      exitoso: true,
-      datos: [{ id: 'tipo-1', tipoIdentificacion: 'CC', nombre: 'Cédula de Ciudadanía' }],
-    });
-
     const reqCoords = http.expectOne(`${environment.apiUrl}/decano/coordinadores`);
     reqCoords.flush({ exitoso: true, datos: mockCoordinadores });
+
+    http.match(`${environment.apiUrl}/tipos-identificacion`).forEach((r) =>
+      r.flush({
+        exitoso: true,
+        datos: [{ id: 'tipo-1', tipoIdentificacion: 'CC', nombre: 'Cédula de Ciudadanía' }],
+      })
+    );
+    http.match(`${environment.apiUrl}/programas-academicos`).forEach((r) =>
+      r.flush({
+        exitoso: true,
+        datos: [{ id: 'prog-1', codigo: 'IS', nombre: 'Ingeniería de Sistemas' }],
+      })
+    );
+
+    http.match(`${environment.apiUrl}/coordinador/planes-estudio`).forEach((r) => r.flush({ exitoso: true, datos: [] }));
+    http.match(`${environment.apiUrl}/coordinador/periodos-academicos`).forEach((r) => r.flush({ exitoso: true, datos: [] }));
+    http.match(`${environment.apiUrl}/docentes`).forEach((r) => r.flush([]));
+    http.match(`${environment.apiUrl}/coordinador/docentes`).forEach((r) => r.flush({ exitoso: true, datos: [] }));
 
     fixture.detectChanges();
   }
@@ -93,6 +103,7 @@ describe('DeanCoordinadoresComponent', () => {
   it('filteredCoordinadores filtra por texto de búsqueda', () => {
     flushInitialRequests();
     component.searchQuery = 'carlos';
+    component.coordinadores.set([...component.coordinadores()]);
     fixture.detectChanges();
 
     expect(component.filteredCoordinadores().length).toBe(1);
@@ -102,6 +113,7 @@ describe('DeanCoordinadoresComponent', () => {
   it('filteredCoordinadores filtra por estado', () => {
     flushInitialRequests();
     component.selectedEstado = 'INACTIVO';
+    component.coordinadores.set([...component.coordinadores()]);
     fixture.detectChanges();
 
     expect(component.filteredCoordinadores().length).toBe(1);
@@ -121,14 +133,144 @@ describe('DeanCoordinadoresComponent', () => {
     expect(component.vistaActual()).toBe('LISTA');
   });
 
-  it('toggleEstadoCoordinador envía PATCH para alternar estado y notifica', () => {
+  it('toggleEstado envía PATCH para alternar estado y notifica', () => {
     flushInitialRequests();
-    component.toggleEstadoCoordinador(mockCoordinadores[0]);
+    component.toggleEstado(mockCoordinadores[0]);
 
     const req = http.expectOne(`${environment.apiUrl}/decano/coordinadores/coord-1/toggle`);
     expect(req.request.method).toBe('PATCH');
     req.flush({ exitoso: true, datos: { ...mockCoordinadores[0], estado: 'INACTIVO' } });
 
+    expect(toastService.success).toHaveBeenCalled();
+  });
+
+  it('onNumeroIdentificacionInput limpia caracteres no numéricos', () => {
+    flushInitialRequests();
+    const event = { target: { value: '1017-abc-999' } } as unknown as Event;
+    component.onNumeroIdentificacionInput(event);
+    expect(component.formData.numeroIdentificacion).toBe('1017999');
+  });
+
+  it('guardarCoordinador valida campos obligatorios antes de enviar', () => {
+    flushInitialRequests();
+    component.abrirFormularioRegistro();
+
+    // Sin documento
+    component.formData.numeroIdentificacion = '';
+    component.guardarCoordinador();
+    expect(toastService.warning).toHaveBeenCalled();
+
+    // Documento válido pero sin nombres
+    component.formData.numeroIdentificacion = '1017123456';
+    component.formData.primerNombre = '';
+    component.guardarCoordinador();
+    expect(toastService.warning).toHaveBeenCalled();
+
+    // Con nombre pero sin apellido
+    component.formData.primerNombre = 'Jorge';
+    component.formData.primerApellido = '';
+    component.guardarCoordinador();
+    expect(toastService.warning).toHaveBeenCalled();
+
+    // Con apellido pero correo inválido
+    component.formData.primerApellido = 'Henao';
+    component.formData.correo = 'invalido';
+    component.guardarCoordinador();
+    expect(toastService.warning).toHaveBeenCalled();
+
+    // Con correo válido pero sin programa
+    component.formData.correo = 'jorge.henao@uco.edu.co';
+    component.formData.programaAcademico = '';
+    component.guardarCoordinador();
+    expect(toastService.warning).toHaveBeenCalled();
+  });
+
+  it('guardarCoordinador envía POST y agrega el nuevo coordinador a la lista', () => {
+    flushInitialRequests();
+    component.abrirFormularioRegistro();
+    component.formData.numeroIdentificacion = '1017555444';
+    component.formData.primerNombre = 'Jorge';
+    component.formData.primerApellido = 'Henao';
+    component.formData.correo = 'jorge.henao@uco.edu.co';
+    component.formData.programaAcademico = 'Ingeniería de Sistemas';
+
+    component.guardarCoordinador();
+
+    const req = http.expectOne(`${environment.apiUrl}/decano/coordinadores`);
+    expect(req.request.method).toBe('POST');
+    req.flush({
+      exitoso: true,
+      mensajeUsuario: 'Coordinador creado.',
+      datos: {
+        id: 'coord-nuevo',
+        ...component.formData,
+        totalDocentes: 0,
+        totalGrupos: 0,
+      },
+    });
+
+    expect(component.coordinadores().length).toBe(3);
+    expect(component.vistaActual()).toBe('LISTA');
+    expect(toastService.success).toHaveBeenCalled();
+  });
+
+  it('abrirModalSeleccionarCoordinador y onSolicitarRegistroNuevo gestionan estado del modal', () => {
+    flushInitialRequests();
+    expect(component.isPickerModalOpen()).toBeFalse();
+    component.abrirModalSeleccionarCoordinador();
+    expect(component.isPickerModalOpen()).toBeTrue();
+    component.onSolicitarRegistroNuevo();
+    expect(component.isPickerModalOpen()).toBeFalse();
+    expect(component.vistaActual()).toBe('REGISTRO');
+  });
+
+  it('onCoordinadorSeleccionadoDelDirectorio avisa si el usuario ya coordina un programa', () => {
+    flushInitialRequests();
+    component.onCoordinadorSeleccionadoDelDirectorio({
+      id: 'coord-1',
+      numeroIdentificacion: '1017001',
+      nombres: 'Carlos',
+      apellidos: 'Aristizábal',
+      correo: 'caristizabal@uco.edu.co',
+    });
+
+    expect(toastService.info).toHaveBeenCalled();
+  });
+
+  it('onCoordinadorSeleccionadoDelDirectorio vincula a un docente nuevo como coordinador', () => {
+    flushInitialRequests();
+    component.onCoordinadorSeleccionadoDelDirectorio({
+      id: 'usr-nuevo-directorio',
+      numeroIdentificacion: '1017998877',
+      nombres: 'Valeria',
+      apellidos: 'Restrepo',
+      correo: 'valeria.restrepo@uco.edu.co',
+      tipoIdentificacion: 'CC',
+    });
+
+    const req = http.expectOne(`${environment.apiUrl}/decano/coordinadores`);
+    expect(req.request.method).toBe('POST');
+    req.flush({
+      exitoso: true,
+      datos: {
+        id: 'usr-nuevo-directorio',
+        tipoIdentificacionId: 'tipo-1',
+        tipoIdentificacion: 'CC',
+        numeroIdentificacion: '1017998877',
+        primerNombre: 'Valeria',
+        primerApellido: 'Restrepo',
+        nombres: 'Valeria',
+        apellidos: 'Restrepo',
+        correo: 'valeria.restrepo@uco.edu.co',
+        facultad: 'Facultad de Ingeniería',
+        programaAcademico: 'Ingeniería de Sistemas',
+        totalDocentes: 0,
+        totalGrupos: 0,
+        estado: 'ACTIVO',
+      },
+    });
+
+    expect(component.coordinadores().some((c) => c.id === 'usr-nuevo-directorio')).toBeTrue();
     expect(toastService.success).toHaveBeenCalled();
   });
 });
