@@ -62,14 +62,17 @@ export type DiaSemana = 'Lunes' | 'Martes' | 'Miércoles' | 'Jueves' | 'Viernes'
 
 export interface HorarioItem {
   id: string;
+  idGrupo?: string;
   codigoMateria: string;
   nombreMateria: string;
   grupo: string;
   dia: DiaSemana;
   horaInicio: string; // ej. '08:00'
   horaFin: string;    // ej. '10:00'
-  aula: string;
-  docente: string;
+  /** HorarioEstudianteDTO no entrega aula; `null` = no informada por el backend. */
+  aula: string | null;
+  /** `null` = el backend no informo docente titular para el horario. */
+  docente: string | null;
   colorCategory: 'emerald' | 'amber' | 'blue' | 'purple';
 }
 
@@ -87,20 +90,36 @@ export interface HorarioDocenteItem {
   colorCategory: 'emerald' | 'amber' | 'blue' | 'purple';
 }
 
-export interface MateriaEstudianteItem {
-  id: string;
-  codigo: string;
-  nombre: string;
-  creditos: number;
-  grupo: string;
-  docente: string;
-  aula: string;
-  horario: string;
+/** Indicadores de asistencia calculados por una fuente autoritativa. Hoy el backend no los entrega. */
+export interface IndicadoresAsistenciaMateria {
   totalClases: number;
   asistencias: number;
   inasistencias: number;
   porcentajeAsistencia: number;
-  estado: 'Al día' | 'Riesgo' | 'Crítico';
+}
+
+/**
+ * Materia del estudiante tal como la entrega `GET /estudiante/materias` (una fila por asignatura + grupo).
+ * Los campos de presentacion que el backend no informa son `null`; la UI muestra "No informado" / "No disponible".
+ */
+export interface MateriaEstudianteItem {
+  /** UUID de la asignatura (`idAsignatura`); es el identificador de la ruta de sesiones. */
+  id: string;
+  /** UUID del grupo (`idGrupo`); identidad propia, nunca se mezcla con la asignatura. */
+  idGrupo: string;
+  /** Identidad compuesta asignatura+grupo; unica por tarjeta aunque haya varios grupos de una asignatura. */
+  claveGrupo: string;
+  nombre: string;
+  /** Descripcion del grupo (`nombreGrupo`). */
+  grupo: string;
+  codigo: string | null;
+  docente: string | null;
+  aula: string | null;
+  horario: string | null;
+  creditos: number | null;
+  /** `null` = sin fuente confiable de asistencia (nunca se sustituye por ceros). */
+  indicadores: IndicadoresAsistenciaMateria | null;
+  estado: 'Al día' | 'Riesgo' | 'Crítico' | null;
 }
 
 export type EstadoAsistenciaSesion = 'PRESENTE' | 'AUSENTE' | 'RETARDO' | 'JUSTIFICADA';
@@ -129,14 +148,26 @@ export interface SoporteAdjuntoItem {
   fechaSubidaUtc?: string;
 }
 
+/**
+ * Sesion de una materia del estudiante. `estadoAsistencia` es `null` mientras el backend no entregue un estado
+ * autoritativo del estudiante autenticado: nunca se infiere AUSENTE para habilitar radicaciones.
+ */
 export interface SesionMateriaDetalle {
   id: string;
+  /** UUID de la asignatura consultada (ruta). */
   materiaId: string;
+  /** UUID del grupo al que pertenece la sesion. */
+  grupoId: string;
   numeroSesion: number;
+  /** Fecha presentada (zona IANA del usuario cuando el instante es UTC explicito). */
   fecha: string;
   horario: string;
+  /** `UTC` = instante con offset/Z convertido a la zona del usuario; `SIN_ZONA` = el backend envio hora sin zona. */
+  temporalidad: 'UTC' | 'SIN_ZONA';
+  /** Instante UTC normalizado (RFC 3339 con `Z`) cuando fue confirmable. */
+  fechaHoraInicioUtc?: string;
   tema: string;
-  estadoAsistencia: EstadoAsistenciaSesion;
+  estadoAsistencia: EstadoAsistenciaSesion | null;
   reclamoId?: string;
   estadoReclamo?: EstadoSolicitudRevision;
   categoriaReclamo?: CategoriaJustificacion;

@@ -2,7 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { environment } from '../../../environments/environment';
-import { AttendanceClaimService } from './attendance-claim.service';
+import { AttendanceClaimService, IdentificadorInvalidoError } from './attendance-claim.service';
+import { SesionMateriaDetalle } from '../models/role-management.model';
 import { SessionTimeZoneService } from './session-timezone.service';
 
 describe('AttendanceClaimService', () => {
@@ -70,10 +71,66 @@ describe('AttendanceClaimService', () => {
     expect(reclamos).toEqual([]);
   });
 
-  it('getSesionesPorMateria y getHorarioDocente consultan las rutas respectivas', () => {
-    service.getSesionesPorMateria('mat-123').subscribe();
-    http.expectOne(`${environment.apiUrl}/estudiante/materias/mat-123/sesiones`).flush({ exitoso: true, datos: [] });
+  describe('getSesionesPorMateria (SesionMateriaEstudianteDTO)', () => {
+    const ASIGNATURA = 'e2f3a4b5-0000-0000-0000-000000000001';
+    const GRUPO = 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d';
 
+    it('consulta la ruta con el UUID de la asignatura y adapta las sesiones', () => {
+      let sesiones: SesionMateriaDetalle[] = [];
+      service.getSesionesPorMateria(ASIGNATURA).subscribe((res) => (sesiones = res.datos));
+
+      const req = http.expectOne(`${environment.apiUrl}/estudiante/materias/${ASIGNATURA}/sesiones`);
+      expect(req.request.url).not.toContain('undefined');
+      req.flush({
+        exitoso: true,
+        total: 1,
+        datos: [{
+          id: 'd1d2d3d4-0000-4000-8000-000000000001', nombre: 'Introducción', numero: 1, codigo: 'SES-01',
+          numeroSemana: 1, idGrupo: GRUPO, codigoGrupo: 'G1', nombreGrupo: 'Grupo 001',
+          fechaHoraInicio: '2026-10-19T13:00:00', fechaHoraFin: '2026-10-19T15:00:00',
+        }],
+      });
+
+      expect(sesiones.length).toBe(1);
+      expect(sesiones[0].materiaId).toBe(ASIGNATURA);
+      expect(sesiones[0].grupoId).toBe(GRUPO);
+      expect(sesiones[0].estadoAsistencia).toBeNull();
+      expect(sesiones[0].temporalidad).toBe('SIN_ZONA');
+    });
+
+    it('con un instante UTC explicito lo presenta en la zona IANA del usuario', () => {
+      const zona = TestBed.inject(SessionTimeZoneService);
+      zona.setManualTimeZone('America/Bogota');
+      let sesiones: SesionMateriaDetalle[] = [];
+      service.getSesionesPorMateria(ASIGNATURA).subscribe((res) => (sesiones = res.datos));
+
+      http.expectOne(`${environment.apiUrl}/estudiante/materias/${ASIGNATURA}/sesiones`).flush({
+        exitoso: true,
+        datos: [{
+          id: 'd1d2d3d4-0000-4000-8000-000000000001', nombre: 'S1', numero: 1, codigo: 'SES-01', numeroSemana: 1,
+          idGrupo: GRUPO, codigoGrupo: 'G1', nombreGrupo: 'Grupo 001',
+          fechaHoraInicio: '2026-10-19T13:00:00Z', fechaHoraFin: '2026-10-19T15:00:00Z',
+        }],
+      });
+
+      expect(sesiones[0].temporalidad).toBe('UTC');
+      expect(sesiones[0].fecha).toBe('2026-10-19');
+      expect(sesiones[0].horario).toBe('08:00 - 10:00');
+      expect(sesiones[0].fechaHoraInicioUtc).toBe('2026-10-19T13:00:00Z');
+    });
+
+    for (const invalido of [undefined, null, '', 'undefined', 'null', 'mat-123', '123']) {
+      it(`no emite ninguna peticion HTTP con el identificador ${JSON.stringify(invalido)}`, () => {
+        let error: unknown;
+        service.getSesionesPorMateria(invalido as unknown as string).subscribe({ error: (e) => (error = e) });
+
+        http.expectNone(() => true);
+        expect(error instanceof IdentificadorInvalidoError).toBeTrue();
+      });
+    }
+  });
+
+  it('getHorarioDocente consulta /docente/horarios', () => {
     service.getHorarioDocente().subscribe();
     http.expectOne(`${environment.apiUrl}/docente/horarios`).flush({ exitoso: true, datos: [] });
   });

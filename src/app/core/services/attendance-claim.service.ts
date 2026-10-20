@@ -1,16 +1,29 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import { Observable, catchError, map, of, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 import { ApiDataResponse } from '../api/models/api-data-response.model';
 import { ClaimMapper, ReclamoDocenteApi } from '../mappers/claim.mapper';
+import { StudentPortalMapper } from '../mappers/student-portal.mapper';
+import { ApiListResponse } from '../api/models/api-list-response.model';
+import { SesionMateriaEstudianteApiDto } from '../api/models/estudiante-portal-api-dto.model';
+import { BYPASS_GLOBAL_ERROR_TOAST } from '../interceptors/error.interceptor';
+import { isUuid } from '../utils/uuid.util';
 import { SessionTimeZoneService } from './session-timezone.service';
 import {
   SesionMateriaDetalle,
   SolicitudRevisionItem,
   HorarioDocenteItem,
 } from '../models/role-management.model';
+
+/** El identificador de asignatura no es un UUID: no se emite ninguna peticion HTTP. */
+export class IdentificadorInvalidoError extends Error {
+  constructor(readonly valor: unknown) {
+    super('Identificador de asignatura inválido.');
+    this.name = 'IdentificadorInvalidoError';
+  }
+}
 
 export interface ResolverReclamoResponse {
   exitoso: boolean;
@@ -69,8 +82,29 @@ export class AttendanceClaimService {
     );
   }
 
+  /**
+   * Sesiones de una asignatura (`idAsignatura`) del estudiante autenticado. Valida el UUID antes de construir la
+   * ruta (jamas `/materias/undefined/sesiones`) y adapta `SesionMateriaEstudianteDTO` al modelo de UI. El backend
+   * devuelve las sesiones de todos los grupos del estudiante en esa asignatura: el consumidor filtra por `grupoId`.
+   * El error HTTP se propaga sin toast global; la vista lo presenta localmente.
+   */
   getSesionesPorMateria(materiaId: string): Observable<ApiResponse<SesionMateriaDetalle[]>> {
-    return this.http.get<ApiResponse<SesionMateriaDetalle[]>>(`${environment.apiUrl}/estudiante/materias/${materiaId}/sesiones`);
+    if (!isUuid(materiaId)) {
+      return throwError(() => new IdentificadorInvalidoError(materiaId));
+    }
+    return this.http
+      .get<ApiListResponse<SesionMateriaEstudianteApiDto>>(
+        `${environment.apiUrl}/estudiante/materias/${materiaId}/sesiones`,
+        { context: new HttpContext().set(BYPASS_GLOBAL_ERROR_TOAST, true) }
+      )
+      .pipe(
+        map((res) => {
+          const datos = StudentPortalMapper.toSesiones(res.datos, materiaId, (instant) =>
+            this.sessionTimeZone.displayInstant(instant)
+          );
+          return { exitoso: res.exitoso, datos, total: datos.length };
+        })
+      );
   }
 
   crearReclamo(

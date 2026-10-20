@@ -3,13 +3,15 @@ import { Subscription, finalize } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { StudentManagementService } from '../../../core/services/student-management.service';
-import { AttendanceClaimService } from '../../../core/services/attendance-claim.service';
+import { AttendanceClaimService, IdentificadorInvalidoError } from '../../../core/services/attendance-claim.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
 import { CourseService } from '../../../core/services/course.service';
 import { SessionService } from '../../../core/services/session.service';
 import { ToastService } from '../../../shared/components/toast/toast.component';
 import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
+import { LoadErrorState, classifyLoadError, loadErrorState } from '../../../core/api/errors/load-error.util';
+import { isUuid } from '../../../core/utils/uuid.util';
 import { validateSoporteFile } from '../../../core/files/soporte-file.validator';
 import {
   MateriaEstudianteItem,
@@ -49,8 +51,10 @@ type VistaEstudiante = 'LISTA' | 'DETALLE' | 'RECLAMO' | 'SOLICITAR_MATRICULA';
         <app-student-courses-list
           [materias]="materias()"
           [isLoading]="isLoading()"
+          [error]="materiasError()"
           [promedioAsistencia]="promedioAsistencia()"
           [totalFallas]="totalFallas()"
+          (retry)="cargarMaterias()"
           (openCodeEnrollment)="abrirModalMatriculaGrupo()"
           (openAutoAttendance)="abrirModalAutoAsistencia()"
           (viewDetail)="verDetalleCompleto($event)"
@@ -64,6 +68,8 @@ type VistaEstudiante = 'LISTA' | 'DETALLE' | 'RECLAMO' | 'SOLICITAR_MATRICULA';
           [materia]="selectedMateria()"
           [sesiones]="sesiones()"
           [loading]="loadingSesiones()"
+          [error]="sesionesError()"
+          (retry)="reintentarSesiones()"
           (back)="volverALista()"
           (startClaim)="iniciarReclamo($event)"
           (withdrawClaim)="retirarReclamo($event)"
@@ -126,6 +132,7 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
   vistaActual = signal<VistaEstudiante>('LISTA');
   materias = signal<MateriaEstudianteItem[]>([]);
   isLoading = signal<boolean>(true);
+  materiasError = signal<LoadErrorState | null>(null);
 
   // Auto-Registro de Asistencia (HU176)
   modalAutoAsistenciaVisible = signal<boolean>(false);
@@ -142,6 +149,7 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
   selectedMateria = signal<MateriaEstudianteItem | null>(null);
   sesiones = signal<SesionMateriaDetalle[]>([]);
   loadingSesiones = signal<boolean>(false);
+  sesionesError = signal<LoadErrorState | null>(null);
 
   // Radicación reclamo
   sesionReclamar = signal<SesionMateriaDetalle | null>(null);
@@ -158,17 +166,22 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
   loadingPrerrequisitos = signal<boolean>(false);
 
   totalCreditos(): number {
-    return this.materias().reduce((sum, m) => sum + (Number(m.creditos) || 0), 0);
+    return this.materias().reduce((sum, m) => sum + (m.creditos ?? 0), 0);
   }
 
-  promedioAsistencia(): string {
-    if (this.materias().length === 0) return '0.0';
-    const total = this.materias().reduce((sum, m) => sum + m.porcentajeAsistencia, 0);
-    return (total / this.materias().length).toFixed(1);
+  /** Promedio solo sobre las materias con indicadores autoritativos; `null` = no disponible (nunca 0 ni NaN). */
+  promedioAsistencia(): string | null {
+    const conIndicadores = this.materias().filter((m) => m.indicadores !== null);
+    if (conIndicadores.length === 0) return null;
+    const total = conIndicadores.reduce((sum, m) => sum + m.indicadores!.porcentajeAsistencia, 0);
+    return (total / conIndicadores.length).toFixed(1);
   }
 
-  totalFallas(): number {
-    return this.materias().reduce((sum, m) => sum + m.inasistencias, 0);
+  /** Suma de inasistencias solo si alguna materia tiene fuente autoritativa; `null` = no disponible. */
+  totalFallas(): number | null {
+    const conIndicadores = this.materias().filter((m) => m.indicadores !== null);
+    if (conIndicadores.length === 0) return null;
+    return conIndicadores.reduce((sum, m) => sum + m.indicadores!.inasistencias, 0);
   }
 
   ngOnInit(): void {
@@ -182,14 +195,16 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
 
   cargarMaterias(): void {
     this.isLoading.set(true);
+    this.materiasError.set(null);
     this.studentService.getMaterias().subscribe({
       next: (res) => {
         this.materias.set(res.datos || []);
         this.isLoading.set(false);
       },
-      error: () => {
+      error: (err) => {
+        this.materias.set([]);
+        this.materiasError.set(classifyLoadError(err));
         this.isLoading.set(false);
-        this.toast.error('Error al cargar asignaturas matriculadas.');
       },
     });
   }
@@ -197,12 +212,14 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
   verDetalleCompleto(materia: MateriaEstudianteItem): void {
     this.selectedMateria.set(materia);
     this.vistaActual.set('DETALLE');
-    this.cargarSesiones(materia.id);
+    this.cargarSesiones(materia);
   }
 
   volverALista(): void {
     this.vistaActual.set('LISTA');
     this.selectedMateria.set(null);
+    this.sesiones.set([]);
+    this.sesionesError.set(null);
   }
 
   abrirSolicitudMatricula(): void {
@@ -246,6 +263,8 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
   }
 
   iniciarReclamo(sesion: SesionMateriaDetalle): void {
+    // Sin estado autoritativo de asistencia (o con una sesion no reclamable) no se abre la radicacion.
+    if (sesion.estadoAsistencia !== 'AUSENTE' && sesion.estadoAsistencia !== 'RETARDO') return;
     this.sesionReclamar.set(sesion);
     this.limpiarSoporte();
     this.vistaActual.set('RECLAMO');
@@ -352,25 +371,44 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
       next: (res) => {
         if (res.exitoso) {
           this.toast.success(res.mensajeUsuario || 'Solicitud de revisión retirada.');
-          this.cargarSesiones(materia.id);
+          this.cargarSesiones(materia);
         }
       },
       error: (err) => this.toast.error(getApiErrorMessage(err)),
     });
   }
 
-  cargarSesiones(materiaId: string): void {
+  /**
+   * Carga las sesiones de la asignatura de la tarjeta y conserva solo las del grupo seleccionado (el backend
+   * devuelve las de todos los grupos del estudiante en esa asignatura). Un error HTTP no se presenta como
+   * "0 sesiones": se guarda en `sesionesError`.
+   */
+  cargarSesiones(materia: MateriaEstudianteItem): void {
+    this.sesionesError.set(null);
+    if (!isUuid(materia.id)) {
+      this.sesiones.set([]);
+      this.sesionesError.set(loadErrorState('IDENTIFICADOR'));
+      return;
+    }
     this.loadingSesiones.set(true);
-    this.claimService.getSesionesPorMateria(materiaId).subscribe({
+    this.claimService.getSesionesPorMateria(materia.id).subscribe({
       next: (res) => {
-        this.sesiones.set(res.datos || []);
+        this.sesiones.set((res.datos || []).filter((sesion) => sesion.grupoId === materia.idGrupo));
         this.loadingSesiones.set(false);
       },
-      error: () => {
+      error: (err) => {
+        this.sesiones.set([]);
+        this.sesionesError.set(
+          err instanceof IdentificadorInvalidoError ? loadErrorState('IDENTIFICADOR') : classifyLoadError(err)
+        );
         this.loadingSesiones.set(false);
-        this.toast.error('Error al cargar sesiones de la materia.');
       },
     });
+  }
+
+  reintentarSesiones(): void {
+    const materia = this.selectedMateria();
+    if (materia) this.cargarSesiones(materia);
   }
 
   enviarReclamo(event: { categoria: CategoriaJustificacion; justificacion: string }): void {
@@ -379,6 +417,7 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
     const currentUser = this.authService.currentUser();
 
     if (!sesion || !materia || !event.justificacion.trim()) return;
+    if (sesion.estadoAsistencia !== 'AUSENTE' && sesion.estadoAsistencia !== 'RETARDO') return;
     // Sin doble envio: ni mientras sube el soporte (aun no hay fileId) ni mientras otra radicacion esta en curso.
     if (this.enviandoReclamo() || this.subiendoSoporte()) return;
 
@@ -389,7 +428,7 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
         estudianteNombre: currentUser?.name || 'Estudiante UCO',
         estudianteCorreo: currentUser?.email || 'estudiante@uco.edu.co',
         materiaId: materia.id,
-        materiaCodigo: materia.codigo,
+        materiaCodigo: materia.codigo ?? '',
         materiaNombre: materia.nombre,
         grupo: materia.grupo,
         sesionId: sesion.id,
@@ -406,7 +445,7 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
           if (res.exitoso) {
             this.toast.success(res.mensajeUsuario || 'Reclamo enviado.');
             this.volverADetalle();
-            this.cargarSesiones(materia.id);
+            this.cargarSesiones(materia);
           }
         },
         error: (err) => {
@@ -482,7 +521,7 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
           this.cargarMaterias();
           const actual = this.selectedMateria();
           if (actual) {
-            this.cargarSesiones(actual.id);
+            this.cargarSesiones(actual);
           }
         },
         error: (err) => {

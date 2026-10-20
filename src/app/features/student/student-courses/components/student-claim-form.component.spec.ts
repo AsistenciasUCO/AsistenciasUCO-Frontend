@@ -6,6 +6,7 @@ import {
   SesionMateriaDetalle,
   SoporteAdjuntoItem,
 } from '../../../../core/models/role-management.model';
+import { crearMateria, crearSesion } from '../../../../core/testing/student-portal.fixtures';
 
 describe('StudentClaimFormComponent — soporte (LB-004D FE-01..FE-03)', () => {
   let fixture: ComponentFixture<StudentClaimFormComponent>;
@@ -90,8 +91,7 @@ describe('StudentClaimFormComponent', () => {
   let fixture: ComponentFixture<StudentClaimFormComponent>;
   let component: StudentClaimFormComponent;
 
-  const mockMateria: MateriaEstudianteItem = {
-    id: 'mat-1',
+  const mockMateria: MateriaEstudianteItem = crearMateria({
     codigo: 'IS-101',
     nombre: 'Ingeniería de Software',
     grupo: '01',
@@ -99,22 +99,18 @@ describe('StudentClaimFormComponent', () => {
     horario: 'Lunes 08:00 - 10:00',
     aula: 'Lab 2',
     creditos: 3,
-    porcentajeAsistencia: 85,
-    asistencias: 8,
-    inasistencias: 2,
-    totalClases: 10,
+    indicadores: { porcentajeAsistencia: 85, asistencias: 8, inasistencias: 2, totalClases: 10 },
     estado: 'Al día',
-  };
+  });
 
-  const mockSesion: SesionMateriaDetalle = {
+  const mockSesion: SesionMateriaDetalle = crearSesion({
     id: 'ses-1',
-    materiaId: 'mat-1',
     numeroSesion: 2,
     fecha: '2026-09-08',
     horario: '08:00 - 10:00',
     tema: 'Arquitectura Limpia',
     estadoAsistencia: 'AUSENTE',
-  };
+  });
 
   const mockArchivo: SoporteAdjuntoItem = {
     fileId: 'file-123',

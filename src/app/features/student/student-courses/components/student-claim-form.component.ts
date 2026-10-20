@@ -58,7 +58,7 @@ import {
               </span>
             </div>
             <p class="text-amber-950 font-medium">Tema: {{ sesion()?.tema }}</p>
-            <p class="text-amber-800">Docente a cargo: {{ materia()?.docente }}</p>
+            <p class="text-amber-800">Docente a cargo: {{ materia()?.docente ?? 'No informado' }}</p>
           </div>
 
           <!-- Formulario de Justificación -->

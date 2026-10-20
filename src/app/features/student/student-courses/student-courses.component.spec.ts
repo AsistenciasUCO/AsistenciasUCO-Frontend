@@ -12,6 +12,16 @@ import { SessionService } from '../../../core/services/session.service';
 import { ToastService } from '../../../shared/components/toast/toast.component';
 import { SOPORTE_MAX_BYTES } from '../../../core/files/soporte-file.validator';
 import { MateriaEstudianteItem, SesionMateriaDetalle } from '../../../core/models/role-management.model';
+import {
+  ASIGNATURA_ID,
+  GRUPO_2_ID,
+  GRUPO_ID,
+  crearMateria,
+  crearSesion,
+} from '../../../core/testing/student-portal.fixtures';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { environment } from '../../../../environments/environment';
 
 function archivo(name: string, size: number, type: string): File {
   const file = new File([new Uint8Array(Math.min(size, 8))], name, { type });
@@ -50,8 +60,8 @@ describe('StudentCoursesComponent — soporte y radicación (LB-004D FE-01..FE-0
       ],
     });
     component = TestBed.createComponent(StudentCoursesComponent).componentInstance;
-    component.selectedMateria.set({ id: 'm-1', codigo: 'MAT1', nombre: 'Mate', grupo: 'G1' } as never);
-    component.sesionReclamar.set({ id: 's-1', numeroSesion: 3, fecha: '2026-10-19', estadoAsistencia: 'AUSENTE' } as never);
+    component.selectedMateria.set(crearMateria({ codigo: 'MAT1', nombre: 'Mate', grupo: 'G1' }));
+    component.sesionReclamar.set(crearSesion({ id: 's-1', numeroSesion: 3, fecha: '2026-10-19', estadoAsistencia: 'AUSENTE' }));
   });
 
   it('FE-01/02: rechaza un tipo no permitido y un archivo > 5 MiB sin llamar al backend', () => {
@@ -165,16 +175,11 @@ describe('StudentCoursesComponent', () => {
   let sessionServiceSpy: jasmine.SpyObj<SessionService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
 
-  const mockMaterias: MateriaEstudianteItem[] = [{
-    id: 'mat-1', codigo: 'IS-101', nombre: 'Arquitectura de Software', creditos: 3, grupo: 'G1',
-    docente: 'Ing. Pedro Pérez', aula: 'Aula 201', horario: 'Lunes 08:00 - 10:00', totalClases: 16,
-    asistencias: 14, inasistencias: 2, porcentajeAsistencia: 87.5, estado: 'Al día',
-  }];
+  const mockMaterias: MateriaEstudianteItem[] = [crearMateria({ nombre: 'Arquitectura de Software' })];
 
-  const mockSesiones: SesionMateriaDetalle[] = [{
-    id: 'ses-1', materiaId: 'mat-1', numeroSesion: 1, fecha: '2026-09-01', horario: '08:00 - 10:00',
-    tema: 'Clean Architecture', estadoAsistencia: 'AUSENTE', reclamoId: 'rec-1',
-  }];
+  const mockSesiones: SesionMateriaDetalle[] = [
+    crearSesion({ id: 'ses-1', numeroSesion: 1, tema: 'Clean Architecture', estadoAsistencia: 'AUSENTE', reclamoId: 'rec-1' }),
+  ];
 
   beforeEach(async () => {
     studentServiceSpy = jasmine.createSpyObj('StudentManagementService', ['getMaterias', 'getPrerrequisitosMateria', 'matricularGrupo']);
@@ -209,15 +214,17 @@ describe('StudentCoursesComponent', () => {
   it('debe inicializarse y cargar materias del estudiante', () => {
     expect(component).toBeTruthy();
     expect(component.materias().length).toBe(1);
-    expect(component.totalCreditos()).toBe(3);
-    expect(component.promedioAsistencia()).toBe('87.5');
-    expect(component.totalFallas()).toBe(2);
+    expect(component.totalCreditos()).toBe(0);
+    // Sin indicadores autoritativos: no hay promedio ni fallas (nunca 0 ni NaN).
+    expect(component.promedioAsistencia()).toBeNull();
+    expect(component.totalFallas()).toBeNull();
   });
 
   it('permite ver detalle completo de sesiones y regresar a la lista', () => {
     component.verDetalleCompleto(mockMaterias[0]);
     expect(component.vistaActual()).toBe('DETALLE');
-    expect(component.selectedMateria()?.id).toBe('mat-1');
+    expect(component.selectedMateria()?.id).toBe(ASIGNATURA_ID);
+    expect(claimServiceSpy.getSesionesPorMateria).toHaveBeenCalledWith(ASIGNATURA_ID);
     expect(component.sesiones().length).toBe(1);
     component.volverALista();
     expect(component.vistaActual()).toBe('LISTA');
@@ -240,7 +247,7 @@ describe('StudentCoursesComponent', () => {
     component.selectedMateria.set(mockMaterias[0]);
     claimServiceSpy.eliminarReclamo.and.returnValue(of({ exitoso: true, mensajeUsuario: 'Reclamo retirado.' } as any));
     component.retirarReclamo(mockSesiones[0]);
-    expect(claimServiceSpy.eliminarReclamo).toHaveBeenCalledWith('rec-1', 'mat-1', 'ses-1');
+    expect(claimServiceSpy.eliminarReclamo).toHaveBeenCalledWith('rec-1', ASIGNATURA_ID, 'ses-1');
     expect(toastSpy.success).toHaveBeenCalledWith('Reclamo retirado.');
   });
 
@@ -248,7 +255,7 @@ describe('StudentCoursesComponent', () => {
     studentServiceSpy.getPrerrequisitosMateria.and.returnValue(of({ exitoso: true, datos: [{ id: 'p1', prerrequisitoNombre: 'Cálculo I' }] } as any));
     component.abrirPrerrequisitos(mockMaterias[0]);
     expect(component.modalPrerrequisitosVisible()).toBeTrue();
-    expect(component.materiaPrerrequisitos()?.id).toBe('mat-1');
+    expect(component.materiaPrerrequisitos()?.id).toBe(ASIGNATURA_ID);
     expect(component.listaPrerrequisitos().length).toBe(1);
     component.cerrarModalPrerrequisitos();
     expect(component.modalPrerrequisitosVisible()).toBeFalse();
@@ -273,5 +280,226 @@ describe('StudentCoursesComponent', () => {
     expect(studentServiceSpy.matricularGrupo).toHaveBeenCalledWith('GRP-101');
     expect(toastSpy.success).toHaveBeenCalledWith('Matrícula confirmada');
     expect(component.modalMatriculaGrupoVisible()).toBeFalse();
+  });
+});
+
+describe('StudentCoursesComponent — contrato real y estados de carga (HTTP)', () => {
+  let fixture: ComponentFixture<StudentCoursesComponent>;
+  let component: StudentCoursesComponent;
+  let http: HttpTestingController;
+  let toast: jasmine.SpyObj<ToastService>;
+
+  const MATERIAS_URL = `${environment.apiUrl}/estudiante/materias`;
+  const sesionesUrl = (id: string) => `${MATERIAS_URL}/${id}/sesiones`;
+  const materiaApi = (over: Record<string, unknown> = {}) => ({
+    idAsignatura: ASIGNATURA_ID,
+    nombreAsignatura: 'Arquitectura de Software',
+    idGrupo: GRUPO_ID,
+    nombreGrupo: 'Grupo 001 - Arq Software',
+    ...over,
+  });
+  const sesionApi = (over: Record<string, unknown> = {}) => ({
+    id: 'd1d2d3d4-0000-4000-8000-000000000001',
+    nombre: 'Introducción',
+    numero: 1,
+    codigo: 'SES-01',
+    numeroSemana: 1,
+    idGrupo: GRUPO_ID,
+    codigoGrupo: '001',
+    nombreGrupo: 'Grupo 001 - Arq Software',
+    fechaHoraInicio: '2026-10-19T13:00:00Z',
+    fechaHoraFin: '2026-10-19T15:00:00Z',
+    ...over,
+  });
+
+  const texto = () => fixture.nativeElement.textContent as string;
+  const clickTexto = (contenido: string) => {
+    const boton = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
+      .find((b) => b.textContent?.includes(contenido));
+    expect(boton).withContext(`boton "${contenido}"`).toBeDefined();
+    boton!.click();
+    fixture.detectChanges();
+  };
+
+  function cargar(materias: unknown[]): void {
+    fixture = TestBed.createComponent(StudentCoursesComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    http.expectOne(MATERIAS_URL).flush({ exitoso: true, datos: materias, total: materias.length });
+    fixture.detectChanges();
+  }
+
+  beforeEach(async () => {
+    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'warning', 'info']);
+    await TestBed.configureTestingModule({
+      imports: [StudentCoursesComponent],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: ToastService, useValue: toast },
+        { provide: AuthService, useValue: { currentUser: () => ({ id: 'u-1', name: 'Ana', email: 'ana@uco.edu.co' }) } },
+        { provide: CourseService, useValue: {} },
+        { provide: SessionService, useValue: {} },
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) } } },
+      ],
+    }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('muestra la materia del contrato real con su grupo, sin NaN ni valores inventados', () => {
+    cargar([materiaApi()]);
+
+    expect(texto()).toContain('Arquitectura de Software');
+    expect(texto()).toContain('Grupo 001 - Arq Software');
+    expect(texto()).not.toContain('NaN');
+    expect(texto()).not.toContain('undefined');
+    expect(texto()).not.toContain('null');
+    expect(fixture.nativeElement.querySelector('[data-testid="asistencia-no-disponible"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="promedio-no-disponible"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="fallas-no-disponible"]')).not.toBeNull();
+    expect(texto()).toContain('No informado');
+  });
+
+  it('Ver Detalle consulta /materias/{idAsignatura}/sesiones con el UUID y la URL nunca contiene undefined', () => {
+    cargar([materiaApi()]);
+    clickTexto('Ver Detalle');
+
+    const req = http.expectOne(sesionesUrl(ASIGNATURA_ID));
+    expect(req.request.method).toBe('GET');
+    expect(req.request.url).not.toContain('undefined');
+    expect(req.request.url).not.toContain('null');
+    req.flush({ exitoso: true, datos: [sesionApi()], total: 1 });
+    fixture.detectChanges();
+
+    expect(component.vistaActual()).toBe('DETALLE');
+    expect(component.sesiones().length).toBe(1);
+    expect(texto()).toContain('Introducción');
+  });
+
+  it('con varios grupos de la misma asignatura muestra una tarjeta por grupo y filtra las sesiones por idGrupo', () => {
+    cargar([
+      materiaApi(),
+      materiaApi({ idGrupo: GRUPO_2_ID, nombreGrupo: 'Grupo 002 - Arq Software' }),
+    ]);
+    expect(component.materias().length).toBe(2);
+    expect(fixture.nativeElement.querySelectorAll('[data-testid="materia-grupo"]').length).toBe(2);
+
+    component.verDetalleCompleto(component.materias()[1]);
+    http.expectOne(sesionesUrl(ASIGNATURA_ID)).flush({
+      exitoso: true,
+      total: 2,
+      datos: [
+        sesionApi({ id: 'd1d2d3d4-0000-4000-8000-0000000000a1', nombre: 'Sesión grupo 1', idGrupo: GRUPO_ID }),
+        sesionApi({ id: 'd1d2d3d4-0000-4000-8000-0000000000a2', nombre: 'Sesión grupo 2', idGrupo: GRUPO_2_ID }),
+      ],
+    });
+
+    expect(component.sesiones().map((s) => s.tema)).toEqual(['Sesión grupo 2']);
+  });
+
+  it('una respuesta 200 con cero sesiones muestra estado vacio, sin error', () => {
+    cargar([materiaApi()]);
+    clickTexto('Ver Detalle');
+    http.expectOne(sesionesUrl(ASIGNATURA_ID)).flush({ exitoso: true, datos: [], total: 0 });
+    fixture.detectChanges();
+
+    expect(component.sesionesError()).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="sesiones-vacio"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="sesiones-error"]')).toBeNull();
+  });
+
+  const casosError: Array<[string, number, string]> = [
+    ['validacion 400 (INVALID_REQUEST)', 400, 'VALIDACION'],
+    ['no autenticado 401', 401, 'AUTORIZACION'],
+    ['prohibido 403', 403, 'AUTORIZACION'],
+    ['fallo de servidor 500', 500, 'SERVIDOR'],
+    ['red caida (status 0)', 0, 'RED'],
+  ];
+  for (const [nombre, status, kind] of casosError) {
+    it(`un ${nombre} se muestra como error ${kind} y NO como "0 sesiones registradas"`, () => {
+      cargar([materiaApi()]);
+      clickTexto('Ver Detalle');
+      const req = http.expectOne(sesionesUrl(ASIGNATURA_ID));
+      if (status === 0) {
+        req.error(new ProgressEvent('error'));
+      } else {
+        req.flush(
+          status === 400
+            ? { timestamp: 't', status: 400, error: 'Bad Request', code: 'INVALID_REQUEST', message: 'materiaId inválido', path: '/x', correlationId: null }
+            : null,
+          { status, statusText: 'err' }
+        );
+      }
+      fixture.detectChanges();
+
+      expect(component.sesionesError()?.kind).toBe(kind as never);
+      expect(component.sesiones()).toEqual([]);
+      expect(fixture.nativeElement.querySelector('[data-testid="sesiones-error"]')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('[data-testid="sesiones-vacio"]')).toBeNull();
+      expect(texto()).not.toContain('0 sesiones');
+    });
+  }
+
+  it('Reintentar vuelve a consultar y recupera las sesiones', () => {
+    cargar([materiaApi()]);
+    clickTexto('Ver Detalle');
+    http.expectOne(sesionesUrl(ASIGNATURA_ID)).flush(null, { status: 500, statusText: 'err' });
+    fixture.detectChanges();
+
+    clickTexto('Reintentar');
+    http.expectOne(sesionesUrl(ASIGNATURA_ID)).flush({ exitoso: true, datos: [sesionApi()], total: 1 });
+    fixture.detectChanges();
+
+    expect(component.sesionesError()).toBeNull();
+    expect(component.sesiones().length).toBe(1);
+  });
+
+  it('una materia con identificador invalido jamas emite una peticion de sesiones', () => {
+    cargar([materiaApi()]);
+    component.verDetalleCompleto(crearMateria({ id: 'undefined' }));
+    fixture.detectChanges();
+
+    http.expectNone((r) => r.url.includes('/sesiones'));
+    expect(component.sesionesError()?.kind).toBe('IDENTIFICADOR');
+  });
+
+  it('un fallo al cargar materias se muestra como error con reintento y no como "sin asignaturas"', () => {
+    fixture = TestBed.createComponent(StudentCoursesComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    http.expectOne(MATERIAS_URL).flush(null, { status: 500, statusText: 'err' });
+    fixture.detectChanges();
+
+    expect(component.materiasError()?.kind).toBe('SERVIDOR');
+    expect(fixture.nativeElement.querySelector('[data-testid="materias-error"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="materias-vacio"]')).toBeNull();
+  });
+
+  it('sin estado autoritativo de asistencia no se puede iniciar un reclamo ni radicarlo', () => {
+    cargar([materiaApi()]);
+    component.verDetalleCompleto(component.materias()[0]);
+    http.expectOne(sesionesUrl(ASIGNATURA_ID)).flush({ exitoso: true, datos: [sesionApi()], total: 1 });
+    fixture.detectChanges();
+
+    expect(component.sesiones()[0].estadoAsistencia).toBeNull();
+    component.iniciarReclamo(component.sesiones()[0]);
+    expect(component.vistaActual()).toBe('DETALLE');
+    expect(component.sesionReclamar()).toBeNull();
+    expect(texto()).not.toContain('Radicar Reclamo');
+
+    component.sesionReclamar.set(component.sesiones()[0]);
+    component.enviarReclamo({ categoria: 'Otro', justificacion: 'motivo' });
+    http.expectNone((r) => r.url.includes('/asistencias/revisiones'));
+  });
+
+  it('un estudiante no dispara ninguna peticion /coordinador/** ni /admin/** al cargar el portal', () => {
+    cargar([materiaApi()]);
+    component.verDetalleCompleto(component.materias()[0]);
+    http.expectOne(sesionesUrl(ASIGNATURA_ID)).flush({ exitoso: true, datos: [], total: 0 });
+
+    http.expectNone((r) => r.url.includes('/coordinador/') || r.url.includes('/admin/') || r.url.includes('/decano/'));
+    expect(component.materias().length).toBe(1);
   });
 });
