@@ -316,7 +316,7 @@ type VistaAdmin = 'LISTA' | 'REGISTRO';
                   [(ngModel)]="formData.password"
                   name="password"
                   required
-                  placeholder="ej. UcoDecano2026!"
+                  placeholder="Ingrese una contraseña segura (mín. 12 car.)"
                   class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500/20"
                 />
               </app-form-field>
@@ -388,7 +388,7 @@ export class AdminDecanosComponent implements OnInit {
     telefono: '',
     fechaAsignacion: new Date().toISOString().split('T')[0],
     estado: 'ACTIVO',
-    password: 'UcoDecano2026!',
+    password: '',
   };
 
   filteredDecanos = computed(() => {
@@ -499,7 +499,7 @@ export class AdminDecanosComponent implements OnInit {
       telefono: '',
       fechaAsignacion: new Date().toISOString().split('T')[0],
       estado: 'ACTIVO',
-      password: 'UcoDecano2026!',
+      password: '',
     };
     this.vistaActual.set('REGISTRO');
   }
@@ -543,7 +543,11 @@ export class AdminDecanosComponent implements OnInit {
       return;
     }
 
-    const pwd = (this.formData.password || 'UcoDecano2026!').trim();
+    const pwd = (this.formData.password || '').trim();
+    if (!pwd) {
+      this.toast.warning('La contraseña inicial de acceso es obligatoria.');
+      return;
+    }
     if (pwd.length < 12) {
       this.toast.warning('La contraseña inicial debe tener mínimo 12 caracteres según las políticas de Keycloak.');
       return;
@@ -616,34 +620,20 @@ export class AdminDecanosComponent implements OnInit {
       return;
     }
 
-    const payload = {
-      tipoIdentificacionId:
-        this.tiposIdentificacion().find((t) => t.tipoIdentificacion === user.tipoIdentificacion)?.id ||
-        (this.tiposIdentificacion().length > 0
-          ? this.tiposIdentificacion()[0].id
-          : 'A1B2C3D4-0000-0000-0000-000000000001'),
-      numeroIdentificacion: Number(user.numeroIdentificacion),
-      primerNombre: user.primerNombre || user.nombres.split(' ')[0] || '',
-      segundoNombre: user.segundoNombre || '',
-      primerApellido: user.primerApellido || user.apellidos.split(' ')[0] || '',
-      segundoApellido: user.segundoApellido || '',
-      correo: user.correo,
-      password: 'UcoDecano2026!',
-      idFacultad: null,
-    };
-
-    this.adminService.createDecano(payload).subscribe({
-      next: (res) => {
-        if (res.exitoso) {
-          this.toast.success(
-            res.mensajeUsuario || `Decano ${user.nombres} ${user.apellidos} nombrado exitosamente.`
-          );
-          this.cargarDecanos();
-          this.cargarFacultades();
-          this.volverALista();
-        }
-      },
-      error: (err) => this.toast.error(getApiErrorMessage(err)),
-    });
+    this.abrirFormularioRegistro();
+    this.formData.tipoIdentificacionId =
+      this.tiposIdentificacion().find((t) => t.tipoIdentificacion === user.tipoIdentificacion)?.id ||
+      (this.tiposIdentificacion().length > 0
+        ? this.tiposIdentificacion()[0].id
+        : 'A1B2C3D4-0000-0000-0000-000000000001');
+    this.formData.tipoIdentificacion = user.tipoIdentificacion || 'CC';
+    this.formData.numeroIdentificacion = String(user.numeroIdentificacion || '');
+    this.formData.primerNombre = user.primerNombre || user.nombres.split(' ')[0] || '';
+    this.formData.segundoNombre = user.segundoNombre || '';
+    this.formData.primerApellido = user.primerApellido || user.apellidos.split(' ')[0] || '';
+    this.formData.segundoApellido = user.segundoApellido || '';
+    this.formData.correo = user.correo || '';
+    this.formData.password = '';
+    this.toast.info(`Datos de ${user.nombres} ${user.apellidos} precargados. Defina la contraseña y guarde para confirmar.`);
   }
 }
