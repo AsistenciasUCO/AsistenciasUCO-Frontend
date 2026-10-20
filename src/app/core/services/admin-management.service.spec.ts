@@ -346,9 +346,9 @@ describe('AdminManagementService', () => {
         },
       ],
     });
-  });
 
-    expect(service.parametros()[0].valor).toBe('25');
+    expect(service.decanos().length).toBe(1);
+    expect(service.decanos()[0].facultad).toBe('Sin Facultad Asignada');
   });
 
   it('cargarAuditoria y ejecutarCierreMasivo funcionan correctamente', () => {
@@ -470,9 +470,5 @@ describe('AdminManagementService', () => {
     expect(patchParam.request.method).toBe('PATCH');
     expect(patchParam.request.body).toEqual({ valor: '25' });
     patchParam.flush({ exitoso: true, datos: { id: 'param-1', valor: '25' } });
-=======
-    expect(service.decanos().length).toBe(1);
-    expect(service.decanos()[0].facultad).toBe('Sin Facultad Asignada');
->>>>>>> feature/HU117-B-registrar-decano-titular-aprovisionamiento-iam
   });
 });
