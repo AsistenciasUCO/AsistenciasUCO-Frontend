@@ -72,9 +72,13 @@ describe('AttendanceControlComponent contract corrections', () => {
     groupService = jasmine.createSpyObj<GroupService>('GroupService', [
       'getStudentsByGroup',
       'getAllGroups',
+      'descargarPlanillaExcel',
     ]);
     groupService.getAllGroups.and.returnValue(
       of({ exitoso: true, total: 1, datos: [{ id: 'group-1', capacidadMaximaPermitida: 40 }] } as any)
+    );
+    groupService.descargarPlanillaExcel.and.returnValue(
+      of(new Blob(['test-excel'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
     );
     studentService = jasmine.createSpyObj<StudentService>('StudentService', [
       'enrollStudentInGroup',
@@ -329,6 +333,51 @@ describe('AttendanceControlComponent contract corrections', () => {
     expect(component.showToast()).toBeFalse();
   });
 
+  it('grupo asignado sin horario ni código: aparece en el selector y carga sus dos sesiones', () => {
+    const grupoId = 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d';
+    courseService.getCurrentTeacherCourses.and.returnValue(
+      of({
+        exitoso: true,
+        total: 1,
+        datos: [
+          {
+            id: grupoId,
+            name: 'Arquitectura de Software',
+            section: 'Grupo 001 - Arq Software',
+            schedule: '',
+            asignaturaId: 'e2f3a4b5-0000-0000-0000-000000000001',
+            colorCategory: 'emerald',
+          },
+        ],
+      })
+    );
+    sessionService.getSessionsByGroup.and.returnValue(
+      of({
+        exitoso: true,
+        total: 2,
+        datos: [1, 2].map((n) => ({
+          id: `sesion-${n}`,
+          courseId: grupoId,
+          sessionNumber: n,
+          title: `Sesión ${n}`,
+          date: '2026-09-14',
+          startTime: '08:00',
+          endTime: '10:00',
+          records: [],
+        })),
+      } as any)
+    );
+    const component = createComponent();
+
+    expect(component.courseOptions()).toEqual([
+      { value: grupoId, label: 'Arquitectura de Software (Grupo 001 - Arq Software)' },
+    ] as any);
+    expect(component.selectedCourseId()).toBe(grupoId);
+    expect(sessionService.getSessionsByGroup).toHaveBeenCalledWith(grupoId);
+    expect(component.sessions().length).toBe(2);
+    expect(component.showToast()).toBeFalse();
+  });
+
   it('muestra feedback útil ante UNAUTHORIZED realtime', () => {
     const component = createComponent();
 
@@ -363,5 +412,137 @@ describe('AttendanceControlComponent contract corrections', () => {
     component.openExcuseModal(component.students()[0]);
 
     expect(component.students()[0].status).toBe('EX');
+  });
+
+  it('permite alternar entre vista OVERVIEW y DETALLE', () => {
+    const component = createComponent([activeStudent], []);
+
+    component.volverAOverview();
+    expect(component.vistaActual()).toBe('OVERVIEW');
+    expect(component.selectedSessionId()).toBe('');
+
+    component.irASesionDetalle('session-1');
+    expect(component.vistaActual()).toBe('DETALLE');
+    expect(component.selectedSessionId()).toBe('session-1');
+
+    component.onSessionSelect('session-1');
+    expect(component.selectedSessionId()).toBe('session-1');
+  });
+
+  it('onClearStudentFieldError elimina el error del campo especificado', () => {
+    const component = createComponent([activeStudent], []);
+    component.studentFieldErrors.set({ primerNombre: 'Requerido', correo: 'Invalido' });
+
+    component.onClearStudentFieldError('primerNombre');
+    expect(component.studentFieldErrors()['primerNombre']).toBeUndefined();
+    expect(component.studentFieldErrors()['correo']).toBe('Invalido');
+  });
+
+  it('onRegisterStudentSubmit valida campos y rechaza formulario incompleto', () => {
+    const component = createComponent([activeStudent], []);
+
+    component.onRegisterStudentSubmit({
+      numeroIdentificacion: '',
+      primerNombre: '',
+      primerApellido: '',
+      correo: 'correo-invalido',
+      tipoIdentificacionId: '',
+    });
+
+    expect(component.showToast()).toBeTrue();
+    expect(component.toastType()).toBe('error');
+    expect(component.studentFieldErrors()['primerNombre']).toBeTruthy();
+    expect(component.studentFieldErrors()['correo']).toBeTruthy();
+  });
+
+  it('descargarPlanillaExcel invoca servicio y muestra toast exitoso', () => {
+    const component = createComponent([activeStudent], []);
+    spyOn(window.URL, 'createObjectURL').and.returnValue('blob:http://localhost/test');
+    spyOn(window.URL, 'revokeObjectURL');
+
+    component.descargarPlanillaExcel();
+
+    expect(groupService.descargarPlanillaExcel).toHaveBeenCalledWith('group-1');
+    expect(component.showToast()).toBeTrue();
+    expect(component.toastType()).toBe('success');
+    expect(component.toastMessage()).toContain('descargada');
+  });
+
+  it('descargarPlanillaExcel muestra error si el servicio falla', () => {
+    const component = createComponent([activeStudent], []);
+    groupService.descargarPlanillaExcel.and.returnValue(
+      throwError(() => new Error('Error al generar planilla'))
+    );
+
+    component.descargarPlanillaExcel();
+
+    expect(component.showToast()).toBeTrue();
+    expect(component.toastType()).toBe('error');
+  });
+
+  it('navega hacia la lista de grupos y bandeja general de reclamos', () => {
+    const component = createComponent([activeStudent], []);
+
+    component.volverAListaGrupos();
+    component.irABandejaGeneralReclamos();
+
+    expect(component.isGroupClaimsModalOpen()).toBeFalse();
+  });
+
+  it('abre modales de información del grupo, reclamos y proyección de sesión', () => {
+    const component = createComponent([activeStudent], []);
+
+    component.abrirProyeccionDeSesion('session-1');
+    expect(component.selectedSessionId()).toBe('session-1');
+    expect(component.isProjectionModalOpen()).toBeTrue();
+
+    component.abrirInfoGrupo();
+    expect(component.isGroupInfoModalOpen()).toBeTrue();
+    expect(groupService.getStudentsByGroup).toHaveBeenCalledWith('group-1');
+
+    component.abrirReclamosGrupo();
+    expect(component.isGroupClaimsModalOpen()).toBeTrue();
+  });
+
+  it('resolverReclamoGrupo procesa respuesta exitosa y actualiza toast', () => {
+    attendanceClaimService.resolverReclamo.and.returnValue(
+      of({ exitoso: true, mensajeUsuario: 'Reclamo aprobado.' } as any)
+    );
+    const component = createComponent([activeStudent], []);
+
+    component.resolverReclamoGrupo({ id: 'rec-1', accion: 'APROBADA' });
+
+    expect(attendanceClaimService.resolverReclamo).toHaveBeenCalled();
+    expect(component.showToast()).toBeTrue();
+    expect(component.toastType()).toBe('success');
+    expect(component.toastMessage()).toBe('Reclamo aprobado.');
+  });
+
+  it('onCreateSessionSubmit crea sesión exitosamente y actualiza lista', () => {
+    sessionService.createSession.and.returnValue(
+      of({ exitoso: true, mensaje: 'Sesión creada.', datos: { id: 'ses-nueva' } } as any)
+    );
+    const component = createComponent([activeStudent], []);
+
+    component.onCreateSessionSubmit({
+      title: 'Sesión de Clase 2',
+      date: '2026-09-20',
+      startTime: '08:00',
+      endTime: '10:00',
+    });
+
+    expect(sessionService.createSession).toHaveBeenCalled();
+    expect(component.showToast()).toBeTrue();
+    expect(component.toastType()).toBe('success');
+    expect(component.isNewSessionModalOpen()).toBeFalse();
+  });
+
+  it('onStudentStatusChange actualiza el estado del estudiante', () => {
+    const component = createComponent([activeStudent], []);
+
+    component.onStudentStatusChange({ studentId: 'student-active', status: 'AN' });
+
+    const student = component.students().find((s) => s.studentId === 'student-active');
+    expect(student?.status).toBe('AN');
   });
 });

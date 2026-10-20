@@ -365,7 +365,7 @@ export class DashboardLayoutComponent {
   }
 
   logout(): void {
-    this.authService.logout();
+    void this.authService.logout();
   }
 
   sidebarClasses(): string {

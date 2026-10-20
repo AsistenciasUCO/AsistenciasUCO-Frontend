@@ -26,7 +26,7 @@ import { Course } from '../../../../../core/models/course.model';
                   Inscripción y Matrícula al Grupo
                 </h3>
                 <p class="text-xs text-emerald-200">
-                  {{ curso()?.name }} • {{ curso()?.code }} ({{ curso()?.section }})
+                  {{ curso()?.name }}{{ curso()?.code ? ' • ' + curso()?.code : '' }} ({{ curso()?.section }})
                 </p>
               </div>
             </div>
@@ -82,7 +82,7 @@ import { Course } from '../../../../../core/models/course.model';
                   />
                 </div>
                 <span class="text-[11px] font-mono text-warm-500">
-                  ID: {{ curso()?.code }}
+                  ID: {{ curso()?.code || curso()?.id }}
                 </span>
               </div>
             </div>
@@ -131,7 +131,7 @@ export class TeacherMatriculaModalComponent {
   copiarPin(): void {
     const id = this.curso()?.id;
     if (id) {
-      navigator.clipboard?.writeText(id);
+      void navigator.clipboard?.writeText(id);
       this.toast.success('Código PIN de matrícula copiado al portapapeles.');
     }
   }
@@ -140,7 +140,7 @@ export class TeacherMatriculaModalComponent {
     const id = this.curso()?.id;
     if (id) {
       const url = `${window.location.origin}/app/estudiante/materias?matricularGrupo=${encodeURIComponent(id)}`;
-      navigator.clipboard?.writeText(url);
+      void navigator.clipboard?.writeText(url);
       this.toast.success('Enlace de matrícula copiado al portapapeles.');
     }
   }

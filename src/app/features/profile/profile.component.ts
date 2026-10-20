@@ -344,9 +344,12 @@ export class ProfileComponent implements OnInit {
 
   ngOnInit(): void {
     this.resetForm();
-    this.authService.fetchProfileFromBackend().then(() => {
-      this.resetForm();
-    });
+    void this.authService
+      .fetchProfileFromBackend()
+      .then(() => {
+        this.resetForm();
+      })
+      .catch(() => {});
   }
 
   enableEditing(): void {
@@ -416,7 +419,7 @@ export class ProfileComponent implements OnInit {
     if (window.history.length > 1) {
       this.location.back();
     } else {
-      this.router.navigate(['/app/dashboard']);
+      void this.router.navigate(['/app/dashboard']);
     }
   }
 

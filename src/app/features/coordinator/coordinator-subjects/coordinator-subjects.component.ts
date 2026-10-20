@@ -332,7 +332,7 @@ export class CoordinatorSubjectsComponent implements OnInit {
     if (!q) return this.courses();
     return this.courses().filter(
       (c) =>
-        c.code.toLowerCase().includes(q) ||
+        (c.code ?? '').toLowerCase().includes(q) ||
         c.name.toLowerCase().includes(q) ||
         c.section.toLowerCase().includes(q) ||
         (c.room || '').toLowerCase().includes(q)
@@ -403,7 +403,7 @@ export class CoordinatorSubjectsComponent implements OnInit {
   }
 
   irAMallaPlan(planId: string): void {
-    this.router.navigate(['/app/coordinador/planes-estudio', planId, 'malla']).catch(() => {});
+    void this.router.navigate(['/app/coordinador/planes-estudio', planId, 'malla']);
   }
 
   getTipoBadgeVariant(componente: string): BadgeVariant {
