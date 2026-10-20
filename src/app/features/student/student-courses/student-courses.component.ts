@@ -246,7 +246,7 @@ export class StudentCoursesComponent implements OnInit, OnDestroy {
         estudianteCodigo: '202210101',
         estudianteCorreo: currentUser?.email || 'estudiante@uco.edu.co',
         cursoId: curso.id,
-        cursoCodigo: curso.code,
+        cursoCodigo: curso.code ?? '',
         cursoNombre: curso.name,
         grupo: curso.section,
         motivo: event.motivo.trim(),

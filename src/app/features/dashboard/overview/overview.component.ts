@@ -342,7 +342,7 @@ export class OverviewComponent implements OnInit {
           const parsed = parseScheduleString(c.schedule);
           for (const p of parsed) {
             items.push({
-              codigoMateria: c.code,
+              codigoMateria: c.code ?? '',
               nombreMateria: c.name,
               dia: p.dia,
               horaInicio: p.horaInicio,
