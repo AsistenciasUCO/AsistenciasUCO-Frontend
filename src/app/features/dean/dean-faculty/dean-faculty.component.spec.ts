@@ -58,6 +58,8 @@ describe('DeanFacultyComponent', () => {
       `${environment.apiUrl}/admin/espacios-fisicos`,
       `${environment.apiUrl}/admin/facultades`,
       `${environment.apiUrl}/admin/areas`,
+      `${environment.apiUrl}/admin/parametros`,
+      `${environment.apiUrl}/admin/auditoria`,
       `${environment.apiUrl}/coordinador/planes-estudio`,
       `${environment.apiUrl}/coordinador/periodos-academicos`,
     ];
