@@ -193,6 +193,7 @@ describe('DeanCoordinadoresComponent', () => {
     component.formData.primerApellido = 'Henao';
     component.formData.correo = 'jorge.henao@uco.edu.co';
     component.formData.programaAcademico = 'Ingeniería de Sistemas';
+    component.formData.password = 'ClaveSegura2026!';
 
     component.guardarCoordinador();
 
@@ -288,6 +289,7 @@ describe('DeanCoordinadoresComponent', () => {
     component.formData.primerNombre = 'Elena';
     component.formData.primerApellido = 'Montoya';
     component.formData.correo = 'elena.montoya@uco.edu.co';
+    component.formData.password = 'ClaveSegura2026!';
 
     component.guardarCoordinador();
 
