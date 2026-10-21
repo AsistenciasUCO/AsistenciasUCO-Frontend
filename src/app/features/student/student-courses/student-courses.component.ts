@@ -122,15 +122,15 @@ type VistaEstudiante = 'LISTA' | 'DETALLE' | 'RECLAMO' | 'SOLICITAR_MATRICULA';
   `,
 })
 export class StudentCoursesComponent implements OnInit, OnDestroy {
-  private route = inject(ActivatedRoute);
-  private studentService = inject(StudentManagementService);
-  private claimService = inject(AttendanceClaimService);
-  private authService = inject(AuthService);
-  private coordinatorService = inject(CoordinatorManagementService);
-  private courseService = inject(CourseService);
-  private sessionService = inject(SessionService);
-  private toast = inject(ToastService);
-  private sessionTimeZone = inject(SessionTimeZoneService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly studentService = inject(StudentManagementService);
+  private readonly claimService = inject(AttendanceClaimService);
+  private readonly authService = inject(AuthService);
+  private readonly coordinatorService = inject(CoordinatorManagementService);
+  private readonly courseService = inject(CourseService);
+  private readonly sessionService = inject(SessionService);
+  private readonly toast = inject(ToastService);
+  private readonly sessionTimeZone = inject(SessionTimeZoneService);
 
   vistaActual = signal<VistaEstudiante>('LISTA');
   materias = signal<MateriaEstudianteItem[]>([]);

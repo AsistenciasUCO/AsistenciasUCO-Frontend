@@ -40,7 +40,7 @@ const ESTADOS_ASISTENCIA: readonly EstadoAsistenciaSesionEstudiante[] = [
 ];
 
 /** Estados con los que el estudiante puede pedir revision; `NO_DISPONIBLE` jamas habilita un reclamo. */
-const ESTADOS_RECLAMABLES: readonly EstadoAsistenciaSesionEstudiante[] = ['AUSENTE', 'RETARDO'];
+const ESTADOS_RECLAMABLES = new Set<EstadoAsistenciaSesionEstudiante>(['AUSENTE', 'RETARDO']);
 
 /** Nombres de estado de solicitud que entrega el catalogo de la DB (`pendiente`, `aceptada`, `rechazada`). */
 const SOLICITUD_POR_NOMBRE: Record<string, EstadoSolicitudRevision> = {
@@ -60,7 +60,11 @@ function texto(value: unknown): string | null {
 
 function hashColor(seed: string): HorarioItem['colorCategory'] {
   let hash = 0;
-  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < seed.length; i++) {
+    const codePoint = seed.codePointAt(i) ?? 0;
+    hash = (hash * 31 + codePoint) >>> 0;
+    if (codePoint > 0xffff) i++;
+  }
   return COLORES[hash % COLORES.length];
 }
 
@@ -97,7 +101,9 @@ export function normalizeDia(value: unknown): DiaSemana | null {
 function descartadas(recurso: string, crudos: readonly unknown[], validos: number, descartada?: unknown): void {
   if (crudos.length <= validos) return;
   const campos =
-    descartada && typeof descartada === 'object' ? Object.keys(descartada as Record<string, unknown>).sort() : [];
+    descartada && typeof descartada === 'object'
+      ? Object.keys(descartada as Record<string, unknown>).sort((a, b) => a.localeCompare(b))
+      : [];
   console.warn(
     `[student-portal] ${crudos.length - validos} de ${crudos.length} ${recurso} descartadas por no cumplir el contrato.`,
     { campos }
@@ -190,7 +196,8 @@ export class StudentPortalMapper {
     const inicio = StudentPortalMapper.presentarInstante(dto.fechaHoraInicio, format);
     const fin = StudentPortalMapper.presentarInstante(dto.fechaHoraFin, format);
     const fecha = inicio?.date ?? NO_INFORMADO;
-    const horario = inicio ? (fin ? `${inicio.time} - ${fin.time}` : inicio.time) : NO_INFORMADO;
+    let horario = NO_INFORMADO;
+    if (inicio) horario = fin ? `${inicio.time} - ${fin.time}` : inicio.time;
     const estado = ESTADOS_ASISTENCIA.find((valor) => valor === dto.estadoAsistencia) ?? 'NO_DISPONIBLE';
     const solicitudRevision = estadoSolicitud(dto.estadoSolicitudRevision);
 
@@ -206,7 +213,7 @@ export class StudentPortalMapper {
       tema: texto(dto.nombre) ?? texto(dto.codigo) ?? `Sesión ${dto.numero}`,
       estadoAsistencia: estado,
       solicitudRevision,
-      reclamable: dto.reclamable === true && ESTADOS_RECLAMABLES.includes(estado) && solicitudRevision === null,
+      reclamable: dto.reclamable === true && ESTADOS_RECLAMABLES.has(estado) && solicitudRevision === null,
     };
   }
 

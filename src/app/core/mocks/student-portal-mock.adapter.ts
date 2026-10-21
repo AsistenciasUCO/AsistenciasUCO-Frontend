@@ -13,14 +13,16 @@ export function mockUuid(seed: string): string {
   const hex: string[] = [];
   for (let round = 0; round < 4; round++) {
     for (let i = 0; i < seed.length; i++) {
-      h1 = Math.imul(h1 ^ (seed.charCodeAt(i) + round), 0x01000193) >>> 0;
+      const codePoint = seed.codePointAt(i) ?? 0;
+      h1 = Math.imul(h1 ^ (codePoint + round), 0x01000193) >>> 0;
       h2 = Math.imul(h2 + h1 + i, 0x85ebca6b) >>> 0;
+      if (codePoint > 0xffff) i++;
     }
     hex.push(h1.toString(16).padStart(8, '0'), h2.toString(16).padStart(8, '0'));
   }
   const flat = hex.join('').slice(0, 32).split('');
   flat[12] = '4';
-  flat[16] = '89ab'[parseInt(flat[16], 16) % 4];
+  flat[16] = '89ab'[Number.parseInt(flat[16], 16) % 4];
   const joined = flat.join('');
   return `${joined.slice(0, 8)}-${joined.slice(8, 12)}-${joined.slice(12, 16)}-${joined.slice(16, 20)}-${joined.slice(20, 32)}`;
 }
