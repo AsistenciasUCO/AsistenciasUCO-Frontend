@@ -183,6 +183,17 @@ describe('DeanCoordinadoresComponent', () => {
     component.formData.programaAcademico = '';
     component.guardarCoordinador();
     expect(toastService.warning).toHaveBeenCalled();
+
+    // Con programa pero sin contraseña
+    component.formData.programaAcademico = 'Ingeniería de Sistemas';
+    component.formData.password = '';
+    component.guardarCoordinador();
+    expect(toastService.warning).toHaveBeenCalledWith('El campo Contraseña Inicial IAM es obligatorio.');
+
+    // Con contraseña inválida (sin cumplir política o con documento)
+    component.formData.password = '123';
+    component.guardarCoordinador();
+    expect(toastService.warning).toHaveBeenCalled();
   });
 
   it('guardarCoordinador envía POST y agrega el nuevo coordinador a la lista', () => {
