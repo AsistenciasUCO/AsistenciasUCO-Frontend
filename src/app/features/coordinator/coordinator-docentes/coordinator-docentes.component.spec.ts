@@ -22,6 +22,7 @@ describe('CoordinatorDocentesComponent', () => {
     getDocentesPrograma: jasmine.Spy;
     getCandidatosDocente: jasmine.Spy;
     vincularDocente: jasmine.Spy;
+    actualizarDocente: jasmine.Spy;
     getTiposVinculacion: jasmine.Spy;
   };
   let catalogService: jasmine.SpyObj<CatalogService>;
@@ -83,6 +84,7 @@ describe('CoordinatorDocentesComponent', () => {
         of({ exitoso: true, total: 1, datos: [{ idDocente: 'doc-9', idUsuario: 'u-9', codigoTipoIdentificacion: 'CC', numeroIdentificacion: 5, nombreCompleto: 'Maria Rostagno' } as DocenteCandidato] })
       ),
       vincularDocente: jasmine.createSpy('vincularDocente').and.returnValue(of({ exitoso: true, mensajeUsuario: 'ok', datos: fila('doc-3', 'Nuevo') })),
+      actualizarDocente: jasmine.createSpy('actualizarDocente').and.returnValue(of({ exitoso: true, mensajeUsuario: 'Docente actualizado.', datos: fila('doc-1', 'Roberto') })),
       getTiposVinculacion: jasmine.createSpy('getTiposVinculacion').and.returnValue(of([{ id: 'tv-1', codigo: 'CAT', nombre: 'Cátedra' }])),
     };
     catalogService = jasmine.createSpyObj<CatalogService>('CatalogService', ['getTiposIdentificacion']);
@@ -291,6 +293,67 @@ describe('CoordinatorDocentesComponent', () => {
 
     expect(toast.error).toHaveBeenCalledWith('El docente ya está vinculado a este programa.');
     expect(component.formularioAbierto()).toBeTrue();
+  }));
+
+  it('HU092: abrirEdicion/cerrarEdicion controlan el modal de edición', fakeAsync(() => {
+    crear();
+    tick(300);
+    const docente = fila('doc-1', 'Roberto');
+
+    component.abrirEdicion(docente);
+    fixture.detectChanges();
+    expect(component.docenteEnEdicion()).toBe(docente);
+    expect(fixture.nativeElement.querySelector('app-coordinator-docente-edit-modal')).toBeTruthy();
+
+    component.cerrarEdicion();
+    fixture.detectChanges();
+    expect(component.docenteEnEdicion()).toBeNull();
+    expect(fixture.nativeElement.querySelector('app-coordinator-docente-edit-modal')).toBeNull();
+  }));
+
+  it('HU092: guardarEdicion actualiza, avisa, cierra y recarga desde el servidor (sin actualización optimista)', fakeAsync(() => {
+    crear();
+    tick(300);
+    component.abrirEdicion(fila('doc-1', 'Roberto'));
+    coordService.getDocentesPrograma.calls.reset();
+
+    component.guardarEdicion({ idTipoVinculacion: 'tv-2', primerNombre: 'Nuevo' });
+    fixture.detectChanges();
+    tick(300);
+
+    expect(coordService.actualizarDocente).toHaveBeenCalledWith('doc-1', { idTipoVinculacion: 'tv-2', primerNombre: 'Nuevo' });
+    expect(toast.success).toHaveBeenCalledWith('Docente actualizado.');
+    expect(component.docenteEnEdicion()).toBeNull();
+    expect(coordService.getDocentesPrograma).toHaveBeenCalledTimes(1);
+  }));
+
+  it('HU092: un error al actualizar muestra el mensaje y mantiene el modal abierto', fakeAsync(() => {
+    coordService.actualizarDocente.and.returnValue(
+      throwError(() => new HttpErrorResponse({
+        status: 404,
+        error: {
+          timestamp: '2026-10-22T10:00:00Z', status: 404, error: 'Not Found', code: 'ERR_DOCENTE_NO_VINCULADO_PROGRAMA',
+          message: 'El docente no está vinculado a este programa.', path: '/api/v1/coordinador/docentes/doc-1', correlationId: null,
+        },
+      }))
+    );
+    crear();
+    tick(300);
+    component.abrirEdicion(fila('doc-1', 'Roberto'));
+
+    component.guardarEdicion({ primerNombre: 'Nuevo' });
+
+    expect(toast.error).toHaveBeenCalledWith('El docente no está vinculado a este programa.');
+    expect(component.docenteEnEdicion()).not.toBeNull();
+  }));
+
+  it('HU092: guardarEdicion sin docente seleccionado no llama al servicio', fakeAsync(() => {
+    crear();
+    tick(300);
+
+    component.guardarEdicion({ primerNombre: 'Nuevo' });
+
+    expect(coordService.actualizarDocente).not.toHaveBeenCalled();
   }));
 
   it('verFichaDocente empareja cursos por idDocente real y cerrarFichaDocente limpia', fakeAsync(() => {

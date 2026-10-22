@@ -4,6 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { CoordinatorManagementService } from './coordinator-management.service';
 import { environment } from '../../../environments/environment';
 import {
+  ActualizarDocentePayload,
   DocentePrograma,
   VincularDocenteExistentePayload,
   VincularDocenteNuevoPayload,
@@ -240,6 +241,28 @@ describe('CoordinatorManagementService', () => {
       );
 
       expect(message).toBe('El docente ya está vinculado a este programa.');
+    });
+
+    it('actualizarDocente (HU092) envía PUT con solo los campos indicados y no toca la lista local', () => {
+      const payload: ActualizarDocentePayload = { idTipoVinculacion: 'tv-2', primerNombre: 'Nuevo', segundoApellido: '' };
+
+      service.actualizarDocente('doc-1', payload).subscribe((res) => expect(res.datos.idDocente).toBe('doc-1'));
+
+      const req = http.expectOne(`${environment.apiUrl}/coordinador/docentes/doc-1`);
+      expect(req.request.method).toBe('PUT');
+      expect(req.request.body).toEqual(payload);
+      req.flush({ exitoso: true, datos: fila });
+      expect(service.docentes()).toEqual([]);
+    });
+
+    it('actualizarDocente propaga el 404 para que la UI muestre el mensaje del backend', () => {
+      let status = 0;
+      service.actualizarDocente('doc-x', { primerNombre: 'A' }).subscribe({ error: (e) => (status = e.status) });
+
+      http.expectOne(`${environment.apiUrl}/coordinador/docentes/doc-x`)
+        .flush({ message: 'El docente no está vinculado a este programa.' }, { status: 404, statusText: 'Not Found' });
+
+      expect(status).toBe(404);
     });
 
     it('getTiposVinculacion consulta el catálogo de la DB', () => {
