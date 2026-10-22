@@ -47,7 +47,11 @@ describe('DeanProgramasGestionComponent', () => {
     iniciar();
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    // Tras una mutacion exitosa el componente recarga tambien los coordinadores disponibles.
+    http.match(`${api}/decano/coordinadores`).forEach((r) => r.flush({ exitoso: true, datos: [] }));
+    http.verify();
+  });
 
   it('carga la primera página al iniciar y expone el total', () => {
     expect(component.service.programas()).toEqual([programa]);
