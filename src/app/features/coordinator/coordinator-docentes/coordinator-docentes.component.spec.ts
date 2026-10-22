@@ -1,288 +1,483 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { of } from 'rxjs';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { signal } from '@angular/core';
+import { By } from '@angular/platform-browser';
+import { HttpErrorResponse } from '@angular/common/http';
+import { of, throwError } from 'rxjs';
 import { CoordinatorDocentesComponent } from './coordinator-docentes.component';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
 import { CatalogService } from '../../../core/services/catalog.service';
 import { CourseService } from '../../../core/services/course.service';
 import { ToastService } from '../../../shared/components/toast/toast.component';
 import { Course } from '../../../core/models/course.model';
-import { DocenteItem } from '../../../core/models/role-management.model';
+import { DocentePrograma, DocenteCandidato } from '../../../core/models/docente-programa.model';
 
 describe('CoordinatorDocentesComponent', () => {
   let fixture: ComponentFixture<CoordinatorDocentesComponent>;
   let component: CoordinatorDocentesComponent;
-  let coordinatorService: jasmine.SpyObj<CoordinatorManagementService>;
+  let docentesSignal: ReturnType<typeof signal<DocentePrograma[]>>;
+  let totalSignal: ReturnType<typeof signal<number>>;
+  let coordService: {
+    docentes: ReturnType<typeof signal<DocentePrograma[]>>;
+    totalDocentes: ReturnType<typeof signal<number>>;
+    getDocentesPrograma: jasmine.Spy;
+    getCandidatosDocente: jasmine.Spy;
+    vincularDocente: jasmine.Spy;
+    actualizarDocente: jasmine.Spy;
+    cambiarEstadoDocente: jasmine.Spy;
+    getTiposVinculacion: jasmine.Spy;
+  };
   let catalogService: jasmine.SpyObj<CatalogService>;
   let courseService: jasmine.SpyObj<CourseService>;
-  let toastService: jasmine.SpyObj<ToastService>;
+  let toast: jasmine.SpyObj<ToastService>;
 
-  const docente1: DocenteItem = {
-    id: 'doc-1',
-    numeroIdentificacion: '9999',
-    nombres: 'Roberto',
-    apellidos: 'Gómez',
-    correo: 'rgomez@uco.edu.co',
-    departamento: 'Ingeniería',
-    especialidad: 'Software',
-    estado: 'ACTIVO',
-    totalGruposAsignados: 2,
-  };
+  const fila = (id: string, nombre: string, activo = true): DocentePrograma => ({
+    idDocentePrograma: `dp-${id}`,
+    idDocente: id,
+    idUsuario: `u-${id}`,
+    codigoTipoIdentificacion: 'CC',
+    numeroIdentificacion: 1017000000 + Number(id.replace(/\D/g, '') || 0),
+    primerNombre: nombre,
+    segundoNombre: null,
+    primerApellido: 'Prueba',
+    segundoApellido: null,
+    nombreCompleto: `${nombre} Prueba`,
+    correo: `${nombre.toLowerCase()}@uco.edu.co`,
+    idTipoVinculacion: 'tv-1',
+    codigoTipoVinculacion: 'CAT',
+    nombreTipoVinculacion: 'Cátedra',
+    fechaVinculacionUtc: '2026-10-22T10:00:00Z',
+    totalGruposPrograma: 2,
+    estaActivo: activo,
+  });
 
-  const docente2: DocenteItem = {
-    id: 'doc-2',
-    numeroIdentificacion: '8888',
-    nombres: 'Luisa',
-    apellidos: 'Castro',
-    correo: 'lcastro@uco.edu.co',
-    departamento: 'Ciencias Básicas',
-    especialidad: 'Matemáticas',
-    estado: 'INACTIVO',
-    totalGruposAsignados: 0,
-  };
-
-  const cursoRelacionado: Course = {
+  const curso: Course = {
     id: 'crs-1',
     code: 'MAT-301',
     name: 'Matemática Avanzada III',
     section: 'Sección A',
-    schedule: 'Lun, Mié 08:00 - 10:00 AM',
-    room: 'Aula A-204',
+    schedule: 'Lun 08:00',
+    room: 'A-204',
     enrolledStudentsCount: 32,
     cupoMaximo: 35,
     docenteId: 'doc-1',
-    docenteName: 'Roberto Gómez',
+    docenteName: 'Roberto',
     colorCategory: 'emerald',
   };
 
-  beforeEach(() => {
-    coordinatorService = jasmine.createSpyObj<CoordinatorManagementService>(
-      'CoordinatorManagementService',
-      ['getDocentes', 'toggleDocenteStatus', 'createDocente']
-    );
-    catalogService = jasmine.createSpyObj<CatalogService>('CatalogService', [
-      'getTiposIdentificacion',
-      'getDepartamentosAcademicos',
-    ]);
-    courseService = jasmine.createSpyObj<CourseService>('CourseService', [
-      'getCoordinatorCourses',
-    ]);
-    toastService = jasmine.createSpyObj<ToastService>('ToastService', [
-      'success',
-      'error',
-      'warning',
-      'info',
-    ]);
+  function crear(): void {
+    fixture = TestBed.createComponent(CoordinatorDocentesComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  }
 
-    coordinatorService.getDocentes.and.returnValue(
-      of({ exitoso: true, datos: [docente1, docente2] })
-    );
+  beforeEach(() => {
+    docentesSignal = signal<DocentePrograma[]>([]);
+    totalSignal = signal(0);
+    coordService = {
+      docentes: docentesSignal,
+      totalDocentes: totalSignal,
+      getDocentesPrograma: jasmine.createSpy('getDocentesPrograma').and.callFake(() => {
+        docentesSignal.set([fila('doc-1', 'Roberto'), fila('doc-2', 'Luisa', false)]);
+        totalSignal.set(12);
+        return of({ exitoso: true, datos: docentesSignal(), total: 12 });
+      }),
+      getCandidatosDocente: jasmine.createSpy('getCandidatosDocente').and.returnValue(
+        of({ exitoso: true, total: 1, datos: [{ idDocente: 'doc-9', idUsuario: 'u-9', codigoTipoIdentificacion: 'CC', numeroIdentificacion: 5, nombreCompleto: 'Maria Rostagno' } as DocenteCandidato] })
+      ),
+      vincularDocente: jasmine.createSpy('vincularDocente').and.returnValue(of({ exitoso: true, mensajeUsuario: 'ok', datos: fila('doc-3', 'Nuevo') })),
+      actualizarDocente: jasmine.createSpy('actualizarDocente').and.returnValue(of({ exitoso: true, mensajeUsuario: 'Docente actualizado.', datos: fila('doc-1', 'Roberto') })),
+      cambiarEstadoDocente: jasmine.createSpy('cambiarEstadoDocente').and.returnValue(of({ exitoso: true, mensajeUsuario: 'Estado del docente actualizado.', datos: fila('doc-1', 'Roberto', false) })),
+      getTiposVinculacion: jasmine.createSpy('getTiposVinculacion').and.returnValue(of([{ id: 'tv-1', codigo: 'CAT', nombre: 'Cátedra' }])),
+    };
+    catalogService = jasmine.createSpyObj<CatalogService>('CatalogService', ['getTiposIdentificacion']);
     catalogService.getTiposIdentificacion.and.returnValue(
       of({ exitoso: true, datos: [{ id: 'tipo-1', tipoIdentificacion: 'CC', nombre: 'Cédula' }] })
     );
-    catalogService.getDepartamentosAcademicos.and.returnValue(
-      of({ exitoso: true, datos: ['Ingeniería', 'Ciencias Básicas'] })
-    );
-    courseService.getCoordinatorCourses.and.returnValue(
-      of({ exitoso: true, datos: [cursoRelacionado] })
-    );
+    courseService = jasmine.createSpyObj<CourseService>('CourseService', ['getCoordinatorCourses']);
+    courseService.getCoordinatorCourses.and.returnValue(of({ exitoso: true, datos: [curso] }));
+    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'warning', 'info']);
 
     TestBed.configureTestingModule({
       imports: [CoordinatorDocentesComponent],
       providers: [
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        { provide: CoordinatorManagementService, useValue: coordinatorService },
+        { provide: CoordinatorManagementService, useValue: coordService },
         { provide: CatalogService, useValue: catalogService },
         { provide: CourseService, useValue: courseService },
-        { provide: ToastService, useValue: toastService },
+        { provide: ToastService, useValue: toast },
       ],
     });
+  });
 
-    fixture = TestBed.createComponent(CoordinatorDocentesComponent);
-    component = fixture.componentInstance;
+  it('T-FE-02: carga el directorio una sola vez tras el debounce y los catálogos', fakeAsync(() => {
+    crear();
+    expect(coordService.getDocentesPrograma).not.toHaveBeenCalled(); // aún dentro del debounce
+    tick(300);
     fixture.detectChanges();
-  });
 
-  it('debe crearse e inicializar la lista de docentes y cursos', () => {
-    expect(component).toBeTruthy();
-    expect(component.docentes().length).toBe(2);
-    expect(component.allCourses().length).toBe(1);
+    expect(coordService.getDocentesPrograma).toHaveBeenCalledTimes(1);
+    expect(coordService.getDocentesPrograma.calls.mostRecent().args[0]).toEqual(
+      jasmine.objectContaining({ pagina: 1, tamano: 10 })
+    );
+    expect(coordService.getTiposVinculacion).toHaveBeenCalled();
+    expect(catalogService.getTiposIdentificacion).toHaveBeenCalled();
     expect(component.isLoading()).toBeFalse();
-  });
+    expect(fixture.nativeElement.textContent).toContain('Roberto Prueba');
+  }));
 
-  it('filteredDocentes filtra por término de búsqueda', () => {
-    component.searchQuery = 'roberto';
-    component.docentes.set([...component.docentes()]);
-    expect(component.filteredDocentes().length).toBe(1);
-    expect(component.filteredDocentes()[0].nombres).toBe('Roberto');
-  });
+  it('T-FE-02: la búsqueda se filtra en el servidor con una sola llamada por término (debounce 300 ms)', fakeAsync(() => {
+    crear();
+    tick(300);
+    coordService.getDocentesPrograma.calls.reset();
 
-  it('filteredDocentes filtra por estado', () => {
-    component.selectedEstado = 'INACTIVO';
-    component.docentes.set([...component.docentes()]);
-    expect(component.filteredDocentes().length).toBe(1);
-    expect(component.filteredDocentes()[0].nombres).toBe('Luisa');
-  });
+    component.onBusquedaChange('r');
+    fixture.detectChanges();
+    tick(100);
+    component.onBusquedaChange('ro');
+    fixture.detectChanges();
+    tick(100);
+    component.onBusquedaChange('ros');
+    fixture.detectChanges();
+    tick(300);
 
-  it('verFichaDocente() empareja cursos por docenteId real', () => {
-    component.verFichaDocente(docente1);
-    expect(component.docenteSeleccionado()).toBe(docente1);
-    expect(component.cursosDocente().length).toBe(1);
-    expect(component.cursosDocente()[0].id).toBe('crs-1');
-  });
-
-  it('cerrarFichaDocente() limpia la selección de ficha', () => {
-    component.verFichaDocente(docente1);
-    component.cerrarFichaDocente();
-    expect(component.docenteSeleccionado()).toBeNull();
-    expect(component.cursosDocente().length).toBe(0);
-  });
-
-  it('abrirFormularioRegistro y volverALista cambian la vista correctamente', () => {
-    component.abrirFormularioRegistro();
-    expect(component.vistaActual()).toBe('REGISTRO');
-
-    component.volverALista();
-    expect(component.vistaActual()).toBe('LISTA');
-  });
-
-  it('toggleEstado alterna el estado del docente y notifica éxito', () => {
-    coordinatorService.toggleDocenteStatus.and.returnValue(
-      of({ exitoso: true, mensajeUsuario: 'Estado actualizado', datos: { ...docente1, estado: 'INACTIVO' } })
+    expect(coordService.getDocentesPrograma).toHaveBeenCalledTimes(1);
+    expect(coordService.getDocentesPrograma.calls.mostRecent().args[0]).toEqual(
+      jasmine.objectContaining({ busqueda: 'ros', pagina: 1 })
     );
+  }));
 
-    component.toggleEstado(docente1);
+  it('el filtro de estado se envía como estaActivo y reinicia la página', fakeAsync(() => {
+    crear();
+    tick(300);
+    component.onPageChange(3);
+    fixture.detectChanges();
+    tick(300);
+    coordService.getDocentesPrograma.calls.reset();
 
-    expect(coordinatorService.toggleDocenteStatus).toHaveBeenCalledWith('doc-1');
-    expect(toastService.success).toHaveBeenCalledWith('Estado actualizado');
-  });
+    component.onEstadoChange('INACTIVO');
+    fixture.detectChanges();
+    tick(300);
 
-  it('onNumeroIdentificacionInput limpia caracteres no numéricos', () => {
-    const event = { target: { value: '1017-999-ABC' } } as unknown as Event;
-    component.onNumeroIdentificacionInput(event);
-    expect(component.formData.numeroIdentificacion).toBe('1017999');
-  });
+    const filtro = coordService.getDocentesPrograma.calls.mostRecent().args[0];
+    expect(filtro.estaActivo).toBeFalse();
+    expect(filtro.pagina).toBe(1);
+  }));
 
-  it('guardarDocente valida campos obligatorios antes de enviar', () => {
-    component.abrirFormularioRegistro();
+  it('el cambio de página consulta la página pedida', fakeAsync(() => {
+    crear();
+    tick(300);
+    coordService.getDocentesPrograma.calls.reset();
 
-    // Sin documento
-    component.formData.numeroIdentificacion = '';
-    component.guardarDocente();
-    expect(toastService.warning).toHaveBeenCalled();
+    component.onPageChange(2);
+    fixture.detectChanges();
+    tick(300);
 
-    // Sin primer nombre
-    component.formData.numeroIdentificacion = '1017123456';
-    component.formData.primerNombre = '';
-    component.guardarDocente();
-    expect(toastService.warning).toHaveBeenCalled();
+    expect(coordService.getDocentesPrograma.calls.mostRecent().args[0].pagina).toBe(2);
+  }));
 
-    // Sin primer apellido
-    component.formData.primerNombre = 'Jorge';
-    component.formData.primerApellido = '';
-    component.guardarDocente();
-    expect(toastService.warning).toHaveBeenCalled();
-
-    // Correo inválido
-    component.formData.primerApellido = 'Gómez';
-    component.formData.correo = 'correo-no-valido';
-    component.guardarDocente();
-    expect(toastService.warning).toHaveBeenCalled();
-
-    // Sin especialidad
-    component.formData.correo = 'jorge.gomez@uco.edu.co';
-    component.formData.especialidad = '';
-    component.guardarDocente();
-    expect(toastService.warning).toHaveBeenCalled();
-  });
-
-  it('guardarDocente registra un nuevo docente exitosamente', () => {
-    component.abrirFormularioRegistro();
-    component.formData.numeroIdentificacion = '1017888777';
-    component.formData.primerNombre = 'Esteban';
-    component.formData.primerApellido = 'Quintero';
-    component.formData.correo = 'esteban.quintero@uco.edu.co';
-    component.formData.especialidad = 'Inteligencia Artificial';
-    component.formData.departamento = 'Departamento de Ciencias Computacionales';
-
-    coordinatorService.createDocente.and.returnValue(
-      of({
-        exitoso: true,
-        mensajeUsuario: 'Docente registrado exitosamente.',
-        datos: {
-          id: 'doc-nuevo',
-          ...component.formData,
-          totalGruposAsignados: 0,
-        },
-      })
+  it('un error del directorio muestra el mensaje del backend y deja de cargar', fakeAsync(() => {
+    coordService.getDocentesPrograma.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 403, error: { message: 'Sin permiso' } }))
     );
+    crear();
+    tick(300);
 
-    component.guardarDocente();
+    expect(toast.error).toHaveBeenCalled();
+    expect(component.isLoading()).toBeFalse();
+  }));
 
-    expect(coordinatorService.createDocente).toHaveBeenCalled();
-    expect(component.docentes().length).toBe(3);
-    expect(component.vistaActual()).toBe('LISTA');
-    expect(toastService.success).toHaveBeenCalled();
-  });
-
-  it('abrirModalSeleccionarDocente y onSolicitarRegistroNuevo manejan estado del modal', () => {
-    expect(component.isPickerModalOpen()).toBeFalse();
-    component.abrirModalSeleccionarDocente();
-    expect(component.isPickerModalOpen()).toBeTrue();
-    component.onSolicitarRegistroNuevo();
-    expect(component.isPickerModalOpen()).toBeFalse();
-    expect(component.vistaActual()).toBe('REGISTRO');
-  });
-
-  it('onDocenteSeleccionadoDelDirectorio avisa si el docente ya está en el claustro', () => {
-    component.onDocenteSeleccionadoDelDirectorio({
-      id: 'doc-1',
-      numeroIdentificacion: '12345678',
-      nombres: 'Roberto',
-      apellidos: 'Gómez',
-      correo: 'roberto.gomez@uco.edu.co',
+  it('el directorio vacío muestra el estado vacío', fakeAsync(() => {
+    coordService.getDocentesPrograma.and.callFake(() => {
+      docentesSignal.set([]);
+      totalSignal.set(0);
+      return of({ exitoso: true, datos: [], total: 0 });
     });
+    crear();
+    tick(300);
+    fixture.detectChanges();
 
-    expect(toastService.info).toHaveBeenCalled();
-  });
+    expect(fixture.nativeElement.textContent).toContain('No se encontraron docentes');
+  }));
 
-  it('onDocenteSeleccionadoDelDirectorio vincula un nuevo docente del directorio', () => {
-    const userPicker = {
-      id: 'usr-nuevo-dir',
-      numeroIdentificacion: '1017444555',
-      nombres: 'Laura',
-      apellidos: 'Cardona',
-      correo: 'laura.cardona@uco.edu.co',
-      tipoIdentificacion: 'CC',
+  it('HU093: el botón de estado está habilitado y solo pide confirmación; no llama al servicio todavía', fakeAsync(() => {
+    crear();
+    tick(300);
+    fixture.detectChanges();
+
+    const boton = fixture.debugElement.query(By.css('[data-testid="toggle-estado"]'));
+    expect(boton).toBeTruthy();
+    expect((boton.nativeElement as HTMLButtonElement).disabled).toBeFalse();
+
+    (boton.nativeElement as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(component.docentePendienteEstado()).not.toBeNull();
+    expect(coordService.cambiarEstadoDocente).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('[data-testid="confirmar-estado"]')).toBeTruthy();
+  }));
+
+  it('HU093: confirmar inactivación llama al servicio con el nuevo estado y recarga desde el servidor', fakeAsync(() => {
+    crear();
+    tick(300);
+    const activo = fila('doc-1', 'Roberto', true);
+    component.solicitarCambioEstado(activo);
+    coordService.getDocentesPrograma.calls.reset();
+
+    component.confirmarCambioEstado();
+    fixture.detectChanges();
+    tick(300);
+
+    expect(coordService.cambiarEstadoDocente).toHaveBeenCalledWith('doc-1', false);
+    expect(toast.success).toHaveBeenCalledWith('Estado del docente actualizado.');
+    expect(component.docentePendienteEstado()).toBeNull();
+    expect(coordService.getDocentesPrograma).toHaveBeenCalledTimes(1);
+  }));
+
+  it('HU093: confirmar sobre un docente inactivo lo reactiva (estaActivo=true)', fakeAsync(() => {
+    crear();
+    tick(300);
+    component.solicitarCambioEstado(fila('doc-2', 'Luisa', false));
+
+    component.confirmarCambioEstado();
+    tick(300);
+
+    expect(coordService.cambiarEstadoDocente).toHaveBeenCalledWith('doc-2', true);
+  }));
+
+  it('HU093: cancelar la confirmación no llama al servicio', fakeAsync(() => {
+    crear();
+    tick(300);
+    component.solicitarCambioEstado(fila('doc-1', 'Roberto'));
+
+    component.cancelarCambioEstado();
+
+    expect(component.docentePendienteEstado()).toBeNull();
+    expect(coordService.cambiarEstadoDocente).not.toHaveBeenCalled();
+  }));
+
+  it('HU093: confirmar sin docente pendiente no hace nada', fakeAsync(() => {
+    crear();
+    tick(300);
+
+    component.confirmarCambioEstado();
+
+    expect(coordService.cambiarEstadoDocente).not.toHaveBeenCalled();
+  }));
+
+  it('HU093: un error del backend se muestra y la lista no se modifica localmente', fakeAsync(() => {
+    coordService.cambiarEstadoDocente.and.returnValue(
+      throwError(() => new HttpErrorResponse({
+        status: 404,
+        error: {
+          timestamp: '2026-10-22T10:00:00Z', status: 404, error: 'Not Found', code: 'ERR_DOCENTE_NO_VINCULADO_PROGRAMA',
+          message: 'El docente no está vinculado a este programa.', path: '/api/v1/coordinador/docentes/doc-1/estado', correlationId: null,
+        },
+      }))
+    );
+    crear();
+    tick(300);
+    component.solicitarCambioEstado(fila('doc-1', 'Roberto'));
+    coordService.getDocentesPrograma.calls.reset();
+
+    component.confirmarCambioEstado();
+    tick(300);
+
+    expect(toast.error).toHaveBeenCalledWith('El docente no está vinculado a este programa.');
+    expect(component.docentePendienteEstado()).toBeNull();
+    expect(coordService.getDocentesPrograma).not.toHaveBeenCalled();
+  }));
+
+  it('abre y cierra el formulario de vinculación', fakeAsync(() => {
+    crear();
+    tick(300);
+
+    component.abrirFormulario();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('app-coordinator-docente-form-modal')).toBeTruthy();
+
+    component.cerrarFormulario();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('app-coordinator-docente-form-modal')).toBeNull();
+  }));
+
+  it('T-FE-04: buscarCandidatos exige 3 caracteres y consulta al backend', fakeAsync(() => {
+    crear();
+    tick(300);
+
+    component.buscarCandidatos('ab');
+    expect(coordService.getCandidatosDocente).not.toHaveBeenCalled();
+    expect(component.candidatos()).toEqual([]);
+
+    component.buscarCandidatos('ros');
+    expect(coordService.getCandidatosDocente).toHaveBeenCalledWith('ros');
+    expect(component.candidatos().length).toBe(1);
+  }));
+
+  it('buscarCandidatos con error muestra el mensaje y limpia la lista', fakeAsync(() => {
+    coordService.getCandidatosDocente.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 400, error: { message: 'corto' } }))
+    );
+    crear();
+    tick(300);
+
+    component.buscarCandidatos('ros');
+
+    expect(toast.error).toHaveBeenCalled();
+    expect(component.candidatos()).toEqual([]);
+  }));
+
+  it('guardarNuevo vincula, recarga desde el servidor y NO inserta localmente', fakeAsync(() => {
+    crear();
+    tick(300);
+    component.abrirFormulario();
+    coordService.getDocentesPrograma.calls.reset();
+    const payload = {
+      idTipoIdentificacion: 'tipo-1', numeroIdentificacion: '1017555444', primerNombre: 'Jorge', primerApellido: 'Henao',
+      correo: 'jorge@uco.edu.co', password: 'Clave1234!', idTipoVinculacion: 'tv-1',
     };
 
-    coordinatorService.createDocente.and.returnValue(
-      of({
-        exitoso: true,
-        datos: {
-          id: 'usr-nuevo-dir',
-          tipoIdentificacionId: 'tipo-1',
-          tipoIdentificacion: 'CC',
-          numeroIdentificacion: '1017444555',
-          primerNombre: 'Laura',
-          primerApellido: 'Cardona',
-          nombres: 'Laura',
-          apellidos: 'Cardona',
-          correo: 'laura.cardona@uco.edu.co',
-          departamento: 'Departamento de Ciencias Computacionales',
-          especialidad: 'Docencia Universitaria',
-          totalGruposAsignados: 0,
-          estado: 'ACTIVO',
+    component.guardarNuevo(payload);
+    fixture.detectChanges();
+    tick(300);
+
+    expect(coordService.vincularDocente).toHaveBeenCalledWith(payload);
+    expect(toast.success).toHaveBeenCalled();
+    expect(component.formularioAbierto()).toBeFalse();
+    expect(coordService.getDocentesPrograma).toHaveBeenCalledTimes(1); // recarga del servidor
+  }));
+
+  it('T-FE-04: guardarExistente envía idDocente e idTipoVinculacion', fakeAsync(() => {
+    crear();
+    tick(300);
+
+    component.guardarExistente({ idDocente: 'doc-9', idTipoVinculacion: 'tv-1' });
+
+    expect(coordService.vincularDocente).toHaveBeenCalledWith({ idDocente: 'doc-9', idTipoVinculacion: 'tv-1' });
+    tick(300); // vaciar el debounce de la recarga posterior al vinculo
+  }));
+
+  it('T-FE-06: el 409 se muestra tal cual lo devuelve el backend y el formulario sigue abierto', fakeAsync(() => {
+    coordService.vincularDocente.and.returnValue(
+      throwError(() => new HttpErrorResponse({
+        status: 409,
+        error: {
+          timestamp: '2026-10-22T10:00:00Z', status: 409, error: 'Conflict', code: 'ERR_DOCENTE_YA_VINCULADO_PROGRAMA',
+          message: 'El docente ya está vinculado a este programa.', path: '/api/v1/coordinador/docentes', correlationId: null,
         },
-      })
+      }))
     );
+    crear();
+    tick(300);
+    component.abrirFormulario();
 
-    component.onDocenteSeleccionadoDelDirectorio(userPicker);
+    component.guardarExistente({ idDocente: 'doc-1', idTipoVinculacion: 'tv-1' });
 
-    expect(coordinatorService.createDocente).toHaveBeenCalled();
-    expect(component.docentes().some((d) => d.id === 'usr-nuevo-dir')).toBeTrue();
-    expect(toastService.success).toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('El docente ya está vinculado a este programa.');
+    expect(component.formularioAbierto()).toBeTrue();
+  }));
+
+  it('HU092: abrirEdicion/cerrarEdicion controlan el modal de edición', fakeAsync(() => {
+    crear();
+    tick(300);
+    const docente = fila('doc-1', 'Roberto');
+
+    component.abrirEdicion(docente);
+    fixture.detectChanges();
+    expect(component.docenteEnEdicion()).toBe(docente);
+    expect(fixture.nativeElement.querySelector('app-coordinator-docente-edit-modal')).toBeTruthy();
+
+    component.cerrarEdicion();
+    fixture.detectChanges();
+    expect(component.docenteEnEdicion()).toBeNull();
+    expect(fixture.nativeElement.querySelector('app-coordinator-docente-edit-modal')).toBeNull();
+  }));
+
+  it('HU092: guardarEdicion actualiza, avisa, cierra y recarga desde el servidor (sin actualización optimista)', fakeAsync(() => {
+    crear();
+    tick(300);
+    component.abrirEdicion(fila('doc-1', 'Roberto'));
+    coordService.getDocentesPrograma.calls.reset();
+
+    component.guardarEdicion({ idTipoVinculacion: 'tv-2', primerNombre: 'Nuevo' });
+    fixture.detectChanges();
+    tick(300);
+
+    expect(coordService.actualizarDocente).toHaveBeenCalledWith('doc-1', { idTipoVinculacion: 'tv-2', primerNombre: 'Nuevo' });
+    expect(toast.success).toHaveBeenCalledWith('Docente actualizado.');
+    expect(component.docenteEnEdicion()).toBeNull();
+    expect(coordService.getDocentesPrograma).toHaveBeenCalledTimes(1);
+  }));
+
+  it('HU092: un error al actualizar muestra el mensaje y mantiene el modal abierto', fakeAsync(() => {
+    coordService.actualizarDocente.and.returnValue(
+      throwError(() => new HttpErrorResponse({
+        status: 404,
+        error: {
+          timestamp: '2026-10-22T10:00:00Z', status: 404, error: 'Not Found', code: 'ERR_DOCENTE_NO_VINCULADO_PROGRAMA',
+          message: 'El docente no está vinculado a este programa.', path: '/api/v1/coordinador/docentes/doc-1', correlationId: null,
+        },
+      }))
+    );
+    crear();
+    tick(300);
+    component.abrirEdicion(fila('doc-1', 'Roberto'));
+
+    component.guardarEdicion({ primerNombre: 'Nuevo' });
+
+    expect(toast.error).toHaveBeenCalledWith('El docente no está vinculado a este programa.');
+    expect(component.docenteEnEdicion()).not.toBeNull();
+  }));
+
+  it('HU092: guardarEdicion sin docente seleccionado no llama al servicio', fakeAsync(() => {
+    crear();
+    tick(300);
+
+    component.guardarEdicion({ primerNombre: 'Nuevo' });
+
+    expect(coordService.actualizarDocente).not.toHaveBeenCalled();
+  }));
+
+  it('la pantalla NO consulta cursos al cargar (evita un 403 para el coordinador) sino al abrir la ficha, una sola vez', fakeAsync(() => {
+    crear();
+    tick(300);
+    expect(courseService.getCoordinatorCourses).not.toHaveBeenCalled();
+
+    component.verFichaDocente(fila('doc-1', 'Roberto'));
+    component.verFichaDocente(fila('doc-1', 'Roberto'));
+
+    expect(courseService.getCoordinatorCourses).toHaveBeenCalledTimes(1);
+    expect(component.cursosDocente().map((c) => c.id)).toEqual(['crs-1']);
+  }));
+
+  it('verFichaDocente empareja cursos por idDocente real y cerrarFichaDocente limpia', fakeAsync(() => {
+    crear();
+    tick(300);
+    const docente = fila('doc-1', 'Roberto');
+
+    component.verFichaDocente(docente);
+    expect(component.docenteSeleccionado()).toBe(docente);
+    expect(component.cursosDocente().map((c) => c.id)).toEqual(['crs-1']);
+
+    component.cerrarFichaDocente();
+    expect(component.docenteSeleccionado()).toBeNull();
+    expect(component.cursosDocente()).toEqual([]);
+  }));
+
+  it('un error al cargar los cursos de la ficha deja la lista vacía y permite reintentar', fakeAsync(() => {
+    courseService.getCoordinatorCourses.and.returnValue(throwError(() => new HttpErrorResponse({ status: 403 })));
+    crear();
+    tick(300);
+
+    component.verFichaDocente(fila('doc-1', 'Roberto'));
+    expect(component.cursosDocente()).toEqual([]);
+
+    courseService.getCoordinatorCourses.and.returnValue(of({ exitoso: true, datos: [curso] }));
+    component.verFichaDocente(fila('doc-1', 'Roberto'));
+    expect(courseService.getCoordinatorCourses).toHaveBeenCalledTimes(2);
+    expect(component.cursosDocente().length).toBe(1);
+  }));
+
+  it('no usa setInterval ni polling para refrescar', () => {
+    const fuente = CoordinatorDocentesComponent.toString();
+    expect(fuente).not.toContain('setInterval');
   });
 });

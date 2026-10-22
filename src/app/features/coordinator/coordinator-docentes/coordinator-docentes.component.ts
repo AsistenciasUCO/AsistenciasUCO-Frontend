@@ -1,21 +1,34 @@
-import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { EMPTY, catchError, debounceTime, switchMap, tap } from 'rxjs';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
 import { CatalogService, TipoIdentificacionItem } from '../../../core/services/catalog.service';
 import { CourseService } from '../../../core/services/course.service';
 import { Course } from '../../../core/models/course.model';
-import { DocenteItem } from '../../../core/models/role-management.model';
+import {
+  ActualizarDocentePayload,
+  DocenteCandidato,
+  DocentePrograma,
+  TipoVinculacionItem,
+  VincularDocenteExistentePayload,
+  VincularDocenteNuevoPayload,
+  VincularDocentePayload,
+} from '../../../core/models/docente-programa.model';
 import { CardComponent } from '../../../shared/components/card/card.component';
 import { BadgeComponent } from '../../../shared/components/badge/badge.component';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
-import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
+import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 import { ToastService } from '../../../shared/components/toast/toast.component';
-import { UserPickerModalComponent, UserPickerItem } from '../../../shared/components/user-picker-modal/user-picker-modal.component';
 import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
-import { parseIdentificationNumber, validateInstitutionalEmail } from '../../../core/validation/request-form-validation.util';
+import { CoordinatorDocenteFormModalComponent } from './components/coordinator-docente-form-modal.component';
+import { CoordinatorDocenteEditModalComponent } from './components/coordinator-docente-edit-modal.component';
 
-type VistaCoordinador = 'LISTA' | 'REGISTRO';
+type FiltroEstado = 'TODOS' | 'ACTIVO' | 'INACTIVO';
+
+const DEBOUNCE_MS = 300;
+const MIN_CARACTERES_CANDIDATOS = 3;
 
 @Component({
   selector: 'app-coordinator-docentes',
@@ -27,580 +40,379 @@ type VistaCoordinador = 'LISTA' | 'REGISTRO';
     CardComponent,
     BadgeComponent,
     ButtonComponent,
-    FormFieldComponent,
-    UserPickerModalComponent,
+    PaginationComponent,
+    CoordinatorDocenteFormModalComponent,
+    CoordinatorDocenteEditModalComponent,
   ],
   template: `
     <div class="space-y-6 animate-fade-in">
-      <!-- 1. VISTA: LISTA DE DOCENTES -->
-      @if (vistaActual() === 'LISTA') {
-        <!-- Header Bento -->
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-2xl border border-warm-200/80 shadow-warm-sm">
-          <div>
-            <div class="flex items-center gap-2 mb-1">
-              <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary-100 text-primary-900 border border-primary-200">
-                Coordinación de Programa
-              </span>
-              <span class="text-xs text-warm-400">•</span>
-              <span class="text-xs font-medium text-warm-500">Cuerpo Profesoral</span>
-            </div>
-            <h1 class="font-serif font-bold text-2xl sm:text-3xl text-warm-900 tracking-tight">
-              Gestión de Docentes
-            </h1>
-            <p class="text-sm text-warm-600 mt-1">
-              Administra los docentes vinculados al programa, sus especialidades y grupos asignados.
-            </p>
-          </div>
-
-          <div class="flex flex-wrap items-center gap-3">
-            <app-button variant="primary" size="md" (clicked)="abrirModalSeleccionarDocente()">
-              <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-              </svg>
-              Seleccionar Docente Existente
-            </app-button>
-            <app-button variant="secondary" size="md" (clicked)="abrirFormularioRegistro()">
-              <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-              </svg>
-              Registrar Nuevo
-            </app-button>
-          </div>
-        </div>
-
-        <!-- Filtros y Búsqueda -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div class="sm:col-span-2">
-            <div class="relative">
-              <input
-                type="text"
-                [(ngModel)]="searchQuery"
-                placeholder="Buscar por nombre, especialidad o cédula..."
-                class="w-full pl-10 pr-4 py-2.5 bg-white border border-warm-200 rounded-xl text-sm text-warm-900 placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 shadow-warm-sm transition-all"
-              />
-              <svg class="w-4 h-4 text-warm-400 absolute left-3.5 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-          </div>
-
-          <div>
-            <select
-              [(ngModel)]="selectedEstado"
-              class="w-full px-3.5 py-2.5 bg-white border border-warm-200 rounded-xl text-sm text-warm-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 shadow-warm-sm"
-            >
-              <option value="TODOS">Todos los estados</option>
-              <option value="ACTIVO">Solo Activos</option>
-              <option value="INACTIVO">Solo Inactivos</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Grid de Docentes -->
-        @if (isLoading()) {
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-            @for (n of [1, 2, 3, 4]; track n) {
-              <div class="h-44 bg-warm-100 rounded-2xl animate-pulse"></div>
-            }
-          </div>
-        } @else if (filteredDocentes().length === 0) {
-          <div class="bg-white rounded-2xl border border-warm-200 p-12 text-center shadow-warm-sm">
-            <div class="w-12 h-12 rounded-full bg-warm-100 text-warm-400 flex items-center justify-center mx-auto mb-3">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <h3 class="text-base font-semibold text-warm-900">No se encontraron docentes</h3>
-            <p class="text-xs text-warm-500 mt-1">Ajusta los términos de búsqueda o registra un nuevo docente.</p>
-          </div>
-        } @else {
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-            @for (docente of filteredDocentes(); track docente.id) {
-              <app-card [hoverable]="true" padding="md">
-                <div class="flex flex-col h-full justify-between gap-4">
-                  <div>
-                    <div class="flex items-start justify-between gap-3 mb-2">
-                      <div class="flex items-center gap-2">
-                        <span class="text-xs font-mono font-semibold px-2 py-0.5 rounded-md bg-warm-100 text-warm-700">
-                          DOC-{{ docente.numeroIdentificacion }}
-                        </span>
-                        <app-badge [variant]="docente.estado === 'ACTIVO' ? 'success' : 'neutral'">
-                          {{ docente.estado }}
-                        </app-badge>
-                      </div>
-
-                      <button
-                        type="button"
-                        (click)="toggleEstado(docente)"
-                        class="text-xs px-2.5 py-1 rounded-lg border border-warm-200 hover:bg-warm-100 text-warm-700 transition-colors"
-                      >
-                        {{ docente.estado === 'ACTIVO' ? 'Desactivar' : 'Reactivar' }}
-                      </button>
-                    </div>
-
-                    <h3 class="font-serif font-bold text-lg text-warm-900 leading-snug">
-                      {{ docente.nombres }} {{ docente.apellidos }}
-                    </h3>
-                    <p class="text-xs font-semibold text-primary-700 mt-0.5">
-                      {{ docente.especialidad }}
-                    </p>
-                    <p class="text-xs text-warm-500 mt-0.5">{{ docente.departamento }}</p>
-                  </div>
-
-                  <!-- Insignia de Carga Académica -->
-                  <div class="flex items-center justify-between p-2.5 rounded-xl bg-warm-50 border border-warm-100">
-                    <span class="text-xs text-warm-600 font-medium">Grupos asignados este semestre:</span>
-                    <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary-50 text-primary-800 border border-primary-200">
-                      {{ docente.totalGruposAsignados }} grupos
-                    </span>
-                  </div>
-
-                  <div class="space-y-1 pt-2 border-t border-warm-100 text-xs text-warm-600">
-                    <div class="flex items-center gap-2">
-                      <svg class="w-3.5 h-3.5 text-warm-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
-                      </svg>
-                      <span>{{ docente.tipoIdentificacion || 'CC' }} {{ docente.numeroIdentificacion }}</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <svg class="w-3.5 h-3.5 text-warm-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                      <span class="truncate">{{ docente.correo }}</span>
-                    </div>
-
-                    <div class="pt-2 border-t border-warm-100 flex items-center justify-between">
-                      <button
-                        type="button"
-                        (click)="verFichaDocente(docente)"
-                        class="w-full text-xs font-semibold text-primary-800 hover:text-primary-950 bg-primary-50 hover:bg-primary-100 border border-primary-200 py-1.5 px-3 rounded-xl transition-colors inline-flex items-center justify-center gap-1.5"
-                      >
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                        Ver Materias & Horarios →
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </app-card>
-            }
-          </div>
-        }
-      }
-
-      <!-- 2. VISTA COMPLETA: FORMULARIO DE VINCULACIÓN DE DOCENTE -->
-      @if (vistaActual() === 'REGISTRO') {
-        <!-- Barra Superior de Retorno -->
-        <div class="flex items-center justify-between bg-white p-4 rounded-2xl border border-warm-200 shadow-warm-sm">
-          <button
-            type="button"
-            (click)="volverALista()"
-            class="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-warm-700 hover:text-warm-950 bg-warm-50 hover:bg-warm-100 border border-warm-200 px-3.5 py-2 rounded-xl transition-all shadow-xs"
-          >
-            <svg class="w-4 h-4 text-warm-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Volver a la Gestión de Docentes
-          </button>
-
-          <span class="text-xs font-bold text-primary-900 bg-primary-100 border border-primary-200 px-3 py-1 rounded-full">
-            Vinculación Profesoral
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-2xl border border-warm-200/80 shadow-warm-sm">
+        <div>
+          <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary-100 text-primary-900 border border-primary-200">
+            Coordinación de Programa
           </span>
+          <h1 class="font-serif font-bold text-2xl sm:text-3xl text-warm-900 tracking-tight mt-2">Gestión de Docentes</h1>
+          <p class="text-sm text-warm-600 mt-1">Directorio de docentes vinculados a su programa, con su tipo de vinculación y grupos asignados.</p>
         </div>
+        <app-button variant="primary" size="md" (clicked)="abrirFormulario()">Vincular docente</app-button>
+      </div>
 
-        <div class="bg-white p-6 sm:p-8 rounded-2xl border border-warm-200 shadow-warm-sm max-w-3xl mx-auto space-y-6">
-          <div>
-            <h2 class="font-serif font-bold text-2xl text-warm-900">
-              Vincular Nuevo Docente al Programa
-            </h2>
-            <p class="text-sm text-warm-600 mt-1">
-              Registra los datos del docente, su área de especialidad y departamento académico adscrito.
-            </p>
-          </div>
-
-          <!-- Banner Asistido: Docente ya existente -->
-          <div class="mb-6 p-4 rounded-2xl bg-primary-50/70 border border-primary-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center text-primary-700 shrink-0">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div>
-                <p class="text-sm font-semibold text-primary-900">¿El docente ya labora en la Universidad?</p>
-                <p class="text-xs text-primary-700">No es necesario digitar sus datos de nuevo. Búscalo en el claustro institucional para vincularlo directamente.</p>
-              </div>
-            </div>
-            <app-button variant="primary" size="sm" type="button" (clicked)="abrirModalSeleccionarDocente()">
-              <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              Buscar Docente
-            </app-button>
-          </div>
-
-          <form (ngSubmit)="guardarDocente()" class="space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <app-form-field label="Primer Nombre" [required]="true">
-                <input
-                  type="text"
-                  [(ngModel)]="formData.primerNombre"
-                  name="primerNombre"
-                  required
-                  placeholder="ej. María"
-                  class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                />
-              </app-form-field>
-              <app-form-field label="Segundo Nombre (Opcional)">
-                <input
-                  type="text"
-                  [(ngModel)]="formData.segundoNombre"
-                  name="segundoNombre"
-                  placeholder="ej. Elena"
-                  class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                />
-              </app-form-field>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <app-form-field label="Primer Apellido" [required]="true">
-                <input
-                  type="text"
-                  [(ngModel)]="formData.primerApellido"
-                  name="primerApellido"
-                  required
-                  placeholder="ej. Rostagno"
-                  class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                />
-              </app-form-field>
-              <app-form-field label="Segundo Apellido (Opcional)">
-                <input
-                  type="text"
-                  [(ngModel)]="formData.segundoApellido"
-                  name="segundoApellido"
-                  placeholder="ej. Valencia"
-                  class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                />
-              </app-form-field>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <app-form-field label="Tipo de Documento" [required]="true">
-                <select
-                  [(ngModel)]="formData.tipoIdentificacionId"
-                  (change)="onTipoIdentificacionChange($event)"
-                  name="tipoIdentificacionId"
-                  required
-                  class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                >
-                  @for (tipo of tiposIdentificacion(); track tipo.id) {
-                    <option [value]="tipo.id">{{ tipo.tipoIdentificacion }} - {{ tipo.nombre }}</option>
-                  }
-                </select>
-              </app-form-field>
-
-              <div class="sm:col-span-2">
-                <app-form-field label="Número de Identificación" [required]="true">
-                  <input
-                    type="text"
-                    [(ngModel)]="formData.numeroIdentificacion"
-                    (input)="onNumeroIdentificacionInput($event)"
-                    name="numeroIdentificacion"
-                    required
-                    maxlength="15"
-                    placeholder="ej. 1017112233"
-                    class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                  />
-                </app-form-field>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 gap-4">
-              <app-form-field label="Especialidad / Área de Enfoque" [required]="true">
-                <input
-                  type="text"
-                  [(ngModel)]="formData.especialidad"
-                  name="especialidad"
-                  placeholder="ej. Arquitectura de Software"
-                  required
-                  class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                />
-              </app-form-field>
-            </div>
-
-            <app-form-field label="Correo Institucional UCO" [required]="true">
-              <input
-                type="email"
-                [(ngModel)]="formData.correo"
-                name="correo"
-                placeholder="docente@uco.edu.co"
-                required
-                class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              />
-            </app-form-field>
-
-            <app-form-field label="Departamento Académico" [required]="true">
-              <select
-                [(ngModel)]="formData.departamento"
-                name="departamento"
-                required
-                class="w-full px-3.5 py-2.5 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              >
-                <option value="Ingeniería de Sistemas">Ingeniería de Sistemas</option>
-                <option value="Departamento de Ciencias Computacionales">Departamento de Ciencias Computacionales</option>
-                <option value="Ciencias Básicas e Ingeniería">Ciencias Básicas e Ingeniería</option>
-                <option value="Ingeniería Industrial">Ingeniería Industrial</option>
-                <option value="Ingeniería Electrónica">Ingeniería Electrónica</option>
-              </select>
-            </app-form-field>
-
-            <div class="flex items-center justify-end gap-3 pt-5 border-t border-warm-100">
-              <app-button variant="secondary" size="md" type="button" (clicked)="volverALista()">
-                Cancelar
-              </app-button>
-              <app-button variant="primary" size="md" type="submit" [disabled]="!formData.primerNombre || !formData.primerApellido || !formData.correo || !formData.especialidad">
-                Guardar Docente
-              </app-button>
-            </div>
-          </form>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="sm:col-span-2">
+          <input
+            type="text"
+            [ngModel]="busqueda()"
+            (ngModelChange)="onBusquedaChange($event)"
+            name="busquedaDocentes"
+            maxlength="50"
+            placeholder="Buscar por cédula o nombre..."
+            class="w-full px-4 py-2.5 bg-white border border-warm-200 rounded-xl text-sm text-warm-900 placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 shadow-warm-sm"
+          />
         </div>
-      }
+        <select
+          [ngModel]="filtroEstado()"
+          (ngModelChange)="onEstadoChange($event)"
+          name="estadoDocentes"
+          class="w-full px-3.5 py-2.5 bg-white border border-warm-200 rounded-xl text-sm text-warm-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 shadow-warm-sm"
+        >
+          <option value="TODOS">Todos los estados</option>
+          <option value="ACTIVO">Solo activos</option>
+          <option value="INACTIVO">Solo inactivos</option>
+        </select>
+      </div>
 
-      <!-- 3. MODAL: FICHA ACADÉMICA DEL DOCENTE (HU094) -->
-      @if (docenteSeleccionado()) {
-        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-warm-950/40 backdrop-blur-xs animate-fade-in">
-          <div class="bg-white border border-warm-200 rounded-3xl max-w-2xl w-full shadow-warm-xl overflow-hidden animate-slide-down">
-            <!-- Header Modal -->
-            <div class="p-6 bg-warm-50 border-b border-warm-200/80 flex items-start justify-between">
-              <div class="flex items-center gap-4">
-                <div class="w-12 h-12 rounded-2xl bg-primary-100 text-primary-800 font-bold font-serif text-lg flex items-center justify-center border border-primary-200">
-                  {{ docenteSeleccionado()?.nombres?.charAt(0) }}{{ docenteSeleccionado()?.apellidos?.charAt(0) }}
-                </div>
+      @if (isLoading()) {
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          @for (n of [1, 2, 3, 4]; track n) {
+            <div class="h-44 bg-warm-100 rounded-2xl animate-pulse"></div>
+          }
+        </div>
+      } @else if (docentes().length === 0) {
+        <div class="bg-white rounded-2xl border border-warm-200 p-12 text-center shadow-warm-sm">
+          <h3 class="text-base font-semibold text-warm-900">No se encontraron docentes</h3>
+          <p class="text-xs text-warm-500 mt-1">Ajuste la búsqueda o vincule un docente al programa.</p>
+        </div>
+      } @else {
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          @for (docente of docentes(); track docente.idDocentePrograma) {
+            <app-card [hoverable]="true" padding="md">
+              <div class="flex flex-col h-full justify-between gap-4">
                 <div>
-                  <div class="flex items-center gap-2">
-                    <h3 class="font-serif font-bold text-xl text-warm-900">
-                      {{ docenteSeleccionado()?.nombres }} {{ docenteSeleccionado()?.apellidos }}
-                    </h3>
-                    <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold"
-                          [class]="docenteSeleccionado()?.estado === 'ACTIVO' ? 'bg-emerald-100 text-emerald-800' : 'bg-warm-200 text-warm-700'">
-                      {{ docenteSeleccionado()?.estado }}
-                    </span>
+                  <div class="flex items-start justify-between gap-3 mb-2">
+                    <div class="flex items-center gap-2">
+                      <app-badge [variant]="docente.estaActivo ? 'success' : 'neutral'">{{ docente.estaActivo ? 'ACTIVO' : 'INACTIVO' }}</app-badge>
+                      <app-badge variant="neutral">{{ docente.nombreTipoVinculacion }}</app-badge>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid="toggle-estado"
+                      (click)="solicitarCambioEstado(docente)"
+                      [title]="docente.estaActivo ? 'Inactivar la vinculación con el programa' : 'Reactivar la vinculación con el programa'"
+                      class="text-xs px-2.5 py-1 rounded-lg border border-warm-200 text-warm-700 hover:bg-warm-100 transition-colors"
+                    >
+                      {{ docente.estaActivo ? 'Desactivar' : 'Reactivar' }}
+                    </button>
                   </div>
-                  <p class="text-xs text-warm-600 mt-0.5">
-                    {{ docenteSeleccionado()?.especialidad }} • {{ docenteSeleccionado()?.departamento }}
-                  </p>
+                  <h3 class="font-serif font-bold text-lg text-warm-900 leading-snug">{{ docente.nombreCompleto }}</h3>
+                  <p class="text-xs text-warm-500 mt-0.5">{{ docente.codigoTipoIdentificacion }} {{ docente.numeroIdentificacion }}</p>
+                  <p class="text-xs text-warm-600 truncate">{{ docente.correo }}</p>
                 </div>
-              </div>
-              <button
-                type="button"
-                (click)="cerrarFichaDocente()"
-                class="text-warm-400 hover:text-warm-700 p-1.5 rounded-xl hover:bg-warm-100 transition-colors"
-              >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <!-- Body Modal: Ficha Detallada -->
-            <div class="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
-              <!-- Datos de Contacto e Identificación -->
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-warm-50/60 rounded-2xl border border-warm-100 text-xs">
-                <div>
-                  <span class="text-[10px] uppercase font-bold text-warm-400 block">Identificación</span>
-                  <span class="font-semibold text-warm-800">{{ docenteSeleccionado()?.tipoIdentificacion || 'CC' }} {{ docenteSeleccionado()?.numeroIdentificacion }}</span>
-                </div>
-                <div>
-                  <span class="text-[10px] uppercase font-bold text-warm-400 block">Correo Institucional</span>
-                  <span class="font-semibold text-warm-800 truncate block">{{ docenteSeleccionado()?.correo }}</span>
-                </div>
-                <div>
-                  <span class="text-[10px] uppercase font-bold text-warm-400 block">Código Docente</span>
-                  <span class="font-mono font-bold text-primary-800">DOC-{{ docenteSeleccionado()?.numeroIdentificacion }}</span>
-                </div>
-              </div>
-
-              <!-- Materias y Horarios Asignados -->
-              <div>
-                <div class="flex items-center justify-between mb-3">
-                  <h4 class="font-serif font-bold text-base text-warm-900">
-                    Materias y Grupos a Cargo este Período
-                  </h4>
-                  <span class="text-xs font-bold px-2.5 py-1 rounded-lg bg-primary-50 text-primary-800 border border-primary-200">
-                    {{ cursosDocente().length }} asignaturas activas
+                <div class="flex items-center justify-between p-2.5 rounded-xl bg-warm-50 border border-warm-100">
+                  <span class="text-xs text-warm-600 font-medium">Grupos asignados en el programa:</span>
+                  <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary-50 text-primary-800 border border-primary-200">
+                    {{ docente.totalGruposPrograma }}
                   </span>
                 </div>
+                <button
+                  type="button"
+                  (click)="abrirEdicion(docente)"
+                  class="w-full text-xs font-semibold text-warm-800 bg-white hover:bg-warm-50 border border-warm-200 py-1.5 px-3 rounded-xl transition-colors"
+                >
+                  Editar datos
+                </button>
+                <button
+                  type="button"
+                  (click)="verFichaDocente(docente)"
+                  class="w-full text-xs font-semibold text-primary-800 bg-primary-50 hover:bg-primary-100 border border-primary-200 py-1.5 px-3 rounded-xl transition-colors"
+                >
+                  Ver materias y horarios →
+                </button>
+              </div>
+            </app-card>
+          }
+        </div>
+        <app-pagination
+          [totalItems]="totalDocentes()"
+          [pageSize]="tamano()"
+          [currentPage]="pagina()"
+          (pageChange)="onPageChange($event)"
+          (pageSizeChange)="onPageSizeChange($event)"
+        />
+      }
 
-                @if (cursosDocente().length === 0) {
-                  <div class="p-6 text-center text-warm-400 bg-warm-50 rounded-2xl border border-warm-100">
-                    <p class="text-xs">No tiene grupos registrados para este período académico.</p>
-                  </div>
-                } @else {
-                  <div class="space-y-3">
-                    @for (curso of cursosDocente(); track curso.id) {
-                      <div class="p-4 rounded-2xl border border-warm-200 bg-white hover:border-primary-300 transition-all shadow-warm-xs">
-                        <div class="flex items-start justify-between gap-2 mb-2">
-                          <div>
-                            <span class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-warm-100 text-warm-800 mr-2">
-                              {{ curso.code }}
-                            </span>
-                            <span class="text-xs font-semibold text-warm-500">{{ curso.section }}</span>
-                            <h5 class="font-bold text-sm text-warm-900 mt-1">{{ curso.name }}</h5>
-                          </div>
-                          <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            {{ curso.enrolledStudentsCount }} matriculados
-                          </span>
-                        </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-warm-100 text-xs text-warm-600">
-                          <div class="flex items-center gap-1.5">
-                            <svg class="w-3.5 h-3.5 text-warm-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span class="font-medium text-warm-800">{{ curso.schedule }}</span>
-                          </div>
-                          <div class="flex items-center gap-1.5">
-                            <svg class="w-3.5 h-3.5 text-warm-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                            </svg>
-                            <span>{{ curso.room }}</span>
-                          </div>
-                        </div>
-                      </div>
-                    }
+      @if (docenteSeleccionado(); as seleccionado) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-warm-950/40 backdrop-blur-xs">
+          <div class="bg-white border border-warm-200 rounded-3xl max-w-2xl w-full shadow-warm-xl overflow-hidden">
+            <div class="p-6 bg-warm-50 border-b border-warm-200/80 flex items-start justify-between">
+              <div>
+                <h3 class="font-serif font-bold text-xl text-warm-900">{{ seleccionado.nombreCompleto }}</h3>
+                <p class="text-xs text-warm-600 mt-0.5">
+                  {{ seleccionado.codigoTipoIdentificacion }} {{ seleccionado.numeroIdentificacion }} • {{ seleccionado.correo }} • {{ seleccionado.nombreTipoVinculacion }}
+                </p>
+              </div>
+              <button type="button" (click)="cerrarFichaDocente()" aria-label="Cerrar ficha" class="text-warm-400 hover:text-warm-700 p-1.5 rounded-xl hover:bg-warm-100">✕</button>
+            </div>
+            <div class="p-6 space-y-3 max-h-[70vh] overflow-y-auto">
+              <h4 class="font-serif font-bold text-base text-warm-900">Materias y grupos a cargo este período</h4>
+              @if (cursosDocente().length === 0) {
+                <p class="p-6 text-center text-xs text-warm-400 bg-warm-50 rounded-2xl border border-warm-100">No tiene grupos registrados para este período académico.</p>
+              } @else {
+                @for (curso of cursosDocente(); track curso.id) {
+                  <div class="p-4 rounded-2xl border border-warm-200 bg-white">
+                    <span class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-warm-100 text-warm-800 mr-2">{{ curso.code }}</span>
+                    <span class="text-xs font-semibold text-warm-500">{{ curso.section }}</span>
+                    <h5 class="font-bold text-sm text-warm-900 mt-1">{{ curso.name }}</h5>
+                    <p class="text-xs text-warm-600 mt-1">{{ curso.schedule }} • {{ curso.room }} • {{ curso.enrolledStudentsCount }} matriculados</p>
                   </div>
                 }
-              </div>
+              }
             </div>
+          </div>
+        </div>
+      }
 
-            <!-- Footer Modal -->
-            <div class="p-4 bg-warm-50 border-t border-warm-200 flex justify-end">
-              <button
-                type="button"
-                (click)="cerrarFichaDocente()"
-                class="px-4 py-2 bg-warm-200 hover:bg-warm-300 text-warm-800 font-semibold text-xs rounded-xl transition-colors"
-              >
-                Cerrar Ficha
+      @if (docentePendienteEstado(); as pendiente) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-warm-900/60 backdrop-blur-xs" role="dialog" aria-modal="true">
+          <div class="bg-white rounded-3xl shadow-warm-2xl border border-warm-200/80 w-full max-w-md p-6 space-y-4">
+            <h2 class="text-lg font-serif font-bold text-warm-900">
+              {{ pendiente.estaActivo ? 'Inactivar vinculación' : 'Reactivar vinculación' }}
+            </h2>
+            <p class="text-sm text-warm-700">
+              {{ pendiente.estaActivo
+                  ? 'El docente ' + pendiente.nombreCompleto + ' dejará de poder ser asignado como titular de nuevos grupos de este programa. Sus grupos actuales y su cuenta de acceso no cambian.'
+                  : 'El docente ' + pendiente.nombreCompleto + ' volverá a poder ser asignado como titular de grupos de este programa.' }}
+            </p>
+            <div class="flex justify-end gap-3 pt-2">
+              <button type="button" (click)="cancelarCambioEstado()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-warm-100 text-warm-800 hover:bg-warm-200">Cancelar</button>
+              <button type="button" data-testid="confirmar-estado" (click)="confirmarCambioEstado()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-primary-700 text-white hover:bg-primary-800">
+                {{ pendiente.estaActivo ? 'Inactivar' : 'Reactivar' }}
               </button>
             </div>
           </div>
         </div>
       }
 
-      <!-- Modal de Selección de Docente Existente -->
-      <app-user-picker-modal
-        [isOpen]="isPickerModalOpen()"
-        title="Vincular Docente al Programa"
-        subtitle="Selecciona un docente ya registrado en la institución para vincularlo al programa sin digitar sus datos de nuevo."
-        roleBadge="Claustro docente"
-        (userSelected)="onDocenteSeleccionadoDelDirectorio($event)"
-        (requestNew)="onSolicitarRegistroNuevo()"
-        (cancelled)="isPickerModalOpen.set(false)"
-      />
+      @if (docenteEnEdicion(); as enEdicion) {
+        <app-coordinator-docente-edit-modal
+          [docente]="enEdicion"
+          [tiposVinculacion]="tiposVinculacion()"
+          (guardar)="guardarEdicion($event)"
+          (cerrar)="cerrarEdicion()"
+        />
+      }
+
+      @if (formularioAbierto()) {
+        <app-coordinator-docente-form-modal
+          [tiposIdentificacion]="tiposIdentificacion()"
+          [tiposVinculacion]="tiposVinculacion()"
+          [candidatos]="candidatos()"
+          (guardarNuevo)="guardarNuevo($event)"
+          (guardarExistente)="guardarExistente($event)"
+          (buscarCandidatos)="buscarCandidatos($event)"
+          (cerrar)="cerrarFormulario()"
+        />
+      }
     </div>
   `,
 })
 export class CoordinatorDocentesComponent implements OnInit {
-  private coordService = inject(CoordinatorManagementService);
-  private catalogService = inject(CatalogService);
-  private courseService = inject(CourseService);
-  private toast = inject(ToastService);
+  private readonly coordService = inject(CoordinatorManagementService);
+  private readonly catalogService = inject(CatalogService);
+  private readonly courseService = inject(CourseService);
+  private readonly toast = inject(ToastService);
+  private readonly destroyRef = inject(DestroyRef);
 
-  isPickerModalOpen = signal<boolean>(false);
-  vistaActual = signal<VistaCoordinador>('LISTA');
-  docentes = signal<DocenteItem[]>([]);
-  tiposIdentificacion = signal<TipoIdentificacionItem[]>([]);
-  docenteSeleccionado = signal<DocenteItem | null>(null);
-  cursosDocente = signal<Course[]>([]);
-  allCourses = signal<Course[]>([]);
-  isLoading = signal<boolean>(true);
-  searchQuery = '';
-  selectedEstado = 'TODOS';
+  readonly docentes = this.coordService.docentes;
+  readonly totalDocentes = this.coordService.totalDocentes;
 
-  formData: Omit<DocenteItem, 'id' | 'totalGruposAsignados'> = {
-    tipoIdentificacionId: 'A1B2C3D4-0000-0000-0000-000000000001',
-    tipoIdentificacion: 'CC',
-    numeroIdentificacion: '',
-    primerNombre: '',
-    segundoNombre: '',
-    primerApellido: '',
-    segundoApellido: '',
-    nombres: '',
-    apellidos: '',
-    correo: '',
-    departamento: 'Departamento de Ciencias Computacionales',
-    especialidad: '',
-    estado: 'ACTIVO',
-  };
+  readonly busqueda = signal('');
+  readonly filtroEstado = signal<FiltroEstado>('TODOS');
+  readonly pagina = signal(1);
+  readonly tamano = signal(10);
+  private readonly recarga = signal(0);
+  private cursosCargados = false;
 
-  filteredDocentes = computed(() => {
-    const query = this.searchQuery.toLowerCase().trim();
-    const estado = this.selectedEstado;
+  readonly isLoading = signal(true);
+  readonly formularioAbierto = signal(false);
+  readonly tiposIdentificacion = signal<TipoIdentificacionItem[]>([]);
+  readonly tiposVinculacion = signal<TipoVinculacionItem[]>([]);
+  readonly candidatos = signal<DocenteCandidato[]>([]);
+  readonly allCourses = signal<Course[]>([]);
+  readonly docenteSeleccionado = signal<DocentePrograma | null>(null);
+  readonly docenteEnEdicion = signal<DocentePrograma | null>(null);
+  readonly docentePendienteEstado = signal<DocentePrograma | null>(null);
+  readonly cursosDocente = signal<Course[]>([]);
 
-    return this.docentes().filter((item) => {
-      const matchQuery =
-        !query ||
-        item.nombres.toLowerCase().includes(query) ||
-        item.apellidos.toLowerCase().includes(query) ||
-        item.especialidad.toLowerCase().includes(query) ||
-        item.numeroIdentificacion.includes(query);
+  private readonly consulta = computed(() => ({
+    pagina: this.pagina(),
+    tamano: this.tamano(),
+    busqueda: this.busqueda().trim() || undefined,
+    estaActivo: this.estaActivoDe(this.filtroEstado()),
+    recarga: this.recarga(),
+  }));
 
-      const matchEstado = estado === 'TODOS' || item.estado === estado;
-
-      return matchQuery && matchEstado;
-    });
-  });
+  constructor() {
+    // Reactividad por signals: cada cambio de filtro/pagina reconsulta al servidor (sin timers de polling).
+    toObservable(this.consulta)
+      .pipe(
+        debounceTime(DEBOUNCE_MS),
+        tap(() => this.isLoading.set(true)),
+        switchMap(({ pagina, tamano, busqueda, estaActivo }) =>
+          this.coordService.getDocentesPrograma({ pagina, tamano, busqueda, estaActivo }).pipe(
+            catchError((error: unknown) => {
+              this.toast.error(getApiErrorMessage(error));
+              this.isLoading.set(false);
+              return EMPTY;
+            })
+          )
+        ),
+        takeUntilDestroyed(this.destroyRef)
+      )
+      .subscribe(() => this.isLoading.set(false));
+  }
 
   ngOnInit(): void {
-    this.cargarTiposIdentificacion();
-    this.cargarCursos();
-    this.cargarDocentes();
-  }
-
-  cargarTiposIdentificacion(): void {
     this.catalogService.getTiposIdentificacion().subscribe({
-      next: (res) => {
-        if (res.datos && res.datos.length > 0) {
-          this.tiposIdentificacion.set(res.datos);
-          this.formData.tipoIdentificacionId = res.datos[0].id;
-          this.formData.tipoIdentificacion = res.datos[0].tipoIdentificacion;
-        }
-      },
-      error: () => console.warn('Usando catálogo local de tipos de documento.'),
+      next: (res) => this.tiposIdentificacion.set(res.datos ?? []),
+      error: (error: unknown) => this.toast.error(getApiErrorMessage(error)),
+    });
+    this.coordService.getTiposVinculacion().subscribe({
+      next: (tipos) => this.tiposVinculacion.set(tipos),
+      error: (error: unknown) => this.toast.error(getApiErrorMessage(error)),
     });
   }
 
-  onTipoIdentificacionChange(event: Event): void {
-    const select = event.target as HTMLSelectElement;
-    const selectedTipo = this.tiposIdentificacion().find((t) => t.id === select.value);
-    if (selectedTipo) {
-      this.formData.tipoIdentificacion = selectedTipo.tipoIdentificacion;
-      this.formData.tipoIdentificacionId = selectedTipo.id;
-    }
+  onBusquedaChange(valor: string): void {
+    this.busqueda.set(valor ?? '');
+    this.pagina.set(1);
   }
 
-  cargarCursos(): void {
+  onEstadoChange(estado: FiltroEstado): void {
+    this.filtroEstado.set(estado);
+    this.pagina.set(1);
+  }
+
+  onPageChange(pagina: number): void {
+    this.pagina.set(pagina);
+  }
+
+  onPageSizeChange(tamano: number): void {
+    this.tamano.set(tamano);
+    this.pagina.set(1);
+  }
+
+  abrirFormulario(): void {
+    this.candidatos.set([]);
+    this.formularioAbierto.set(true);
+  }
+
+  cerrarFormulario(): void {
+    this.formularioAbierto.set(false);
+  }
+
+  buscarCandidatos(texto: string): void {
+    const busqueda = (texto ?? '').trim();
+    if (busqueda.length < MIN_CARACTERES_CANDIDATOS) {
+      this.candidatos.set([]);
+      return;
+    }
+    this.coordService.getCandidatosDocente(busqueda).subscribe({
+      next: (res) => this.candidatos.set(res.datos ?? []),
+      error: (error: unknown) => {
+        this.candidatos.set([]);
+        this.toast.error(getApiErrorMessage(error));
+      },
+    });
+  }
+
+  guardarNuevo(payload: VincularDocenteNuevoPayload): void {
+    this.vincular(payload);
+  }
+
+  guardarExistente(payload: VincularDocenteExistentePayload): void {
+    this.vincular(payload);
+  }
+
+  solicitarCambioEstado(docente: DocentePrograma): void {
+    this.docentePendienteEstado.set(docente);
+  }
+
+  cancelarCambioEstado(): void {
+    this.docentePendienteEstado.set(null);
+  }
+
+  /** HU093. Sin actualizacion optimista: se espera la respuesta y se recarga la pagina desde el servidor. */
+  confirmarCambioEstado(): void {
+    const docente = this.docentePendienteEstado();
+    if (!docente) {
+      return;
+    }
+    this.docentePendienteEstado.set(null);
+    this.coordService.cambiarEstadoDocente(docente.idDocente, !docente.estaActivo).subscribe({
+      next: (res) => {
+        this.toast.success(res.mensajeUsuario || 'Estado del docente actualizado.');
+        this.recarga.update((n) => n + 1);
+      },
+      error: (error: unknown) => this.toast.error(getApiErrorMessage(error)),
+    });
+  }
+
+  abrirEdicion(docente: DocentePrograma): void {
+    this.docenteEnEdicion.set(docente);
+  }
+
+  cerrarEdicion(): void {
+    this.docenteEnEdicion.set(null);
+  }
+
+  /** HU092. Sin actualizacion optimista: se espera la respuesta y se recarga la pagina desde el servidor. */
+  guardarEdicion(payload: ActualizarDocentePayload): void {
+    const docente = this.docenteEnEdicion();
+    if (!docente) {
+      return;
+    }
+    this.coordService.actualizarDocente(docente.idDocente, payload).subscribe({
+      next: (res) => {
+        this.toast.success(res.mensajeUsuario || 'Docente actualizado.');
+        this.docenteEnEdicion.set(null);
+        this.recarga.update((n) => n + 1);
+      },
+      error: (error: unknown) => this.toast.error(getApiErrorMessage(error)),
+    });
+  }
+
+  /**
+   * Los cursos se cargan solo al abrir la ficha (no al entrar a la pantalla): el endpoint de cursos es del portal
+   * docente y un coordinador recibiria un 403 innecesario al listar el directorio.
+   */
+  verFichaDocente(docente: DocentePrograma): void {
+    this.docenteSeleccionado.set(docente);
+    if (this.cursosCargados) {
+      this.cursosDocente.set(this.allCourses().filter((c) => c.docenteId === docente.idDocente));
+      return;
+    }
+    this.cursosCargados = true;
     this.courseService.getCoordinatorCourses().subscribe({
       next: (res) => {
-        if (res.datos) {
-          this.allCourses.set(res.datos);
-        }
+        this.allCourses.set(res.datos ?? []);
+        this.cursosDocente.set(this.allCourses().filter((c) => c.docenteId === docente.idDocente));
       },
-      error: () => console.warn('No fue posible precargar cursos.'),
+      error: () => {
+        this.cursosCargados = false;
+        this.allCourses.set([]);
+        this.cursosDocente.set([]);
+      },
     });
-  }
-
-  verFichaDocente(docente: DocenteItem): void {
-    this.docenteSeleccionado.set(docente);
-    // TARGET (PLAN.md LB-001B.1B, AS-IS #19): se retira la coincidencia por texto libre
-    // sobre Course.docenteName (CONTRACT_DRIFT, incluía fallbacks 'maria'/'docente' que
-    // emparejaban casi cualquier curso). Sin un contrato real para relacionar Grupo→Docente
-    // wireado en este work item (ver PLAN.md riesgo 3b, diferido a tarea de integración
-    // separada), no se sintetiza un reemplazo: solo se relacionan cursos por docenteId real.
-    const cursosFiltrados = this.allCourses().filter((c) => c.docenteId === docente.id);
-    this.cursosDocente.set(cursosFiltrados);
   }
 
   cerrarFichaDocente(): void {
@@ -608,179 +420,22 @@ export class CoordinatorDocentesComponent implements OnInit {
     this.cursosDocente.set([]);
   }
 
-  cargarDocentes(): void {
-    this.isLoading.set(true);
-    this.coordService.getDocentes().subscribe({
+  /** Sin actualizacion optimista: se espera la respuesta del backend y se recarga la pagina desde el servidor. */
+  private vincular(payload: VincularDocentePayload): void {
+    this.coordService.vincularDocente(payload).subscribe({
       next: (res) => {
-        this.docentes.set(res.datos || []);
-        this.isLoading.set(false);
+        this.toast.success(res.mensajeUsuario || 'Docente vinculado al programa.');
+        this.formularioAbierto.set(false);
+        this.recarga.update((n) => n + 1);
       },
-      error: () => {
-        this.isLoading.set(false);
-        this.toast.error('Error al cargar docentes.');
-      },
+      error: (error: unknown) => this.toast.error(getApiErrorMessage(error)),
     });
   }
 
-  toggleEstado(docente: DocenteItem): void {
-    this.coordService.toggleDocenteStatus(docente.id).subscribe({
-      next: (res) => {
-        if (res.exitoso && res.datos) {
-          const updated = this.docentes().map((d) => (d.id === docente.id ? res.datos! : d));
-          this.docentes.set(updated);
-          this.toast.success(res.mensajeUsuario || 'Estado actualizado.');
-        }
-      },
-      error: (err) => this.toast.error(getApiErrorMessage(err)),
-    });
-  }
-
-  abrirFormularioRegistro(): void {
-    this.formData = {
-      tipoIdentificacionId: this.tiposIdentificacion().length > 0 ? this.tiposIdentificacion()[0].id : 'A1B2C3D4-0000-0000-0000-000000000001',
-      tipoIdentificacion: this.tiposIdentificacion().length > 0 ? this.tiposIdentificacion()[0].tipoIdentificacion : 'CC',
-      numeroIdentificacion: '',
-      primerNombre: '',
-      segundoNombre: '',
-      primerApellido: '',
-      segundoApellido: '',
-      nombres: '',
-      apellidos: '',
-      correo: '',
-      departamento: 'Departamento de Ciencias Computacionales',
-      especialidad: '',
-      estado: 'ACTIVO',
-    };
-    this.vistaActual.set('REGISTRO');
-  }
-
-  onNumeroIdentificacionInput(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    input.value = input.value.replace(/\D/g, '');
-    this.formData.numeroIdentificacion = input.value;
-  }
-
-  volverALista(): void {
-    this.vistaActual.set('LISTA');
-  }
-
-  guardarDocente(): void {
-    if (!this.formData.tipoIdentificacionId) {
-      this.toast.warning('El campo Tipo de Documento es obligatorio.');
-      return;
+  private estaActivoDe(estado: FiltroEstado): boolean | undefined {
+    if (estado === 'ACTIVO') {
+      return true;
     }
-
-    const idResult = parseIdentificationNumber(this.formData.numeroIdentificacion);
-    if (!idResult.valid) {
-      this.toast.warning(idResult.error);
-      return;
-    }
-
-    const pn = (this.formData.primerNombre || '').trim();
-    const pa = (this.formData.primerApellido || '').trim();
-    if (!pn) {
-      this.toast.warning('El campo Primer Nombre es obligatorio.');
-      return;
-    }
-    if (!pa) {
-      this.toast.warning('El campo Primer Apellido es obligatorio.');
-      return;
-    }
-
-    const emailRes = validateInstitutionalEmail(this.formData.correo);
-    if (!emailRes.valid) {
-      this.toast.warning(emailRes.error || 'Correo institucional inválido.');
-      return;
-    }
-
-    if (!this.formData.especialidad || !this.formData.especialidad.trim()) {
-      this.toast.warning('El campo Especialidad / Área de Enfoque es obligatorio.');
-      return;
-    }
-
-    if (!this.formData.departamento || !this.formData.departamento.trim()) {
-      this.toast.warning('El campo Departamento Académico es obligatorio.');
-      return;
-    }
-
-    this.formData.nombres = [pn, (this.formData.segundoNombre || '').trim()].filter(Boolean).join(' ');
-    this.formData.apellidos = [pa, (this.formData.segundoApellido || '').trim()].filter(Boolean).join(' ');
-
-    this.coordService.createDocente(this.formData).subscribe({
-      next: (res) => {
-        if (res.exitoso && res.datos) {
-          this.docentes.set([res.datos, ...this.docentes()]);
-          this.toast.success(res.mensajeUsuario || 'Docente registrado exitosamente.');
-          this.volverALista();
-        }
-      },
-      error: (err) => this.toast.error(getApiErrorMessage(err)),
-    });
-  }
-
-  abrirModalSeleccionarDocente(): void {
-    this.isPickerModalOpen.set(true);
-  }
-
-  onSolicitarRegistroNuevo(): void {
-    this.isPickerModalOpen.set(false);
-    this.abrirFormularioRegistro();
-  }
-
-  onDocenteSeleccionadoDelDirectorio(user: UserPickerItem): void {
-    this.isPickerModalOpen.set(false);
-
-    const yaExiste = this.docentes().some(
-      (d) =>
-        d.id === user.id ||
-        (d.numeroIdentificacion && d.numeroIdentificacion === user.numeroIdentificacion) ||
-        (d.correo && user.correo && d.correo.toLowerCase() === user.correo.toLowerCase())
-    );
-
-    if (yaExiste) {
-      this.toast.info(`El docente ${user.nombres} ${user.apellidos} ya se encuentra vinculado al claustro.`);
-      return;
-    }
-
-    const tipoDocId =
-      this.tiposIdentificacion().find((t) => t.tipoIdentificacion === user.tipoIdentificacion)?.id ||
-      (this.tiposIdentificacion().length > 0
-        ? this.tiposIdentificacion()[0].id
-        : 'A1B2C3D4-0000-0000-0000-000000000001');
-
-    const nuevoDocente: DocenteItem = {
-      id: user.id,
-      tipoIdentificacionId: tipoDocId,
-      tipoIdentificacion: user.tipoIdentificacion || 'CC',
-      numeroIdentificacion: user.numeroIdentificacion,
-      primerNombre: user.primerNombre || user.nombres.split(' ')[0] || 'Docente',
-      segundoNombre: user.segundoNombre || '',
-      primerApellido: user.primerApellido || user.apellidos.split(' ')[0] || 'UCO',
-      segundoApellido: user.segundoApellido || '',
-      nombres: user.nombres,
-      apellidos: user.apellidos,
-      correo: user.correo,
-      departamento: user.dependenciaOPrograma || 'Departamento de Ciencias Computacionales',
-      especialidad: 'Docencia Universitaria',
-      totalGruposAsignados: 0,
-      estado: 'ACTIVO',
-    };
-
-    this.coordService.createDocente(nuevoDocente).subscribe({
-      next: (res) => {
-        const creado = res.datos || nuevoDocente;
-        this.docentes.set([creado, ...this.docentes()]);
-        this.toast.success(
-          res.mensajeUsuario || `Docente ${user.nombres} ${user.apellidos} vinculado exitosamente al programa.`
-        );
-        this.vistaActual.set('LISTA');
-      },
-      error: () => {
-        // Fallback optimista para UI
-        this.docentes.set([nuevoDocente, ...this.docentes()]);
-        this.toast.success(`Docente ${user.nombres} ${user.apellidos} vinculado exitosamente.`);
-        this.vistaActual.set('LISTA');
-      },
-    });
+    return estado === 'INACTIVO' ? false : undefined;
   }
 }
