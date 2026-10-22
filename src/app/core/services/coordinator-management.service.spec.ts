@@ -4,7 +4,11 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { CoordinatorManagementService } from './coordinator-management.service';
 import { environment } from '../../../environments/environment';
 import {
-  DocenteItem,
+  DocentePrograma,
+  VincularDocenteExistentePayload,
+  VincularDocenteNuevoPayload,
+} from '../models/docente-programa.model';
+import {
   PlanEstudioItem,
   AsignaturaPlanItem,
   EstudianteDirectorioItem,
@@ -96,61 +100,132 @@ describe('CoordinatorManagementService', () => {
     httpFresco.verify();
   });
 
-  describe('Docentes', () => {
-    it('getDocentes obtiene la lista de docentes', () => {
-      const mockDocentes: DocenteItem[] = [
-        {
-          id: 'doc-1',
-          numeroIdentificacion: '1017001',
-          nombres: 'Pedro',
-          apellidos: 'Pérez',
-          correo: 'pperez@uco.edu.co',
-          departamento: 'Ingeniería',
-          especialidad: 'Software',
-          estado: 'ACTIVO',
-          totalGruposAsignados: 3,
-        },
-      ];
+  describe('Docentes del programa (HU062/HU063/HU089/HU090/HU091)', () => {
+    const fila: DocentePrograma = {
+      idDocentePrograma: 'dp-1',
+      idDocente: 'doc-1',
+      idUsuario: 'usr-1',
+      codigoTipoIdentificacion: 'CC',
+      numeroIdentificacion: 1017555444,
+      primerNombre: 'Jorge',
+      segundoNombre: null,
+      primerApellido: 'Henao',
+      segundoApellido: null,
+      nombreCompleto: 'Jorge Henao',
+      correo: 'jorge.henao@uco.edu.co',
+      idTipoVinculacion: 'tv-1',
+      codigoTipoVinculacion: 'CAT',
+      nombreTipoVinculacion: 'Cátedra',
+      fechaVinculacionUtc: '2026-10-22T10:00:00Z',
+      totalGruposPrograma: 0,
+      estaActivo: true,
+    };
 
-      service.getDocentes().subscribe((res) => {
-        expect(res.exitoso).toBeTrue();
-        expect(res.datos?.length).toBe(1);
-      });
+    it('getDocentesPrograma consulta paginado con filtros y actualiza las señales', () => {
+      service
+        .getDocentesPrograma({ pagina: 2, tamano: 5, busqueda: 'ros', estaActivo: true, idTipoVinculacion: 'tv-1' })
+        .subscribe((res) => expect(res.exitoso).toBeTrue());
 
-      const req = http.expectOne(`${environment.apiUrl}/coordinador/docentes`);
+      const req = http.expectOne((r) => r.url === `${environment.apiUrl}/coordinador/docentes`);
       expect(req.request.method).toBe('GET');
-      req.flush({ exitoso: true, datos: mockDocentes });
+      expect(req.request.params.get('pagina')).toBe('2');
+      expect(req.request.params.get('tamano')).toBe('5');
+      expect(req.request.params.get('busqueda')).toBe('ros');
+      expect(req.request.params.get('estaActivo')).toBe('true');
+      expect(req.request.params.get('idTipoVinculacion')).toBe('tv-1');
+      req.flush({ exitoso: true, datos: [fila], total: 12 });
+
+      expect(service.docentes()).toEqual([fila]);
+      expect(service.totalDocentes()).toBe(12);
     });
 
-    it('createDocente envía POST y retorna el nuevo docente', () => {
-      const nuevo: Omit<DocenteItem, 'id' | 'totalGruposAsignados'> = {
-        numeroIdentificacion: '1017002',
-        nombres: 'Luisa',
-        apellidos: 'Castro',
-        correo: 'lcastro@uco.edu.co',
-        departamento: 'Ingeniería',
-        especialidad: 'Inteligencia Artificial',
-        estado: 'ACTIVO',
+    it('getDocentesPrograma omite parámetros opcionales vacíos', () => {
+      service.getDocentesPrograma({ pagina: 1, tamano: 10, busqueda: '  ' }).subscribe();
+
+      const req = http.expectOne((r) => r.url === `${environment.apiUrl}/coordinador/docentes`);
+      expect(req.request.params.has('busqueda')).toBeFalse();
+      expect(req.request.params.has('estaActivo')).toBeFalse();
+      expect(req.request.params.has('idTipoVinculacion')).toBeFalse();
+      req.flush({ exitoso: true, datos: [], total: 0 });
+      expect(service.docentes()).toEqual([]);
+      expect(service.totalDocentes()).toBe(0);
+    });
+
+    it('getDocentesPrograma propaga el error sin tocar las señales', () => {
+      let status = 0;
+      service.getDocentesPrograma({ pagina: 1, tamano: 10 }).subscribe({ error: (e) => (status = e.status) });
+
+      http.expectOne((r) => r.url === `${environment.apiUrl}/coordinador/docentes`)
+        .flush({ message: 'x' }, { status: 403, statusText: 'Forbidden' });
+
+      expect(status).toBe(403);
+      expect(service.docentes()).toEqual([]);
+    });
+
+    it('getCandidatosDocente consulta con la búsqueda', () => {
+      service.getCandidatosDocente('ros').subscribe((res) => expect(res.datos.length).toBe(1));
+
+      const req = http.expectOne((r) => r.url === `${environment.apiUrl}/coordinador/docentes/candidatos`);
+      expect(req.request.method).toBe('GET');
+      expect(req.request.params.get('busqueda')).toBe('ros');
+      req.flush({
+        exitoso: true,
+        total: 1,
+        datos: [{ idDocente: 'doc-9', idUsuario: 'u-9', codigoTipoIdentificacion: 'CC', numeroIdentificacion: 1, nombreCompleto: 'Maria' }],
+      });
+    });
+
+    it('vincularDocente (persona nueva) envía POST con el payload tipado y NO actualiza la lista localmente', () => {
+      const payload: VincularDocenteNuevoPayload = {
+        idTipoIdentificacion: 'tipo-1',
+        numeroIdentificacion: '1017555444',
+        primerNombre: 'Jorge',
+        primerApellido: 'Henao',
+        correo: 'jorge.henao@uco.edu.co',
+        password: 'Clave1234!',
+        idTipoVinculacion: 'tv-1',
       };
 
-      service.createDocente(nuevo).subscribe((res) => {
-        expect(res.exitoso).toBeTrue();
-        expect(res.datos?.nombres).toBe('Luisa');
-      });
+      service.vincularDocente(payload).subscribe((res) => expect(res.datos.idDocente).toBe('doc-1'));
 
       const req = http.expectOne(`${environment.apiUrl}/coordinador/docentes`);
       expect(req.request.method).toBe('POST');
-      req.flush({ exitoso: true, datos: { id: 'doc-2', ...nuevo, totalGruposAsignados: 0 } });
+      expect(req.request.body).toEqual(payload);
+      req.flush({ exitoso: true, datos: fila });
+
+      expect(service.docentes()).toEqual([]); // sin actualización optimista
     });
 
-    it('toggleDocenteStatus envía PATCH para alternar estado', () => {
-      service.toggleDocenteStatus('doc-1').subscribe((res) => {
-        expect(res.exitoso).toBeTrue();
+    it('vincularDocente (existente) envía solo idDocente e idTipoVinculacion', () => {
+      const payload: VincularDocenteExistentePayload = { idDocente: 'doc-9', idTipoVinculacion: 'tv-1' };
+
+      service.vincularDocente(payload).subscribe();
+
+      const req = http.expectOne(`${environment.apiUrl}/coordinador/docentes`);
+      expect(req.request.body).toEqual(payload);
+      req.flush({ exitoso: true, datos: fila });
+    });
+
+    it('vincularDocente propaga el 409 para que la UI muestre el mensaje del backend', () => {
+      let message = '';
+      service.vincularDocente({ idDocente: 'doc-1', idTipoVinculacion: 'tv-1' }).subscribe({
+        error: (e) => (message = e.error.message),
       });
 
-      const req = http.expectOne(`${environment.apiUrl}/coordinador/docentes/doc-1/toggle`);
-      expect(req.request.method).toBe('PATCH');
-      req.flush({ exitoso: true, datos: null });
+      http.expectOne(`${environment.apiUrl}/coordinador/docentes`).flush(
+        { message: 'El docente ya está vinculado a este programa.' },
+        { status: 409, statusText: 'Conflict' }
+      );
+
+      expect(message).toBe('El docente ya está vinculado a este programa.');
+    });
+
+    it('getTiposVinculacion consulta el catálogo de la DB', () => {
+      service.getTiposVinculacion().subscribe((tipos) => expect(tipos[0].codigo).toBe('PLA'));
+
+      const req = http.expectOne(`${environment.apiUrl}/tipos-vinculacion`);
+      expect(req.request.method).toBe('GET');
+      req.flush([{ id: 'tv-1', codigo: 'PLA', nombre: 'Planta' }]);
     });
   });
 
