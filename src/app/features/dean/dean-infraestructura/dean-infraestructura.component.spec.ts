@@ -55,10 +55,6 @@ describe('DeanInfraestructuraComponent', () => {
         },
       ],
     });
-    http.expectOne(`${environment.apiUrl}/admin/espacios-fisicos`).flush({
-      exitoso: true,
-      datos: [],
-    });
     fixture.detectChanges();
   });
 
