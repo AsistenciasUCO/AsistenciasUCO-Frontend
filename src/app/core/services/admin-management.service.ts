@@ -253,52 +253,40 @@ export class AdminManagementService {
     );
   }
 
-  actualizarFacultad(id: string, cambios: Partial<FacultadItem>): void {
-    this.http.put<ApiResponse<FacultadItem>>(`${environment.apiUrl}/admin/facultades/${id}`, cambios).pipe(
-      tap((res) => {
-        if (res.exitoso && res.datos) {
-          this._facultades.update((prev) => prev.map((f) => (f.id === id ? res.datos : f)));
-        }
-      })
-    ).subscribe();
+  /** HU110 (nombre) y HU117 (decano): solo se envian los campos indicados y la señal refleja la respuesta del backend. */
+  actualizarFacultad(
+    id: string,
+    cambios: { nombre?: string; idDecano?: string }
+  ): Observable<ApiResponse<FacultadItem>> {
+    return this.http
+      .put<ApiResponse<any>>(`${environment.apiUrl}/admin/facultades/${id}`, cambios)
+      .pipe(map((res) => this.aplicarFacultadRespuesta(id, res)));
   }
 
-  cambiarEstadoFacultad(id: string): void {
-    this.http.patch<ApiResponse<FacultadItem>>(`${environment.apiUrl}/admin/facultades/${id}/estado`, {}).pipe(
-      tap((res) => {
-        if (res.exitoso && res.datos) {
-          this._facultades.update((prev) => prev.map((f) => (f.id === id ? res.datos : f)));
-        }
-      })
-    ).subscribe();
+  /** HU111: recibe el estado deseado (idempotente); la señal solo cambia con la respuesta exitosa. */
+  cambiarEstadoFacultad(id: string, activa: boolean): Observable<ApiResponse<FacultadItem>> {
+    return this.http
+      .patch<ApiResponse<any>>(`${environment.apiUrl}/admin/facultades/${id}/estado`, { activa })
+      .pipe(map((res) => this.aplicarFacultadRespuesta(id, res)));
   }
 
-  asignarDecanoFacultad(facultadId: string, idDecano: string, decanoNombre: string): Observable<boolean> {
-    // Actualización reactiva optimista del estado de la facultad
-    this._facultades.update((prev) =>
-      prev.map((f) => (f.id === facultadId ? { ...f, decanoId: idDecano, decanoNombre } : f))
-    );
-
-    return this.http.put<ApiResponse<any>>(`${environment.apiUrl}/admin/facultades/${facultadId}`, {
-      idDecano,
-    }).pipe(
-      map(() => true),
-      catchError(() => of(true))
-    );
-  }
-
-  desvincularDecanoFacultad(facultadId: string): Observable<boolean> {
-    // Desvinculación reactiva optimista
-    this._facultades.update((prev) =>
-      prev.map((f) => (f.id === facultadId ? { ...f, decanoId: undefined, decanoNombre: 'Sin asignar' } : f))
-    );
-
-    return this.http.put<ApiResponse<any>>(`${environment.apiUrl}/admin/facultades/${facultadId}`, {
-      idDecano: null,
-    }).pipe(
-      map(() => true),
-      catchError(() => of(true))
-    );
+  private aplicarFacultadRespuesta(id: string, res: ApiResponse<any>): ApiResponse<FacultadItem> {
+    if (!res.exitoso || !res.datos) {
+      return { ...res, datos: undefined as unknown as FacultadItem };
+    }
+    const dto: any = res.datos;
+    const actual = this._facultades().find((f) => f.id === id);
+    const item: FacultadItem = {
+      ...actual,
+      id: dto.id ?? id,
+      codigo: actual?.codigo ?? '',
+      nombre: dto.nombreFacultad || dto.nombre || actual?.nombre || '',
+      decanoId: dto.idDecano ?? actual?.decanoId,
+      decanoNombre: dto.nombreCompletoDecano || actual?.decanoNombre || 'Sin asignar',
+      estado: (dto.estaActivaFacultad ?? true) ? 'ACTIVO' : 'INACTIVO',
+    };
+    this._facultades.update((prev) => prev.map((f) => (f.id === id ? item : f)));
+    return { ...res, datos: item };
   }
 
   cargarAreas(): Observable<ApiResponse<AreaConocimientoItem[]>> {

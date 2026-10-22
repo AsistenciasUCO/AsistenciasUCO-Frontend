@@ -83,73 +83,150 @@ describe('AdminManagementService', () => {
     expect(encontrada?.decanoNombre).toBe('Dr. Roberto Gómez');
   });
 
-  it('asignarDecanoFacultad actualiza optimista y reactivamente el decano de la facultad', () => {
-    // Inicializar estado previo
-    const facultadInicial: FacultadItem = {
-      id: 'fac-100',
-      codigo: 'FAC-TEST',
-      nombre: 'Facultad de Prueba',
-      decanoId: undefined,
-      decanoNombre: 'Sin asignar',
-      estado: 'ACTIVO',
+  describe('actualizarFacultad (HU110 + HU117)', () => {
+    const cargarFacultadBase = () => {
+      service.cargarFacultades().subscribe();
+      http.expectOne(`${environment.apiUrl}/admin/facultades`).flush({
+        exitoso: true,
+        datos: [
+          {
+            id: 'fac-100',
+            nombreFacultad: 'Facultad de Prueba',
+            idDecano: 'dec-1',
+            nombreCompletoDecano: 'Dr. Decano Titular',
+            estaActivaFacultad: true,
+          },
+        ],
+      });
     };
 
-    // Forzar actualización inicial
-    service.cargarFacultades().subscribe();
-    http.expectOne(`${environment.apiUrl}/admin/facultades`).flush({
-      exitoso: true,
-      datos: [
-        {
-          id: facultadInicial.id,
-          codigo: facultadInicial.codigo,
-          nombreFacultad: facultadInicial.nombre,
-          idDecano: null,
-          nombreCompletoDecano: null,
+    it('envia PUT solo con los campos indicados y actualiza la señal con la respuesta del backend', () => {
+      cargarFacultadBase();
+      let resultado: any;
+
+      service.actualizarFacultad('fac-100', { nombre: 'Facultad Renombrada', idDecano: 'dec-2' })
+        .subscribe((res) => (resultado = res));
+
+      const req = http.expectOne(`${environment.apiUrl}/admin/facultades/fac-100`);
+      expect(req.request.method).toBe('PUT');
+      expect(req.request.body).toEqual({ nombre: 'Facultad Renombrada', idDecano: 'dec-2' });
+      // La señal no cambia hasta recibir la respuesta (sin actualización optimista).
+      expect(service.facultades()[0].nombre).toBe('Facultad de Prueba');
+
+      req.flush({
+        exitoso: true,
+        datos: {
+          id: 'fac-100',
+          nombreFacultad: 'Facultad Renombrada',
+          idDecano: 'dec-2',
+          nombreCompletoDecano: 'Dra. María Pérez',
           estaActivaFacultad: true,
         },
-      ],
+      });
+
+      expect(resultado.exitoso).toBeTrue();
+      const target = service.facultades().find((f) => f.id === 'fac-100');
+      expect(target?.nombre).toBe('Facultad Renombrada');
+      expect(target?.decanoId).toBe('dec-2');
+      expect(target?.decanoNombre).toBe('Dra. María Pérez');
+      expect(target?.estado).toBe('ACTIVO');
     });
 
-    service.asignarDecanoFacultad('fac-100', 'dec-999', 'Dra. María Pérez').subscribe();
+    it('no envia los campos no indicados', () => {
+      cargarFacultadBase();
 
-    const target = service.facultades().find((f) => f.id === 'fac-100');
-    expect(target?.decanoId).toBe('dec-999');
-    expect(target?.decanoNombre).toBe('Dra. María Pérez');
+      service.actualizarFacultad('fac-100', { idDecano: 'dec-2' }).subscribe();
 
-    const putReq = http.expectOne(`${environment.apiUrl}/admin/facultades/fac-100`);
-    expect(putReq.request.method).toBe('PUT');
-    expect(putReq.request.body.idDecano).toBe('dec-999');
-    putReq.flush({ exitoso: true, datos: null });
+      const req = http.expectOne(`${environment.apiUrl}/admin/facultades/fac-100`);
+      expect(req.request.body).toEqual({ idDecano: 'dec-2' });
+      expect('nombre' in req.request.body).toBeFalse();
+      req.flush({ exitoso: true, datos: { id: 'fac-100', nombreFacultad: 'Facultad de Prueba', idDecano: 'dec-2', estaActivaFacultad: true } });
+    });
+
+    it('un error HTTP no modifica la señal y se propaga al llamador', () => {
+      cargarFacultadBase();
+      let error: any;
+
+      service.actualizarFacultad('fac-100', { nombre: 'Duplicada' }).subscribe({ error: (e) => (error = e) });
+
+      http.expectOne(`${environment.apiUrl}/admin/facultades/fac-100`)
+        .flush({ exitoso: false, message: 'Ya existe una facultad con ese nombre.' }, { status: 409, statusText: 'Conflict' });
+
+      expect(error.status).toBe(409);
+      expect(service.facultades()[0].nombre).toBe('Facultad de Prueba');
+      expect(service.facultades()[0].decanoId).toBe('dec-1');
+    });
+
+    it('una respuesta exitoso=false sin datos no modifica la señal', () => {
+      cargarFacultadBase();
+
+      service.actualizarFacultad('fac-100', { nombre: 'Otra' }).subscribe();
+
+      http.expectOne(`${environment.apiUrl}/admin/facultades/fac-100`).flush({ exitoso: false, datos: null });
+      expect(service.facultades()[0].nombre).toBe('Facultad de Prueba');
+    });
   });
 
-  it('desvincularDecanoFacultad deja la facultad en estado vacante sin decano', () => {
-    service.cargarFacultades().subscribe();
-    http.expectOne(`${environment.apiUrl}/admin/facultades`).flush({
-      exitoso: true,
-      datos: [
-        {
+  describe('cambiarEstadoFacultad (HU111)', () => {
+    const cargarFacultadBase = () => {
+      service.cargarFacultades().subscribe();
+      http.expectOne(`${environment.apiUrl}/admin/facultades`).flush({
+        exitoso: true,
+        datos: [
+          {
+            id: 'fac-200',
+            nombreFacultad: 'Facultad con Decano',
+            idDecano: 'dec-1',
+            nombreCompletoDecano: 'Dr. Decano Titular',
+            estaActivaFacultad: true,
+          },
+        ],
+      });
+    };
+
+    it('envia PATCH con el estado deseado y refleja la respuesta del backend', () => {
+      cargarFacultadBase();
+      let resultado: any;
+
+      service.cambiarEstadoFacultad('fac-200', false).subscribe((res) => (resultado = res));
+
+      const req = http.expectOne(`${environment.apiUrl}/admin/facultades/fac-200/estado`);
+      expect(req.request.method).toBe('PATCH');
+      expect(req.request.body).toEqual({ activa: false });
+      expect(service.facultades()[0].estado).toBe('ACTIVO');
+
+      req.flush({
+        exitoso: true,
+        datos: {
           id: 'fac-200',
-          codigo: 'FAC-2',
           nombreFacultad: 'Facultad con Decano',
           idDecano: 'dec-1',
           nombreCompletoDecano: 'Dr. Decano Titular',
-          estaActivaFacultad: true,
+          estaActivaFacultad: false,
         },
-      ],
+      });
+
+      expect(resultado.exitoso).toBeTrue();
+      expect(service.facultades()[0].estado).toBe('INACTIVO');
     });
 
-    expect(service.facultades()[0].decanoId).toBe('dec-1');
+    it('un error HTTP deja el estado intacto y se propaga', () => {
+      cargarFacultadBase();
+      let error: any;
 
-    service.desvincularDecanoFacultad('fac-200').subscribe();
+      service.cambiarEstadoFacultad('fac-200', true).subscribe({ error: (e) => (error = e) });
 
-    const target = service.facultades().find((f) => f.id === 'fac-200');
-    expect(target?.decanoId).toBeUndefined();
-    expect(target?.decanoNombre).toBe('Sin asignar');
+      http.expectOne(`${environment.apiUrl}/admin/facultades/fac-200/estado`)
+        .flush({ exitoso: false, message: 'El decano ya titulariza otra facultad activa.' }, { status: 409, statusText: 'Conflict' });
 
-    const putReq = http.expectOne(`${environment.apiUrl}/admin/facultades/fac-200`);
-    expect(putReq.request.method).toBe('PUT');
-    expect(putReq.request.body.idDecano).toBeNull();
-    putReq.flush({ exitoso: true, datos: null });
+      expect(error.status).toBe(409);
+      expect(service.facultades()[0].estado).toBe('ACTIVO');
+    });
+  });
+
+  it('el servicio ya no expone la desvinculacion de decano ni la asignacion optimista', () => {
+    expect((service as any).desvincularDecanoFacultad).toBeUndefined();
+    expect((service as any).asignarDecanoFacultad).toBeUndefined();
   });
 
   it('getDecanos deduplica decanos por id y normaliza nombreCompleto', () => {
@@ -421,32 +498,6 @@ describe('AdminManagementService', () => {
     const patchReq = http.expectOne(`${environment.apiUrl}/admin/instituciones/inst-1/toggle-estado`);
     expect(patchReq.request.method).toBe('PATCH');
     patchReq.flush({ exitoso: true, datos: { id: 'inst-1' } });
-  });
-
-  it('actualizarFacultad, cambiarEstadoFacultad, asignarDecanoFacultad y desvincularDecanoFacultad funcionan', () => {
-    service.actualizarFacultad('fac-1', { nombre: 'Ingeniería Actualizada' });
-    const putReq = http.expectOne(`${environment.apiUrl}/admin/facultades/fac-1`);
-    expect(putReq.request.method).toBe('PUT');
-    putReq.flush({ exitoso: true, datos: { id: 'fac-1', nombre: 'Ingeniería Actualizada' } });
-
-    service.cambiarEstadoFacultad('fac-1');
-    const patchReq = http.expectOne(`${environment.apiUrl}/admin/facultades/fac-1/estado`);
-    expect(patchReq.request.method).toBe('PATCH');
-    patchReq.flush({ exitoso: true, datos: { id: 'fac-1', estaActivaFacultad: false } });
-
-    service.asignarDecanoFacultad('fac-1', 'dec-1', 'Dr. Roberto').subscribe((res) => {
-      expect(res).toBeTrue();
-    });
-    const reqAsignar = http.expectOne(`${environment.apiUrl}/admin/facultades/fac-1`);
-    expect(reqAsignar.request.method).toBe('PUT');
-    reqAsignar.flush({ exitoso: true, datos: null });
-
-    service.desvincularDecanoFacultad('fac-1').subscribe((res) => {
-      expect(res).toBeTrue();
-    });
-    const reqDesvincular = http.expectOne(`${environment.apiUrl}/admin/facultades/fac-1`);
-    expect(reqDesvincular.request.method).toBe('PUT');
-    reqDesvincular.flush({ exitoso: true, datos: null });
   });
 
   it('crearArea, actualizarArea, cambiarEstadoArea y actualizarParametro funcionan', () => {

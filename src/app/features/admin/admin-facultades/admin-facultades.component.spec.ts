@@ -5,7 +5,7 @@ import { AdminFacultadesComponent } from './admin-facultades.component';
 import { AdminManagementService } from '../../../core/services/admin-management.service';
 import { ToastService } from '../../../shared/components/toast/toast.component';
 import { environment } from '../../../../environments/environment';
-import { of } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 describe('AdminFacultadesComponent', () => {
   let fixture: ComponentFixture<AdminFacultadesComponent>;
@@ -205,30 +205,165 @@ describe('AdminFacultadesComponent', () => {
     expect(adminService.crearFacultad).not.toHaveBeenCalled();
   });
 
-  it('permite cambiar decano titular vía modal', () => {
+  const inicializar = () => {
     fixture.detectChanges();
-
     http.expectOne(`${environment.apiUrl}/admin/facultades`).flush({ exitoso: true, datos: mockFacultadesApi });
     http.expectOne(`${environment.apiUrl}/admin/decanos`).flush({ exitoso: true, datos: mockDecanos });
     http.expectOne(`${environment.apiUrl}/admin/instituciones`).flush({ exitoso: true, datos: [] });
     flushCoordinatorCatalogs();
+  };
 
+  it('permite cambiar decano titular vía modal usando actualizarFacultad (HU117)', () => {
+    inicializar();
     const fac = mockFacultades[0];
     component.abrirModalVincularDecano(fac);
-
     expect(component.facultadParaDecano()?.id).toBe(fac.id);
 
     component.decanoSeleccionadoId = 'dec-2';
-    spyOn(adminService, 'asignarDecanoFacultad').and.returnValue(of(true));
+    spyOn(adminService, 'actualizarFacultad').and.returnValue(of({ exitoso: true, datos: mockFacultades[0] }));
 
     component.confirmarAsignacionDecano();
 
-    expect(adminService.asignarDecanoFacultad).toHaveBeenCalledWith(
-      fac.id,
-      'dec-2',
-      'María Pérez'
-    );
+    expect(adminService.actualizarFacultad).toHaveBeenCalledWith(fac.id, { idDecano: 'dec-2' });
     expect(toastService.success).toHaveBeenCalled();
     expect(component.facultadParaDecano()).toBeNull();
+  });
+
+  it('cambiar decano: el toast de exito solo aparece tras la respuesta y el modal sigue abierto mientras tanto', () => {
+    inicializar();
+    component.abrirModalVincularDecano(mockFacultades[0]);
+    component.decanoSeleccionadoId = 'dec-2';
+    const pendiente = new Subject<any>();
+    spyOn(adminService, 'actualizarFacultad').and.returnValue(pendiente);
+
+    component.confirmarAsignacionDecano();
+
+    expect(component.guardandoDecano()).toBeTrue();
+    expect(toastService.success).not.toHaveBeenCalled();
+    expect(component.facultadParaDecano()).not.toBeNull();
+
+    component.confirmarAsignacionDecano(); // segundo clic ignorado
+    expect(adminService.actualizarFacultad).toHaveBeenCalledTimes(1);
+
+    pendiente.next({ exitoso: true, datos: mockFacultades[0] });
+    pendiente.complete();
+    expect(component.guardandoDecano()).toBeFalse();
+    expect(toastService.success).toHaveBeenCalled();
+    expect(component.facultadParaDecano()).toBeNull();
+  });
+
+  it('cambiar decano: ante 409 muestra el mensaje del backend y mantiene el modal abierto', () => {
+    inicializar();
+    component.abrirModalVincularDecano(mockFacultades[0]);
+    component.decanoSeleccionadoId = 'dec-2';
+    spyOn(adminService, 'actualizarFacultad').and.returnValue(
+      throwError(() => ({ status: 409, error: { message: 'El decano ya es titular de otra facultad activa.' } }))
+    );
+
+    component.confirmarAsignacionDecano();
+
+    expect(toastService.error).toHaveBeenCalledWith('El decano ya es titular de otra facultad activa.');
+    expect(toastService.success).not.toHaveBeenCalled();
+    expect(component.facultadParaDecano()).not.toBeNull();
+    expect(component.guardandoDecano()).toBeFalse();
+  });
+
+  it('editar facultad (HU110) llama actualizarFacultad con nombre e idDecano y confirma tras la respuesta', () => {
+    inicializar();
+    component.editarFacultad(mockFacultades[0]);
+    component.formFacultad.nombre = 'Facultad de Ingeniería y Ciencias';
+    component.formFacultad.idDecano = 'dec-1';
+    const pendiente = new Subject<any>();
+    spyOn(adminService, 'actualizarFacultad').and.returnValue(pendiente);
+
+    component.guardar();
+
+    expect(adminService.actualizarFacultad).toHaveBeenCalledWith('fac-1', {
+      nombre: 'Facultad de Ingeniería y Ciencias',
+      idDecano: 'dec-1',
+    });
+    expect(toastService.success).not.toHaveBeenCalled();
+    expect(component.guardando()).toBeTrue();
+
+    pendiente.next({ exitoso: true, datos: mockFacultades[0] });
+    pendiente.complete();
+
+    expect(toastService.success).toHaveBeenCalledWith('Facultad actualizada correctamente.');
+    expect(component.guardando()).toBeFalse();
+    expect(component.vista()).toBe('LISTA');
+  });
+
+  it('editar facultad: un error muestra el mensaje del backend y no cierra el formulario', () => {
+    inicializar();
+    component.editarFacultad(mockFacultades[0]);
+    component.formFacultad.nombre = 'Nombre Nuevo';
+    spyOn(adminService, 'actualizarFacultad').and.returnValue(
+      throwError(() => ({ status: 409, error: { message: 'Ya existe una facultad con ese nombre.' } }))
+    );
+
+    component.guardar();
+
+    expect(toastService.error).toHaveBeenCalledWith('Ya existe una facultad con ese nombre.');
+    expect(toastService.success).not.toHaveBeenCalled();
+    expect(component.vista()).toBe('FORM');
+    expect(component.guardando()).toBeFalse();
+  });
+
+  it('editar facultad: conservar el nombre propio no cuenta como duplicado', () => {
+    inicializar();
+    component.editarFacultad(mockFacultades[0]);
+    component.formFacultad.nombre = mockFacultades[0].nombre;
+
+    expect(component.nombreDuplicado()).toBeFalse();
+  });
+
+  it('alternar estado (HU111) envia el estado deseado y confirma solo tras la respuesta', () => {
+    inicializar();
+    const activa = mockFacultades[0]; // ACTIVO -> se pide inactivar
+    const pendiente = new Subject<any>();
+    spyOn(adminService, 'cambiarEstadoFacultad').and.returnValue(pendiente);
+
+    component.toggleEstadoFacultad(activa);
+
+    expect(adminService.cambiarEstadoFacultad).toHaveBeenCalledWith('fac-1', false);
+    expect(component.facultadCambiandoEstado()).toBe('fac-1');
+    expect(toastService.info).not.toHaveBeenCalled();
+    expect(toastService.success).not.toHaveBeenCalled();
+
+    component.toggleEstadoFacultad(activa); // clic repetido ignorado
+    expect(adminService.cambiarEstadoFacultad).toHaveBeenCalledTimes(1);
+
+    pendiente.next({ exitoso: true, datos: { ...activa, estado: 'INACTIVO' } });
+    pendiente.complete();
+
+    expect(component.facultadCambiandoEstado()).toBeNull();
+    expect(toastService.success).toHaveBeenCalled();
+  });
+
+  it('alternar estado: una facultad inactiva se reactiva enviando activa=true', () => {
+    inicializar();
+    spyOn(adminService, 'cambiarEstadoFacultad').and.returnValue(of({ exitoso: true, datos: mockFacultades[1] }));
+
+    component.toggleEstadoFacultad(mockFacultades[1]);
+
+    expect(adminService.cambiarEstadoFacultad).toHaveBeenCalledWith('fac-2', true);
+  });
+
+  it('alternar estado: ante 409 muestra el mensaje del backend y libera el bloqueo', () => {
+    inicializar();
+    spyOn(adminService, 'cambiarEstadoFacultad').and.returnValue(
+      throwError(() => ({ status: 409, error: { message: 'El decano ya titulariza otra facultad activa.' } }))
+    );
+
+    component.toggleEstadoFacultad(mockFacultades[1]);
+
+    expect(toastService.error).toHaveBeenCalledWith('El decano ya titulariza otra facultad activa.');
+    expect(toastService.success).not.toHaveBeenCalled();
+    expect(component.facultadCambiandoEstado()).toBeNull();
+  });
+
+  it('no existe la accion de desvincular decano (decano es obligatorio)', () => {
+    inicializar();
+    expect((component as any).desvincularDecano).toBeUndefined();
   });
 });
