@@ -106,9 +106,9 @@ const MIN_CARACTERES_CANDIDATOS = 3;
                     <button
                       type="button"
                       data-testid="toggle-estado"
-                      disabled
-                      title="Disponible próximamente (HU093)"
-                      class="text-xs px-2.5 py-1 rounded-lg border border-warm-200 text-warm-400 cursor-not-allowed"
+                      (click)="solicitarCambioEstado(docente)"
+                      [title]="docente.estaActivo ? 'Inactivar la vinculación con el programa' : 'Reactivar la vinculación con el programa'"
+                      class="text-xs px-2.5 py-1 rounded-lg border border-warm-200 text-warm-700 hover:bg-warm-100 transition-colors"
                     >
                       {{ docente.estaActivo ? 'Desactivar' : 'Reactivar' }}
                     </button>
@@ -181,6 +181,27 @@ const MIN_CARACTERES_CANDIDATOS = 3;
         </div>
       }
 
+      @if (docentePendienteEstado(); as pendiente) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-warm-900/60 backdrop-blur-xs" role="dialog" aria-modal="true">
+          <div class="bg-white rounded-3xl shadow-warm-2xl border border-warm-200/80 w-full max-w-md p-6 space-y-4">
+            <h2 class="text-lg font-serif font-bold text-warm-900">
+              {{ pendiente.estaActivo ? 'Inactivar vinculación' : 'Reactivar vinculación' }}
+            </h2>
+            <p class="text-sm text-warm-700">
+              {{ pendiente.estaActivo
+                  ? 'El docente ' + pendiente.nombreCompleto + ' dejará de poder ser asignado como titular de nuevos grupos de este programa. Sus grupos actuales y su cuenta de acceso no cambian.'
+                  : 'El docente ' + pendiente.nombreCompleto + ' volverá a poder ser asignado como titular de grupos de este programa.' }}
+            </p>
+            <div class="flex justify-end gap-3 pt-2">
+              <button type="button" (click)="cancelarCambioEstado()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-warm-100 text-warm-800 hover:bg-warm-200">Cancelar</button>
+              <button type="button" data-testid="confirmar-estado" (click)="confirmarCambioEstado()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-primary-700 text-white hover:bg-primary-800">
+                {{ pendiente.estaActivo ? 'Inactivar' : 'Reactivar' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
       @if (docenteEnEdicion(); as enEdicion) {
         <app-coordinator-docente-edit-modal
           [docente]="enEdicion"
@@ -228,6 +249,7 @@ export class CoordinatorDocentesComponent implements OnInit {
   readonly allCourses = signal<Course[]>([]);
   readonly docenteSeleccionado = signal<DocentePrograma | null>(null);
   readonly docenteEnEdicion = signal<DocentePrograma | null>(null);
+  readonly docentePendienteEstado = signal<DocentePrograma | null>(null);
   readonly cursosDocente = signal<Course[]>([]);
 
   private readonly consulta = computed(() => ({
@@ -322,6 +344,30 @@ export class CoordinatorDocentesComponent implements OnInit {
 
   guardarExistente(payload: VincularDocenteExistentePayload): void {
     this.vincular(payload);
+  }
+
+  solicitarCambioEstado(docente: DocentePrograma): void {
+    this.docentePendienteEstado.set(docente);
+  }
+
+  cancelarCambioEstado(): void {
+    this.docentePendienteEstado.set(null);
+  }
+
+  /** HU093. Sin actualizacion optimista: se espera la respuesta y se recarga la pagina desde el servidor. */
+  confirmarCambioEstado(): void {
+    const docente = this.docentePendienteEstado();
+    if (!docente) {
+      return;
+    }
+    this.docentePendienteEstado.set(null);
+    this.coordService.cambiarEstadoDocente(docente.idDocente, !docente.estaActivo).subscribe({
+      next: (res) => {
+        this.toast.success(res.mensajeUsuario || 'Estado del docente actualizado.');
+        this.recarga.update((n) => n + 1);
+      },
+      error: (error: unknown) => this.toast.error(getApiErrorMessage(error)),
+    });
   }
 
   abrirEdicion(docente: DocentePrograma): void {

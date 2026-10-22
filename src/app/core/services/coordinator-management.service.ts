@@ -136,6 +136,11 @@ export class CoordinatorManagementService {
     return this.http.put<ApiResponse<DocentePrograma>>(`${environment.apiUrl}/coordinador/docentes/${idDocente}`, payload);
   }
 
+  /** HU093: activa/inactiva SOLO el vinculo con el programa. La lista se recarga desde el servidor. */
+  cambiarEstadoDocente(idDocente: string, estaActivo: boolean): Observable<ApiResponse<DocentePrograma>> {
+    return this.http.patch<ApiResponse<DocentePrograma>>(`${environment.apiUrl}/coordinador/docentes/${idDocente}/estado`, { estaActivo });
+  }
+
   getTiposVinculacion(): Observable<TipoVinculacionItem[]> {
     return this.http.get<TipoVinculacionItem[]>(`${environment.apiUrl}/tipos-vinculacion`);
   }
