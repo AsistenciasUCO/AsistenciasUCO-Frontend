@@ -45,6 +45,23 @@ export interface CoordinadorItem {
   totalGrupos: number;
   estado: 'ACTIVO' | 'INACTIVO';
   estaActivoCoordinador?: boolean;
+  estaActivoRolCoordinador?: boolean;
+}
+
+/** HU121: datos editables del coordinador. El documento no se edita. */
+export interface ActualizarCoordinadorPayload {
+  primerNombre: string;
+  segundoNombre: string;
+  primerApellido: string;
+  segundoApellido: string;
+  correo: string;
+}
+
+/** HU121/HU122: resultado de editar o cambiar el estado de un coordinador. */
+export interface ResultadoGestionCoordinador {
+  idCoordinador: string;
+  sincronizacionIdentidad: 'OK' | 'PENDIENTE';
+  mensajeUsuario: string | null;
 }
 
 export interface DocenteItem {

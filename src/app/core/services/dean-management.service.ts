@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
-import { CoordinadorItem } from '../models/role-management.model';
+import { ActualizarCoordinadorPayload, CoordinadorItem, ResultadoGestionCoordinador } from '../models/role-management.model';
 
 @Injectable({
   providedIn: 'root',
@@ -51,6 +51,10 @@ export class DeanManagementService {
               tipoIdentificacionId: raw.tipoIdentificacionId,
               numeroIdentificacion: String(raw.numeroIdentificacion || ''),
               nombreCompleto: nombreCompleto || `${nombres} ${apellidos}`.trim(),
+              primerNombre: raw.primerNombre,
+              segundoNombre: raw.segundoNombre,
+              primerApellido: raw.primerApellido,
+              segundoApellido: raw.segundoApellido,
               nombres: nombres || nombreCompleto,
               apellidos: apellidos,
               correo: raw.correo || '',
@@ -61,6 +65,7 @@ export class DeanManagementService {
               totalGrupos: raw.totalGrupos ?? 0,
               estado: raw.estado || (raw.estaActivoCoordinador === false ? 'INACTIVO' : 'ACTIVO'),
               estaActivoCoordinador: raw.estaActivoCoordinador ?? true,
+              estaActivoRolCoordinador: raw.estaActivoRolCoordinador,
             };
           });
 
@@ -75,7 +80,14 @@ export class DeanManagementService {
     return this.http.post<ApiResponse<CoordinadorItem>>(`${environment.apiUrl}/decano/coordinadores`, nuevoCoord);
   }
 
-  toggleCoordinadorStatus(id: string): Observable<ApiResponse<CoordinadorItem | null>> {
-    return this.http.patch<ApiResponse<CoordinadorItem | null>>(`${environment.apiUrl}/decano/coordinadores/${id}/toggle`, {});
+  updateCoordinador(id: string, payload: ActualizarCoordinadorPayload): Observable<ApiResponse<ResultadoGestionCoordinador>> {
+    return this.http.put<ApiResponse<ResultadoGestionCoordinador>>(`${environment.apiUrl}/decano/coordinadores/${id}`, payload);
+  }
+
+  setCoordinadorEstado(id: string, estaActivo: boolean): Observable<ApiResponse<ResultadoGestionCoordinador>> {
+    return this.http.patch<ApiResponse<ResultadoGestionCoordinador>>(
+      `${environment.apiUrl}/decano/coordinadores/${id}/estado`,
+      { estaActivo },
+    );
   }
 }
