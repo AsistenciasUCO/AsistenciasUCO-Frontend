@@ -138,7 +138,8 @@ export class OverviewComponent implements OnInit {
 
   // Datos Docente
   courses: Course[] = [];
-  pendingClaimsCount = signal<number>(0);
+  /** Total de reclamos pendientes del servidor; `null` si la consulta falló (la vista no muestra cifra). */
+  pendingClaimsCount = signal<number | null>(0);
   totalStudentsCount = signal<number>(0);
 
   // Datos Administrador
@@ -258,15 +259,10 @@ export class OverviewComponent implements OnInit {
           },
           error: () => this.isLoading.set(false),
         });
-        this.claimService.getReclamosDocente().subscribe({
-          next: (res) => {
-            if (res.exitoso && res.datos) {
-              const pending = res.datos.filter(
-                (c: any) => c.estadoSolicitud === 'PENDIENTE'
-              ).length;
-              this.pendingClaimsCount.set(pending);
-            }
-          },
+        // Total real del servidor (misma consulta de una fila que AC-04 de HU035), no la longitud de la primera página.
+        this.claimService.getReclamosDocente({ estado: 'P', pagina: 1, tamano: 1 }).subscribe({
+          next: (res) => this.pendingClaimsCount.set(res.total ?? res.datos.length),
+          error: () => this.pendingClaimsCount.set(null),
         });
         this.iniciarRelojProximaClase();
         break;

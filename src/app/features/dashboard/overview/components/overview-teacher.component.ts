@@ -30,12 +30,14 @@ import { ProximaClaseInfo } from '../utils/proxima-clase.util';
         </div>
         <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
           <span class="text-xs text-warm-500 font-medium">Reclamos Pendientes</span>
-          <p class="text-2xl font-serif font-bold text-warm-900 mt-1" [ngClass]="pendingClaimsCount() > 0 ? 'text-amber-600' : 'text-warm-900'">
-            {{ pendingClaimsCount() }}
+          <p class="text-2xl font-serif font-bold text-warm-900 mt-1" [ngClass]="(pendingClaimsCount() ?? 0) > 0 ? 'text-amber-600' : 'text-warm-900'">
+            {{ pendingClaimsCount() ?? '—' }}
           </p>
-          <span class="text-[11px] font-medium" [ngClass]="pendingClaimsCount() > 0 ? 'text-amber-600' : 'text-emerald-700'">
-            {{ pendingClaimsCount() > 0 ? 'Requieren revisión' : 'Bandeja al día' }}
-          </span>
+          @if (pendingClaimsCount() !== null) {
+            <span class="text-[11px] font-medium" [ngClass]="pendingClaimsCount()! > 0 ? 'text-amber-600' : 'text-emerald-700'">
+              {{ pendingClaimsCount()! > 0 ? 'Requieren revisión' : 'Bandeja al día' }}
+            </span>
+          }
         </div>
         <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]"
              [ngClass]="{'border-emerald-300 bg-emerald-50/30 ring-1 ring-emerald-400/20': proximaClase()?.enCurso, 'border-primary-200/60': proximaClase() && !proximaClase()?.enCurso}">
@@ -70,7 +72,7 @@ import { ProximaClaseInfo } from '../utils/proxima-clase.util';
       </section>
 
       <!-- Alerta destacada si hay reclamos pendientes -->
-      @if (pendingClaimsCount() > 0) {
+      @if ((pendingClaimsCount() ?? 0) > 0) {
         <div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
@@ -208,7 +210,7 @@ import { ProximaClaseInfo } from '../utils/proxima-clase.util';
 export class OverviewTeacherComponent {
   courses = input<Course[]>([]);
   totalStudentsCount = input<number>(0);
-  pendingClaimsCount = input<number>(0);
+  pendingClaimsCount = input<number | null>(0);
   proximaClase = input<ProximaClaseInfo | null>(null);
   isLoading = input<boolean>(false);
 }
