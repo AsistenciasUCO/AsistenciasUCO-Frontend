@@ -273,4 +273,98 @@ describe('CourseService', () => {
     expect(putReq.request.body).toEqual({ name: 'Arquitectura Actualizada' });
     putReq.flush({ exitoso: true, datos: { id: 'grp-nuevo', name: 'Arquitectura Actualizada' } });
   });
+  // --- Grupos por ambito (hallazgo del recorrido de vistas): decano y coordinador NO usan /docente/* ---
+
+  const grupoApi = (over: Record<string, unknown> = {}) => ({
+    id: 'g1',
+    codigo: 'MAT-301',
+    nombre: 'Sección A',
+    idAsignatura: 'asig-1',
+    nombreAsignatura: 'Matemática Avanzada III',
+    idDocente: 'doc-1',
+    capacidadMaximaPermitida: 35,
+    estudiantesActivos: 28,
+    cuposDisponibles: 7,
+    grupoHabilitado: true,
+    fechaInicioPeriodoAcademico: '2026-01-15',
+    fechaFinPeriodoAcademico: '2026-06-15',
+    ...over,
+  });
+
+  it('getDeanCourses lee GET /decano/grupos y nunca los endpoints del docente', () => {
+    let courses: Course[] = [];
+    service.getDeanCourses().subscribe((res) => (courses = res.datos));
+
+    const req = http.expectOne(`${environment.apiUrl}/decano/grupos`);
+    expect(req.request.method).toBe('GET');
+    req.flush({ exitoso: true, total: 2, datos: [grupoApi(), grupoApi({ id: 'g2', codigo: 'SIS-102' })] });
+
+    expect(courses.length).toBe(2);
+    http.expectNone(`${environment.apiUrl}/docente/asignaturas`);
+    http.expectNone(`${environment.apiUrl}/docente/horarios`);
+  });
+
+  it('getCoordinatorCourses lee GET /grupos y nunca los endpoints del docente', () => {
+    let courses: Course[] = [];
+    service.getCoordinatorCourses().subscribe((res) => (courses = res.datos));
+
+    const req = http.expectOne(`${environment.apiUrl}/grupos`);
+    expect(req.request.method).toBe('GET');
+    req.flush({ exitoso: true, total: 1, datos: [grupoApi()] });
+
+    expect(courses.length).toBe(1);
+    http.expectNone(`${environment.apiUrl}/docente/asignaturas`);
+    http.expectNone(`${environment.apiUrl}/docente/horarios`);
+  });
+
+  it('el mapeo del grupo conserva solo lo que entrega el contrato', () => {
+    let courses: Course[] = [];
+    service.getDeanCourses().subscribe((res) => (courses = res.datos));
+    http.expectOne(`${environment.apiUrl}/decano/grupos`).flush({ exitoso: true, total: 1, datos: [grupoApi()] });
+
+    expect(courses[0]).toEqual(jasmine.objectContaining({
+      id: 'g1',
+      code: 'MAT-301',
+      name: 'Matemática Avanzada III',
+      section: 'Sección A',
+      asignaturaId: 'asig-1',
+      docenteId: 'doc-1',
+      enrolledStudentsCount: 28,
+      cupoMaximo: 35,
+      schedule: '',
+    }));
+    expect('room' in courses[0]).toBeFalse();
+    expect('docenteName' in courses[0]).toBeFalse();
+  });
+
+  it('asigna colores de categoria de forma cíclica y estable', () => {
+    let courses: Course[] = [];
+    service.getCoordinatorCourses().subscribe((res) => (courses = res.datos));
+    http.expectOne(`${environment.apiUrl}/grupos`).flush({
+      exitoso: true,
+      total: 5,
+      datos: [1, 2, 3, 4, 5].map((n) => grupoApi({ id: `g${n}` })),
+    });
+
+    expect(courses.map((c) => c.colorCategory)).toEqual(['emerald', 'amber', 'blue', 'purple', 'emerald']);
+  });
+
+  it('una respuesta sin datos produce una lista vacía exitosa', () => {
+    let resultado: { exitoso: boolean; total?: number; datos: Course[] } | null = null;
+    service.getDeanCourses().subscribe((res) => (resultado = res));
+    http.expectOne(`${environment.apiUrl}/decano/grupos`).flush({ exitoso: true });
+
+    expect(resultado!.exitoso).toBeTrue();
+    expect(resultado!.datos).toEqual([]);
+    expect(resultado!.total).toBe(0);
+  });
+
+  it('un 403 del backend se propaga sin reintentar con otro endpoint', () => {
+    let status = 0;
+    service.getDeanCourses().subscribe({ error: (err) => (status = err.status) });
+    http.expectOne(`${environment.apiUrl}/decano/grupos`).flush({ message: 'No autorizado' }, { status: 403, statusText: 'Forbidden' });
+
+    expect(status).toBe(403);
+    http.expectNone(`${environment.apiUrl}/docente/asignaturas`);
+  });
 });

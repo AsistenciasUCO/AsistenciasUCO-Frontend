@@ -66,7 +66,7 @@ describe('CoordinatorDocentesComponent', () => {
       'getDepartamentosAcademicos',
     ]);
     courseService = jasmine.createSpyObj<CourseService>('CourseService', [
-      'getTeacherCourses',
+      'getCoordinatorCourses',
     ]);
     toastService = jasmine.createSpyObj<ToastService>('ToastService', [
       'success',
@@ -84,7 +84,7 @@ describe('CoordinatorDocentesComponent', () => {
     catalogService.getDepartamentosAcademicos.and.returnValue(
       of({ exitoso: true, datos: ['Ingeniería', 'Ciencias Básicas'] })
     );
-    courseService.getTeacherCourses.and.returnValue(
+    courseService.getCoordinatorCourses.and.returnValue(
       of({ exitoso: true, datos: [cursoRelacionado] })
     );
 

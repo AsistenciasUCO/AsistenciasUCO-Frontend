@@ -46,7 +46,7 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
       </div>
 
       <!-- KPIs Bento -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div class="p-4 rounded-2xl bg-white border border-warm-200 shadow-warm-sm flex items-center justify-between">
           <div>
             <span class="text-xs text-warm-500 font-medium">Áreas de Conocimiento</span>
@@ -192,10 +192,10 @@ export class DeanInfraestructuraComponent implements OnInit {
   ngOnInit(): void {
     this.adminService.cargarAreas().subscribe();
     this.adminService.cargarSedes().subscribe();
-    this.adminService.cargarEspacios().subscribe();
   }
 
   volverAFacultad(): void {
     void this.router.navigate(['/app/decano/facultad']);
   }
 }
+

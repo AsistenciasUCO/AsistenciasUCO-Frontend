@@ -209,7 +209,7 @@ export class DeanGruposComponent implements OnInit {
   );
 
   ngOnInit(): void {
-    this.courseService.getTeacherCourses().subscribe({
+    this.courseService.getDeanCourses().subscribe({
       next: (res) => this.courses.set(res.datos || []),
     });
   }

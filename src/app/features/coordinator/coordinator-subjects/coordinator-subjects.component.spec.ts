@@ -33,9 +33,9 @@ describe('CoordinatorSubjectsComponent', () => {
       'CoordinatorManagementService',
       ['getPlanesEstudio', 'getAsignaturasPorPlan', 'getEstudiantesPorGrupo']
     );
-    courseService = jasmine.createSpyObj<CourseService>('CourseService', ['getTeacherCourses']);
+    courseService = jasmine.createSpyObj<CourseService>('CourseService', ['getCoordinatorCourses']);
 
-    courseService.getTeacherCourses.and.returnValue(
+    courseService.getCoordinatorCourses.and.returnValue(
       of({ exitoso: true, datos: [course] } as any)
     );
     coordinatorService.getPlanesEstudio.and.returnValue(

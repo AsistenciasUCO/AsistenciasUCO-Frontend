@@ -5,6 +5,7 @@ import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 import { ApiListResponse } from '../api/models/api-list-response.model';
 import { AsignaturaDocenteApiDto } from '../api/models/asignatura-docente-api-dto.model';
+import { GrupoApiDto } from '../api/models/grupo-api-dto.model';
 import { HorarioDocenteApiDto } from '../api/models/horario-docente-api-dto.model';
 import { Course } from '../models/course.model';
 import { MOCK_COURSES } from '../mocks/course.mock';
@@ -54,6 +55,61 @@ export class CourseService {
           total: courses.length,
           datos: courses,
         };
+      })
+    );
+  }
+
+  /**
+   * Grupos de la facultad del decano autenticado (GET /decano/grupos, ambito forzado en el backend).
+   * Nunca usa los endpoints del docente: `/docente/asignaturas` y `/docente/horarios` devuelven los grupos del docente
+   * autenticado y responden 403 a cualquier otro rol.
+   */
+  getDeanCourses(): Observable<ApiResponse<Course[]>> {
+    return this.getGroupsAsCourses('decano/grupos');
+  }
+
+  /** Grupos para el coordinador (GET /grupos). Nunca usa los endpoints del docente (403 para su rol). */
+  getCoordinatorCourses(): Observable<ApiResponse<Course[]>> {
+    return this.getGroupsAsCourses('grupos');
+  }
+
+  private getGroupsAsCourses(path: string): Observable<ApiResponse<Course[]>> {
+    if (environment.useMocks) {
+      const courses = [...this.coursesSignal()];
+      return of({
+        exitoso: true,
+        total: courses.length,
+        datos: courses,
+      }).pipe(delay(250));
+    }
+
+    return this.http.get<ApiListResponse<GrupoApiDto>>(`${environment.apiUrl}/${path}`).pipe(
+      map((res) => {
+        const courses = this.buildCoursesFromGroups(res.datos ?? []);
+        return {
+          exitoso: res.exitoso,
+          total: courses.length,
+          datos: courses,
+        };
+      })
+    );
+  }
+
+  /** Solo los campos que entrega el contrato del grupo: sin horario, aula ni nombre de docente sintetizados. */
+  private buildCoursesFromGroups(grupos: GrupoApiDto[]): Course[] {
+    const colors: Course['colorCategory'][] = ['emerald', 'amber', 'blue', 'purple'];
+    return grupos.map(
+      (grupo, index): Course => ({
+        id: grupo.id,
+        code: grupo.codigo,
+        name: grupo.nombreAsignatura,
+        section: grupo.nombre,
+        schedule: '',
+        asignaturaId: grupo.idAsignatura,
+        docenteId: grupo.idDocente,
+        enrolledStudentsCount: grupo.estudiantesActivos,
+        cupoMaximo: grupo.capacidadMaximaPermitida,
+        colorCategory: colors[index % colors.length],
       })
     );
   }
