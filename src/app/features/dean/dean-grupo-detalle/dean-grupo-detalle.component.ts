@@ -145,7 +145,7 @@ export class DeanGrupoDetalleComponent implements OnInit {
 
   ngOnInit(): void {
     const id = this.effectiveGrupoId();
-    this.courseService.getTeacherCourses().subscribe({
+    this.courseService.getDeanCourses().subscribe({
       next: (res) => this.courses.set(res.datos || []),
     });
     if (id) {
