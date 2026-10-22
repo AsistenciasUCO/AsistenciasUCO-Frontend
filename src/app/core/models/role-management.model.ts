@@ -368,6 +368,13 @@ export interface FacultadItem {
   totalEstudiantes?: number;
 }
 
+export interface TipoProgramaItem {
+  id: string;
+  codigo: string;
+  nombre: string;
+  activo: boolean;
+}
+
 export interface AreaConocimientoItem {
   id: string;
   codigo: string;
