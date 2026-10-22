@@ -365,7 +365,7 @@ export class CoordinatorSubjectsComponent implements OnInit {
   }
 
   cargarDatos(): void {
-    this.courseService.getTeacherCourses().subscribe({
+    this.courseService.getCoordinatorCourses().subscribe({
       next: (res) => {
         const list = res.datos || [];
         this.courses.set(list);

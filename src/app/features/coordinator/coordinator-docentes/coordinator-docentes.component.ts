@@ -582,7 +582,7 @@ export class CoordinatorDocentesComponent implements OnInit {
   }
 
   cargarCursos(): void {
-    this.courseService.getTeacherCourses().subscribe({
+    this.courseService.getCoordinatorCourses().subscribe({
       next: (res) => {
         if (res.datos) {
           this.allCourses.set(res.datos);
