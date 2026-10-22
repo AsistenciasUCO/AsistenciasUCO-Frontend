@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, delay, map, of } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { TipoIdentificacionApiDto } from '../api/models/tipo-identificacion-api-dto.model';
@@ -65,15 +65,17 @@ export class CatalogService {
     );
   }
 
+  /** Programas activos reales de la facultad del decano (máx. 100 por página; sin datos quemados). */
   getProgramasAcademicos(): Observable<{ exitoso: boolean; datos: Array<{ id: string; nombre: string; facultad?: string }> }> {
-    const defaultProgramas = [
-      { id: 'PROG-01', nombre: 'Ingeniería de Sistemas', facultad: 'Facultad de Ingeniería' },
-      { id: 'PROG-02', nombre: 'Ingeniería Industrial', facultad: 'Facultad de Ingeniería' },
-      { id: 'PROG-03', nombre: 'Ingeniería Electrónica', facultad: 'Facultad de Ingeniería' },
-      { id: 'PROG-04', nombre: 'Ingeniería Agroindustrial', facultad: 'Facultad de Ingeniería' },
-    ];
-
-    return of({ exitoso: true, datos: defaultProgramas }).pipe(delay(150));
+    const params = new HttpParams().set('estaActivo', true).set('pagina', 1).set('tamano', 100);
+    return this.http
+      .get<{ datos?: Array<{ id: string; nombre: string; nombreFacultad?: string | null }> }>(`${environment.apiUrl}/decano/programas`, { params })
+      .pipe(
+        map((res) => ({
+          exitoso: true,
+          datos: (res.datos ?? []).map((p) => ({ id: p.id, nombre: p.nombre, facultad: p.nombreFacultad ?? undefined })),
+        }))
+      );
   }
 
   getDepartamentosAcademicos(): Observable<{ exitoso: boolean; datos: string[] }> {

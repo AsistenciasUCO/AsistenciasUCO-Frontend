@@ -3,6 +3,7 @@ import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideHttpClient, withInterceptors, withXsrfConfiguration } from '@angular/common/http';
 import { routes } from './app.routes';
 import { correlationInterceptor } from './core/interceptors/correlation.interceptor';
+import { roleScopeInterceptor } from './core/interceptors/role-scope.interceptor';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { mockBackendInterceptor } from './core/interceptors/mock-backend.interceptor';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
@@ -21,6 +22,8 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(
       withInterceptors([
         correlationInterceptor,
+        // Corta en el cliente las lecturas a prefijos que el rol autenticado no puede usar (evita 403 evitables).
+        roleScopeInterceptor,
         authInterceptor,
         // Siempre está registrado, pero decide por petición si el modo mock está
         // activo. Así cambiar de modo en runtime no deja un pipeline inconsistente.
