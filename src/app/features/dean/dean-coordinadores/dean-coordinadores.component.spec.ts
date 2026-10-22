@@ -78,10 +78,11 @@ describe('DeanCoordinadoresComponent', () => {
         datos: [{ id: 'tipo-1', tipoIdentificacion: 'CC', nombre: 'Cédula de Ciudadanía' }],
       })
     );
-    http.match(`${environment.apiUrl}/programas-academicos`).forEach((r) =>
+    http.match((r) => r.url === `${environment.apiUrl}/decano/programas`).forEach((r) =>
       r.flush({
         exitoso: true,
-        datos: [{ id: 'prog-1', codigo: 'IS', nombre: 'Ingeniería de Sistemas' }],
+        datos: [{ id: '7d0f6a52-0000-4000-8000-000000000001', nombre: 'Ingeniería de Sistemas', nombreFacultad: 'Facultad de Ingeniería' }],
+        total: 1,
       })
     );
 
@@ -98,6 +99,14 @@ describe('DeanCoordinadoresComponent', () => {
     expect(component).toBeTruthy();
     expect(component.coordinadores().length).toBe(2);
     expect(component.isLoading()).toBeFalse();
+  });
+
+  it('T-FE-06 el selector de programa muestra los programas reales del decano (sin ids quemados)', () => {
+    flushInitialRequests();
+    expect(component.programasAcademicos()).toEqual([
+      { id: '7d0f6a52-0000-4000-8000-000000000001', nombre: 'Ingeniería de Sistemas', facultad: 'Facultad de Ingeniería' },
+    ]);
+    expect(component.programasAcademicos().some((p) => p.id.startsWith('PROG-'))).toBeFalse();
   });
 
   it('filteredCoordinadores filtra por texto de búsqueda', () => {

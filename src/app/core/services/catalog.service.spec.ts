@@ -66,13 +66,34 @@ describe('CatalogService', () => {
     req.flush({ datos: [{ id: 'fac-1', nombre: 'Facultad de Ingeniería' }] });
   });
 
-  it('getProgramasAcademicos retorna el catálogo institucional por defecto', (done) => {
+  it('T-FE-01 getProgramasAcademicos consulta los programas activos reales y no devuelve datos quemados', (done) => {
     service.getProgramasAcademicos().subscribe((res) => {
       expect(res.exitoso).toBeTrue();
-      expect(res.datos.length).toBeGreaterThan(0);
-      expect(res.datos.some((p) => p.nombre.includes('Ingeniería de Sistemas'))).toBeTrue();
+      expect(res.datos).toEqual([{ id: '7d0f6a52-0000-4000-8000-000000000001', nombre: 'Ingeniería de Sistemas', facultad: 'Facultad de Ingeniería' }]);
+      expect(res.datos.some((p) => p.id.startsWith('PROG-'))).toBeFalse();
       done();
     });
+
+    const req = http.expectOne((r) => r.url === `${environment.apiUrl}/decano/programas`);
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.get('estaActivo')).toBe('true');
+    expect(req.request.params.get('tamano')).toBe('100');
+    req.flush({
+      exitoso: true,
+      datos: [{ id: '7d0f6a52-0000-4000-8000-000000000001', nombre: 'Ingeniería de Sistemas', nombreFacultad: 'Facultad de Ingeniería' }],
+      total: 1,
+    });
+  });
+
+  it('getProgramasAcademicos propaga el error del backend', (done) => {
+    service.getProgramasAcademicos().subscribe({
+      next: () => fail('no debe emitir éxito'),
+      error: (e) => {
+        expect(e.status).toBe(403);
+        done();
+      },
+    });
+    http.expectOne((r) => r.url === `${environment.apiUrl}/decano/programas`).flush({ message: 'x' }, { status: 403, statusText: 'Forbidden' });
   });
 
   it('getDepartamentosAcademicos retorna la lista institucional', (done) => {

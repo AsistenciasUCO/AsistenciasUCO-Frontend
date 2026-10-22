@@ -51,6 +51,13 @@ describe('DeanProgramasComponent', () => {
     http.match(`${environment.apiUrl}/coordinador/periodos-academicos`).forEach((req) =>
       req.flush({ exitoso: true, datos: [] })
     );
+    http.match((r) => r.url === `${environment.apiUrl}/decano/programas`).forEach((req) =>
+      req.flush({ exitoso: true, datos: [], total: 0 })
+    );
+    http.match(`${environment.apiUrl}/decano/coordinadores`).forEach((req) => req.flush({ exitoso: true, datos: [] }));
+    http.match(`${environment.apiUrl}/tipos-programa`).forEach((req) => req.flush([]));
+    http.match(`${environment.apiUrl}/modalidades-programa`).forEach((req) => req.flush([]));
+    http.match(`${environment.apiUrl}/jornadas-programa`).forEach((req) => req.flush([]));
     fixture.detectChanges();
   });
 
