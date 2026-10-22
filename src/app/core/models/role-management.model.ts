@@ -217,6 +217,19 @@ export interface SolicitudRevisionItem {
   fechaRespuesta?: string;
 }
 
+/** Causal de inasistencia registrada por el docente para la sesión reclamada (HU036). */
+export interface CausalInasistenciaItem {
+  codigo: string;
+  nombre: string;
+  asistio: boolean | null;
+}
+
+/** Detalle de una solicitud de revisión del docente: `GET /docente/reclamos/{id}` (HU036). */
+export interface DetalleReclamoDocenteItem extends SolicitudRevisionItem {
+  causalInasistencia: CausalInasistenciaItem | null;
+  nombreEstado: string;
+}
+
 export interface PlanEstudioItem {
   id: string;
   codigo: string;
