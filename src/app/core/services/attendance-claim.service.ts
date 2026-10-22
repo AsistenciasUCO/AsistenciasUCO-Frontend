@@ -1,10 +1,10 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpContext } from '@angular/common/http';
-import { Observable, catchError, map, of, throwError } from 'rxjs';
+import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
+import { Observable, map, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 import { ApiDataResponse } from '../api/models/api-data-response.model';
-import { ClaimMapper, ReclamoDocenteApi } from '../mappers/claim.mapper';
+import { ClaimMapper, DetalleReclamoDocenteApi, ReclamoDocenteApi } from '../mappers/claim.mapper';
 import { StudentPortalMapper } from '../mappers/student-portal.mapper';
 import { ApiListResponse } from '../api/models/api-list-response.model';
 import { SesionMateriaEstudianteApiDto } from '../api/models/estudiante-portal-api-dto.model';
@@ -12,15 +12,23 @@ import { BYPASS_GLOBAL_ERROR_TOAST } from '../interceptors/error.interceptor';
 import { isUuid } from '../utils/uuid.util';
 import { SessionTimeZoneService } from './session-timezone.service';
 import {
+  DetalleReclamoDocenteItem,
   SesionMateriaDetalle,
   SolicitudRevisionItem,
   HorarioDocenteItem,
 } from '../models/role-management.model';
 
-/** El identificador de asignatura no es un UUID: no se emite ninguna peticion HTTP. */
+/** Filtro de la bandeja del docente: `estado` P/A/R opcional; `pagina` base 1; `tamano` máximo 100 (límite del backend). */
+export interface FiltroReclamosDocente {
+  estado?: 'P' | 'A' | 'R';
+  pagina: number;
+  tamano: number;
+}
+
+/** El identificador (asignatura o solicitud) no es un UUID: no se emite ninguna peticion HTTP. */
 export class IdentificadorInvalidoError extends Error {
   constructor(readonly valor: unknown) {
-    super('Identificador de asignatura inválido.');
+    super('Identificador inválido.');
     this.name = 'IdentificadorInvalidoError';
   }
 }
@@ -60,26 +68,45 @@ export class AttendanceClaimService {
   /**
    * Reclamos del docente titular. El backend (LB-004D) devuelve `ApiListResponse<ReclamoDocenteApi>` con instantes UTC;
    * se adaptan al modelo de UI presentando las fechas en la zona IANA seleccionada, sin perder el instante original.
+   * La paginación y el filtro de estado los resuelve el servidor (`estado`, `pagina`, `tamano`); `total` es el total
+   * del servidor. Los errores HTTP (404/501 incluidos) se propagan: jamás se simulan como lista vacía exitosa.
    */
-  getReclamosDocente(docenteId?: string): Observable<ApiResponse<SolicitudRevisionItem[]>> {
-    return this.http.get<ApiResponse<ReclamoDocenteApi[]>>(`${environment.apiUrl}/docente/reclamos`).pipe(
-      map((res): ApiResponse<SolicitudRevisionItem[]> => ({
-        ...res,
-        datos: (res.datos ?? []).map((item) =>
+  getReclamosDocente(filtro: FiltroReclamosDocente): Observable<ApiListResponse<SolicitudRevisionItem>>;
+  /** Compatibilidad con consumidores del tablero que no paginan: primera página con el tamaño por defecto del backend. */
+  getReclamosDocente(): Observable<ApiResponse<SolicitudRevisionItem[]>>;
+  getReclamosDocente(filtro: FiltroReclamosDocente = { pagina: 1, tamano: 10 }): Observable<ApiListResponse<SolicitudRevisionItem>> {
+    let params = new HttpParams().set('pagina', filtro.pagina).set('tamano', filtro.tamano);
+    if (filtro.estado) {
+      params = params.set('estado', filtro.estado);
+    }
+    return this.http.get<ApiListResponse<ReclamoDocenteApi>>(`${environment.apiUrl}/docente/reclamos`, { params }).pipe(
+      map((res): ApiListResponse<SolicitudRevisionItem> => {
+        const datos = (res.datos ?? []).map((item) =>
           ClaimMapper.fromReclamoDocente(item, (instant) => this.sessionTimeZone.displayInstant(instant).date)
-        ),
-      })),
-      catchError((error) => {
-        if (error?.status === 501 || error?.status === 404) {
-          return of({
-            exitoso: true,
-            mensajeUsuario: 'Módulo de reclamos no disponible en este entorno',
-            datos: []
-          });
-        }
-        return throwError(() => error);
+        );
+        return { ...res, datos, total: res.total ?? datos.length };
       })
     );
+  }
+
+  /**
+   * Detalle de una solicitud del docente titular (HU036). Valida el UUID antes de construir la ruta (sin petición si
+   * es inválido). El error HTTP se propaga con su `ApiErrorResponse`; la vista muestra el `message` del backend.
+   */
+  getDetalleReclamoDocente(id: string): Observable<ApiDataResponse<DetalleReclamoDocenteItem>> {
+    if (!isUuid(id)) {
+      return throwError(() => new IdentificadorInvalidoError(id));
+    }
+    return this.http
+      .get<ApiDataResponse<DetalleReclamoDocenteApi>>(`${environment.apiUrl}/docente/reclamos/${id}`, {
+        context: new HttpContext().set(BYPASS_GLOBAL_ERROR_TOAST, true),
+      })
+      .pipe(
+        map((res): ApiDataResponse<DetalleReclamoDocenteItem> => ({
+          ...res,
+          datos: ClaimMapper.fromDetalleReclamoDocente(res.datos, (instant) => this.sessionTimeZone.displayInstant(instant).date),
+        }))
+      );
   }
 
   /**

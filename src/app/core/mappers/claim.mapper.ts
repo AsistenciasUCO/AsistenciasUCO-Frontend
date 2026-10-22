@@ -1,4 +1,5 @@
 import {
+  DetalleReclamoDocenteItem,
   SolicitudRevisionItem,
   EstadoAsistenciaSesion,
   EstadoSolicitudRevision,
@@ -71,6 +72,17 @@ export interface ReclamoDocenteApi {
   soporteAdjunto?: ReclamoDocenteSoporteApi | null;
 }
 
+/** `datos` de GET /docente/reclamos/{id} (HU036): el elemento del listado más causal y estado legible. */
+export interface DetalleReclamoDocenteApi extends ReclamoDocenteApi {
+  codigoEstado?: string | null;
+  nombreEstado?: string | null;
+  causalInasistencia?: {
+    codigo: string;
+    nombre: string;
+    asistio?: boolean | null;
+  } | null;
+}
+
 /** Formatea un instante UTC ISO en la zona IANA del usuario; devuelve la fecha local 'yyyy-MM-dd'. */
 export type InstantDateFormatter = (isoInstant: string) => string;
 
@@ -115,6 +127,18 @@ export class ClaimMapper {
         : undefined,
       justificacionSolicitud: dto.justificacionSolicitud,
       justificacionRespuesta: dto.justificacionRespuesta ?? undefined,
+    };
+  }
+
+  /** Adapta el detalle del backend: mismo mapeo que el listado más la causal real (`null` si no hay detalle de asistencia). */
+  static fromDetalleReclamoDocente(dto: DetalleReclamoDocenteApi, formatDate: InstantDateFormatter): DetalleReclamoDocenteItem {
+    const causal = dto.causalInasistencia ?? null;
+    return {
+      ...ClaimMapper.fromReclamoDocente(dto, formatDate),
+      nombreEstado: dto.nombreEstado ?? '',
+      causalInasistencia: causal
+        ? { codigo: causal.codigo, nombre: causal.nombre, asistio: causal.asistio ?? null }
+        : null,
     };
   }
 

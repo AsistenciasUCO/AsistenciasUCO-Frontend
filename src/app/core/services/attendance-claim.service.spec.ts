@@ -57,18 +57,112 @@ describe('AttendanceClaimService', () => {
     request.flush({ exitoso: true, datos: { fileId: 'f1', nombre: 'prueba.pdf', url: '/api/v1/archivos/f1', tamanio: 5 } });
   });
 
-  it('getReclamosDocente consulta la lista y conserva el fallback 501', () => {
+  it('getReclamosDocente consulta la lista paginada y propaga el 501 sin enmascararlo', () => {
     let reclamos: any[] = [];
-    service.getReclamosDocente().subscribe((res) => (reclamos = res.datos || []));
+    service.getReclamosDocente({ pagina: 1, tamano: 10 }).subscribe((res) => (reclamos = res.datos || []));
 
-    const request = http.expectOne(`${environment.apiUrl}/docente/reclamos`);
+    const request = http.expectOne(`${environment.apiUrl}/docente/reclamos?pagina=1&tamano=10`);
     expect(request.request.method).toBe('GET');
-    request.flush({ exitoso: true, datos: [{ id: 'rec-1', materia: 'Cálculo' }] });
+    request.flush({ exitoso: true, datos: [{ id: 'rec-1', materia: 'Cálculo' }], total: 1 });
     expect(reclamos.length).toBe(1);
 
-    service.getReclamosDocente().subscribe((res) => (reclamos = res.datos || []));
-    http.expectOne(`${environment.apiUrl}/docente/reclamos`).flush({}, { status: 501, statusText: 'Not Implemented' });
-    expect(reclamos).toEqual([]);
+    let error: { status?: number } | undefined;
+    service.getReclamosDocente({ pagina: 1, tamano: 10 }).subscribe({ error: (e) => (error = e) });
+    http.expectOne(`${environment.apiUrl}/docente/reclamos?pagina=1&tamano=10`).flush({}, { status: 501, statusText: 'Not Implemented' });
+    expect(error?.status).toBe(501);
+  });
+
+  describe('bandeja y detalle del docente (HU035/HU036)', () => {
+    const ID = '3f0c1d2e-0000-4000-8000-000000000001';
+    const LISTA = `${environment.apiUrl}/docente/reclamos`;
+
+    it('FE-01 envía pagina y tamano como query params y devuelve el total del servidor', () => {
+      let total = -1;
+      service.getReclamosDocente({ pagina: 3, tamano: 20 }).subscribe((res) => (total = res.total));
+      const req = http.expectOne((r) => r.url === LISTA);
+      expect(req.request.params.get('pagina')).toBe('3');
+      expect(req.request.params.get('tamano')).toBe('20');
+      expect(req.request.params.has('estado')).toBeFalse();
+      req.flush({ exitoso: true, datos: [], total: 41 });
+      expect(total).toBe(41);
+    });
+
+    it('FE-02 envía el estado cuando se filtra', () => {
+      service.getReclamosDocente({ estado: 'P', pagina: 1, tamano: 10 }).subscribe();
+      const req = http.expectOne((r) => r.url === LISTA);
+      expect(req.request.params.get('estado')).toBe('P');
+      req.flush({ exitoso: true, datos: [], total: 0 });
+    });
+
+    it('un 404 de la bandeja se propaga y no se convierte en lista vacía exitosa', () => {
+      let result: unknown;
+      let error: { status?: number } | undefined;
+      service.getReclamosDocente({ pagina: 1, tamano: 10 }).subscribe({ next: (v) => (result = v), error: (e) => (error = e) });
+      http.expectOne((r) => r.url === LISTA).flush({}, { status: 404, statusText: 'Not Found' });
+      expect(result).toBeUndefined();
+      expect(error?.status).toBe(404);
+    });
+
+    it('FE-04 getDetalleReclamoDocente consulta /docente/reclamos/{id} y adapta causal y estado', () => {
+      TestBed.inject(SessionTimeZoneService).setManualTimeZone('America/Bogota');
+      let item: Record<string, any> | undefined;
+      service.getDetalleReclamoDocente(ID).subscribe((res) => (item = res.datos as never));
+
+      const req = http.expectOne(`${LISTA}/${ID}`);
+      expect(req.request.method).toBe('GET');
+      req.flush({
+        exitoso: true,
+        datos: {
+          id: ID, nombre: 'REV-1', fechaSolicitud: '2026-10-15', codigoEstado: 'P', estadoSolicitud: 'PENDIENTE',
+          nombreEstado: 'pendiente', justificacionSolicitud: 'Cita médica', justificacionRespuesta: '',
+          estudianteId: 'e1', estudianteNombre: 'Ana Pérez', sesionId: 's1', sesionNumero: 4,
+          fechaSesionUtc: '2026-10-14T13:00:00.0000000Z', procedenciaTemporalSesion: 'UTC_V2',
+          grupoId: 'g1', grupoCodigo: 1, grupoNombre: 'Grupo 1', materiaId: 'm1', materiaCodigo: 'MAT101',
+          materiaNombre: 'Cálculo I',
+          causalInasistencia: { codigo: 'SJC', nombre: 'sin justa causa', asistio: false },
+          soporteAdjunto: null,
+        },
+      });
+
+      expect(item?.['id']).toBe(ID);
+      expect(item?.['estadoSolicitud']).toBe('PENDIENTE');
+      expect(item?.['nombreEstado']).toBe('pendiente');
+      expect(item?.['grupo']).toBe('Grupo 1');
+      expect(item?.['fechaSesion']).toBe('2026-10-14');
+      expect(item?.['causalInasistencia']).toEqual({ codigo: 'SJC', nombre: 'sin justa causa', asistio: false });
+      expect(item?.['soporteAdjunto']).toBeUndefined();
+    });
+
+    it('el detalle sin causal conserva causalInasistencia en null', () => {
+      let item: Record<string, any> | undefined;
+      service.getDetalleReclamoDocente(ID).subscribe((res) => (item = res.datos as never));
+      http.expectOne(`${LISTA}/${ID}`).flush({
+        exitoso: true,
+        datos: {
+          id: ID, fechaSolicitud: '2026-10-15', estadoSolicitud: 'APROBADA', nombreEstado: 'aprobada',
+          justificacionSolicitud: 'x', estudianteId: 'e1', estudianteNombre: 'Ana', sesionId: 's1', sesionNumero: 1,
+          materiaId: 'm1', materiaCodigo: 'M', materiaNombre: 'Mat', causalInasistencia: null, soporteAdjunto: null,
+        },
+      });
+      expect(item?.['causalInasistencia']).toBeNull();
+      expect(item?.['fechaSesion']).toBe('');
+    });
+
+    it('FE-05 propaga el error 404 del detalle', () => {
+      let error: { status?: number } | undefined;
+      service.getDetalleReclamoDocente(ID).subscribe({ error: (e) => (error = e) });
+      http.expectOne(`${LISTA}/${ID}`).flush({}, { status: 404, statusText: 'Not Found' });
+      expect(error?.status).toBe(404);
+    });
+
+    for (const invalido of [undefined, null, '', 'x', 'undefined', 'rec-1']) {
+      it(`FE-07 no emite petición con el id ${JSON.stringify(invalido)}`, () => {
+        let error: unknown;
+        service.getDetalleReclamoDocente(invalido as unknown as string).subscribe({ error: (e) => (error = e) });
+        http.expectNone(() => true);
+        expect(error instanceof IdentificadorInvalidoError).toBeTrue();
+      });
+    }
   });
 
   describe('getSesionesPorMateria (SesionMateriaEstudianteDTO)', () => {
@@ -236,8 +330,8 @@ describe('AttendanceClaimService', () => {
 
     function cargar(items: unknown[]) {
       let result: { datos: Array<Record<string, any>> } | undefined;
-      service.getReclamosDocente().subscribe((value) => (result = value as never));
-      http.expectOne(`${environment.apiUrl}/docente/reclamos`).flush({ exitoso: true, datos: items, total: items.length });
+      service.getReclamosDocente({ pagina: 1, tamano: 10 }).subscribe((value) => (result = value as never));
+      http.expectOne((r) => r.url === `${environment.apiUrl}/docente/reclamos`).flush({ exitoso: true, datos: items, total: items.length });
       return result!.datos;
     }
 
@@ -295,11 +389,13 @@ describe('AttendanceClaimService', () => {
       expect(zone.displayInstant('2026-03-29T01:30:00.0000000Z').time).toBe('02:30');
     });
 
-    it('conserva el fallback de módulo no disponible para 501', () => {
-      let result: { datos: unknown[] } | undefined;
-      service.getReclamosDocente().subscribe((value) => (result = value as never));
-      http.expectOne(`${environment.apiUrl}/docente/reclamos`).flush({}, { status: 501, statusText: 'Not Implemented' });
-      expect(result!.datos).toEqual([]);
+    it('propaga el 501 del módulo de reclamos en lugar de simular una lista vacía exitosa', () => {
+      let result: unknown;
+      let error: { status?: number } | undefined;
+      service.getReclamosDocente({ pagina: 1, tamano: 10 }).subscribe({ next: (value) => (result = value), error: (e) => (error = e) });
+      http.expectOne((r) => r.url === `${environment.apiUrl}/docente/reclamos`).flush({}, { status: 501, statusText: 'Not Implemented' });
+      expect(result).toBeUndefined();
+      expect(error?.status).toBe(501);
     });
   });
 });
