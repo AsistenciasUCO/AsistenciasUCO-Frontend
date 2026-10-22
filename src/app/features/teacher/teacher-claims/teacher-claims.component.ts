@@ -1,9 +1,10 @@
-import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { finalize } from 'rxjs';
+import { Subscription, finalize } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { AttendanceClaimService } from '../../../core/services/attendance-claim.service';
 import {
+  DetalleReclamoDocenteItem,
   SolicitudRevisionItem,
   EstadoSolicitudRevision,
   SoporteAdjuntoItem,
@@ -14,9 +15,11 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
 import { ToastService } from '../../../shared/components/toast/toast.component';
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
-import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
+import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
+import { getApiErrorMessage, getApiErrorResponse } from '../../../core/api/errors/api-error.util';
 
 type VistaDocenteReclamos = 'BANDEJA' | 'RESOLUCION';
+type EstadoFiltroReclamos = 'TODOS' | 'P' | 'A' | 'R';
 type ReclamosListState = 'LOADING' | 'LOADED' | 'UNAVAILABLE' | 'FORBIDDEN' | 'NETWORK_ERROR' | 'SERVER_ERROR';
 
 @Component({
@@ -31,6 +34,7 @@ type ReclamosListState = 'LOADING' | 'LOADED' | 'UNAVAILABLE' | 'FORBIDDEN' | 'N
     ButtonComponent,
     FormFieldComponent,
     AvatarComponent,
+    PaginationComponent,
   ],
   template: `
     <div class="space-y-6 animate-fade-in">
@@ -57,7 +61,7 @@ type ReclamosListState = 'LOADING' | 'LOADED' | 'UNAVAILABLE' | 'FORBIDDEN' | 'N
           <!-- Indicador de Pendientes -->
           <div class="flex items-center gap-3">
             <span class="px-3.5 py-1.5 rounded-xl bg-amber-50 text-amber-900 text-xs font-bold border border-amber-200">
-              {{ totalPendientes() }} Pendientes por Resolver
+              {{ totalPendientes() ?? '—' }} Pendientes por Resolver
             </span>
           </div>
         </div>
@@ -75,7 +79,8 @@ type ReclamosListState = 'LOADING' | 'LOADED' | 'UNAVAILABLE' | 'FORBIDDEN' | 'N
             <div class="relative">
               <input
                 type="text"
-                [(ngModel)]="searchQuery"
+                [value]="searchQuery()"
+                (input)="onBuscar($event)"
                 placeholder="Buscar por estudiante, materia o motivo..."
                 class="w-full pl-10 pr-4 py-2.5 bg-white border border-warm-200 rounded-xl text-sm text-warm-900 placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 shadow-warm-sm transition-all"
               />
@@ -87,13 +92,14 @@ type ReclamosListState = 'LOADING' | 'LOADED' | 'UNAVAILABLE' | 'FORBIDDEN' | 'N
 
           <div>
             <select
-              [(ngModel)]="selectedEstado"
+              [value]="estadoFiltro()"
+              (change)="onEstadoChange($event)"
               class="w-full px-3.5 py-2.5 bg-white border border-warm-200 rounded-xl text-sm text-warm-800 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 shadow-warm-sm"
             >
               <option value="TODOS">Todos los reclamos</option>
-              <option value="PENDIENTE">Solo Pendientes</option>
-              <option value="APROBADA">Solo Aprobados</option>
-              <option value="RECHAZADA">Solo Rechazados</option>
+              <option value="P">Solo Pendientes</option>
+              <option value="A">Solo Aprobados</option>
+              <option value="R">Solo Rechazados</option>
             </select>
           </div>
         </div>
@@ -173,7 +179,6 @@ type ReclamosListState = 'LOADING' | 'LOADED' | 'UNAVAILABLE' | 'FORBIDDEN' | 'N
                       </div>
                       <div class="flex items-center justify-between text-warm-600">
                         <span>Sesión #{{ reclamo.sesionNumero }} ({{ reclamo.fechaSesion }})</span>
-                        <span class="font-bold text-red-700">Falla: {{ reclamo.estadoOriginal ?? 'No informado' }}</span>
                       </div>
                     </div>
 
@@ -202,6 +207,17 @@ type ReclamosListState = 'LOADING' | 'LOADED' | 'UNAVAILABLE' | 'FORBIDDEN' | 'N
               </app-card>
             }
           </div>
+        }
+
+        @if (listState() === 'LOADED' && total() > 0) {
+          <app-pagination
+            [totalItems]="total()"
+            [pageSize]="tamano()"
+            [currentPage]="pagina()"
+            [showPageSizeSelector]="true"
+            (pageChange)="cambiarPagina($event)"
+            (pageSizeChange)="cambiarTamano($event)"
+          />
         }
       }
 
@@ -270,7 +286,16 @@ type ReclamosListState = 'LOADING' | 'LOADED' | 'UNAVAILABLE' | 'FORBIDDEN' | 'N
               <p class="text-xs text-warm-600">
                 Grupo: {{ selectedReclamo()?.grupo }} • Sesión #{{ selectedReclamo()?.sesionNumero }} ({{ selectedReclamo()?.fechaSesion }})
               </p>
-              <p class="text-xs font-bold text-red-700">Registro original: {{ selectedReclamo()?.estadoOriginal ?? 'No informado' }}</p>
+              @if (selectedReclamo()?.causalInasistencia; as causal) {
+                <p class="text-xs font-bold text-red-700">
+                  Registro original: {{ causal.nombre }}
+                  @if (causal.asistio !== null) {
+                    ({{ causal.asistio ? 'Asistió' : 'No asistió' }})
+                  }
+                </p>
+              } @else {
+                <p class="text-xs font-bold text-warm-600">Sin registro de asistencia</p>
+              }
             </div>
           </div>
 
@@ -368,7 +393,7 @@ type ReclamosListState = 'LOADING' | 'LOADED' | 'UNAVAILABLE' | 'FORBIDDEN' | 'N
     </div>
   `,
 })
-export class TeacherClaimsComponent implements OnInit {
+export class TeacherClaimsComponent implements OnInit, OnDestroy {
   private claimService = inject(AttendanceClaimService);
   private toast = inject(ToastService);
 
@@ -377,68 +402,146 @@ export class TeacherClaimsComponent implements OnInit {
   isLoading = signal<boolean>(true);
   listUnavailable = signal<boolean>(false);
   listState = signal<ReclamosListState>('LOADING');
-  searchQuery = '';
-  selectedEstado: string = 'TODOS';
+  searchQuery = signal<string>('');
+  estadoFiltro = signal<EstadoFiltroReclamos>('TODOS');
+  pagina = signal<number>(1);
+  tamano = signal<number>(10);
+  /** Total del servidor para el filtro vigente (no la longitud de la página cargada). */
+  total = signal<number>(0);
+  /** Total del servidor de solicitudes pendientes (`estado=P`); `null` mientras no se conoce. */
+  totalPendientes = signal<number | null>(null);
 
-  selectedReclamo = signal<SolicitudRevisionItem | null>(null);
+  selectedReclamo = signal<DetalleReclamoDocenteItem | null>(null);
+  abriendoDetalle = signal<boolean>(false);
   comentarioDocente = '';
 
-  totalPendientes = computed(() => {
-    return this.reclamos().filter((r) => r.estadoSolicitud === 'PENDIENTE').length;
-  });
+  private listaSub?: Subscription;
+  private pendientesSub?: Subscription;
+  private detalleSub?: Subscription;
 
   filteredReclamos = computed(() => {
-    const query = this.searchQuery.toLowerCase().trim();
-    const estado = this.selectedEstado;
+    const query = this.searchQuery().toLowerCase().trim();
 
-    return this.reclamos().filter((item) => {
-      const matchQuery =
+    return this.reclamos().filter(
+      (item) =>
         !query ||
         item.estudianteNombre.toLowerCase().includes(query) ||
         item.materiaNombre.toLowerCase().includes(query) ||
         item.materiaCodigo.toLowerCase().includes(query) ||
-        item.justificacionSolicitud.toLowerCase().includes(query);
-
-      const matchEstado = estado === 'TODOS' || item.estadoSolicitud === estado;
-
-      return matchQuery && matchEstado;
-    });
+        item.justificacionSolicitud.toLowerCase().includes(query)
+    );
   });
 
   ngOnInit(): void {
     this.cargarReclamos();
   }
 
+  ngOnDestroy(): void {
+    this.listaSub?.unsubscribe();
+    this.pendientesSub?.unsubscribe();
+    this.detalleSub?.unsubscribe();
+  }
+
+  onBuscar(event: Event): void {
+    this.searchQuery.set((event.target as HTMLInputElement).value);
+  }
+
+  onEstadoChange(event: Event): void {
+    this.cambiarEstado((event.target as HTMLSelectElement).value as EstadoFiltroReclamos);
+  }
+
+  cambiarEstado(estado: EstadoFiltroReclamos): void {
+    this.estadoFiltro.set(estado);
+    this.pagina.set(1);
+    this.cargarReclamos();
+  }
+
+  cambiarPagina(pagina: number): void {
+    this.pagina.set(pagina);
+    this.cargarReclamos();
+  }
+
+  cambiarTamano(tamano: number): void {
+    this.tamano.set(tamano);
+    this.pagina.set(1);
+    this.cargarReclamos();
+  }
+
   cargarReclamos(): void {
+    this.listaSub?.unsubscribe();
     this.isLoading.set(true);
     this.listUnavailable.set(false);
     this.listState.set('LOADING');
-    this.claimService.getReclamosDocente().subscribe({
-      next: (res) => {
-        this.reclamos.set(res.datos || []);
-        this.listState.set('LOADED');
-        this.isLoading.set(false);
-      },
-      error: (error: unknown) => {
-        const status = (error as { status?: number })?.status;
-        this.listState.set(status === 501
-          ? 'UNAVAILABLE'
-          : status === 403
-            ? 'FORBIDDEN'
-            : status === 0
-              ? 'NETWORK_ERROR'
-              : 'SERVER_ERROR');
-        this.listUnavailable.set(status === 501);
-        this.isLoading.set(false);
-        if (status !== 501) this.toast.error(getApiErrorMessage(error));
-      },
+    const estado = this.estadoFiltro();
+    this.listaSub = this.claimService
+      .getReclamosDocente({
+        estado: estado === 'TODOS' ? undefined : estado,
+        pagina: this.pagina(),
+        tamano: this.tamano(),
+      })
+      .subscribe({
+        next: (res) => {
+          const total = res.total ?? res.datos.length;
+          const ultimaPagina = Math.max(1, Math.ceil(total / this.tamano()));
+          if (res.datos.length === 0 && total > 0 && this.pagina() > ultimaPagina) {
+            this.pagina.set(ultimaPagina);
+            this.cargarReclamos();
+            return;
+          }
+          this.reclamos.set(res.datos);
+          this.total.set(total);
+          this.listState.set('LOADED');
+          this.isLoading.set(false);
+          this.actualizarPendientes(estado, total);
+        },
+        error: (error: unknown) => {
+          const status = (error as { status?: number })?.status;
+          this.listState.set(status === 501
+            ? 'UNAVAILABLE'
+            : status === 403
+              ? 'FORBIDDEN'
+              : status === 0
+                ? 'NETWORK_ERROR'
+                : 'SERVER_ERROR');
+          this.listUnavailable.set(status === 501);
+          this.isLoading.set(false);
+          if (status !== 501) this.toast.error(getApiErrorMessage(error));
+        },
+      });
+  }
+
+  /**
+   * El contador de pendientes es siempre el total del servidor para `estado=P`: con el filtro Pendientes se reutiliza
+   * el total de la propia lista; con otro filtro se consulta una sola fila de `estado=P` solo para leer su total.
+   */
+  private actualizarPendientes(estado: EstadoFiltroReclamos, totalLista: number): void {
+    this.pendientesSub?.unsubscribe();
+    if (estado === 'P') {
+      this.totalPendientes.set(totalLista);
+      return;
+    }
+    this.pendientesSub = this.claimService.getReclamosDocente({ estado: 'P', pagina: 1, tamano: 1 }).subscribe({
+      next: (res) => this.totalPendientes.set(res.total ?? res.datos.length),
+      error: () => this.totalPendientes.set(null),
     });
   }
 
+  /** Abre la vista de resolución con el detalle real del backend (causal incluida); sin detalle no se abre. */
   abrirVistaResolucion(reclamo: SolicitudRevisionItem): void {
-    this.selectedReclamo.set(reclamo);
-    this.comentarioDocente = reclamo.justificacionRespuesta || '';
-    this.vistaActual.set('RESOLUCION');
+    if (this.abriendoDetalle()) return;
+    this.abriendoDetalle.set(true);
+    this.detalleSub?.unsubscribe();
+    this.detalleSub = this.claimService
+      .getDetalleReclamoDocente(reclamo.id)
+      .pipe(finalize(() => this.abriendoDetalle.set(false)))
+      .subscribe({
+        next: (res) => {
+          this.selectedReclamo.set(res.datos);
+          this.comentarioDocente = res.datos.justificacionRespuesta || '';
+          this.vistaActual.set('RESOLUCION');
+        },
+        error: (error: unknown) => this.toast.error(this.mensajeBackend(error)),
+      });
   }
 
   volverABandeja(): void {
@@ -462,6 +565,11 @@ export class TeacherClaimsComponent implements OnInit {
       },
       error: (err) => this.toast.error(getApiErrorMessage(err)),
     });
+  }
+
+  /** Muestra el `message` institucional del backend; sin envelope usa la resolución por código existente. */
+  private mensajeBackend(error: unknown): string {
+    return getApiErrorResponse(error)?.message.trim() || getApiErrorMessage(error);
   }
 
   listStateMessage(): string {
