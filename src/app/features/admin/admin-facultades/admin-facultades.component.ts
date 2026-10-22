@@ -239,6 +239,7 @@ type FiltroEstadoFacultad = 'TODOS' | 'ACTIVO' | 'INACTIVO';
                     <button
                       type="button"
                       (click)="toggleEstadoFacultad(fac)"
+                      [disabled]="facultadCambiandoEstado() === fac.id"
                       class="p-2 text-warm-500 hover:text-warm-800 hover:bg-warm-100 rounded-xl transition-colors"
                       [title]="fac.estado === 'ACTIVO' ? 'Desactivar Facultad' : 'Activar Facultad'"
                     >
@@ -459,7 +460,7 @@ type FiltroEstadoFacultad = 'TODOS' | 'ACTIVO' | 'INACTIVO';
                 </button>
                 <button
                   type="button"
-                  [disabled]="!decanoSeleccionadoId"
+                  [disabled]="!decanoSeleccionadoId || guardandoDecano()"
                   (click)="confirmarAsignacionDecano()"
                   class="px-5 py-2.5 bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-sm transition-all"
                 >
@@ -566,6 +567,8 @@ export class AdminFacultadesComponent implements OnInit {
 
   vista = signal<VistaFacultad>('LISTA');
   guardando = signal<boolean>(false);
+  guardandoDecano = signal<boolean>(false);
+  facultadCambiandoEstado = signal<string | null>(null);
   filtroTexto = signal('');
   filtroEstado = signal<FiltroEstadoFacultad>('TODOS');
   currentPage = signal(1);
@@ -691,13 +694,21 @@ export class AdminFacultadesComponent implements OnInit {
     this.guardando.set(true);
 
     if (this.facultadEnEdicion) {
-      this.adminService.actualizarFacultad(this.facultadEnEdicion.id, {
-        nombre,
-        decanoId: idDecano,
+      this.adminService.actualizarFacultad(this.facultadEnEdicion.id, { nombre, idDecano }).subscribe({
+        next: (res) => {
+          this.guardando.set(false);
+          if (res.exitoso) {
+            this.toast.success('Facultad actualizada correctamente.');
+            this.vista.set('LISTA');
+          } else {
+            this.toast.error(res.mensajeUsuario || 'No fue posible actualizar la facultad.');
+          }
+        },
+        error: (err) => {
+          this.guardando.set(false);
+          this.toast.error(this.mensajeBackend(err, 'No fue posible actualizar la facultad.'));
+        },
       });
-      this.toast.success('Facultad actualizada correctamente.');
-      this.guardando.set(false);
-      this.vista.set('LISTA');
     } else {
       this.adminService
         .crearFacultad({
@@ -733,8 +744,23 @@ export class AdminFacultadesComponent implements OnInit {
   }
 
   toggleEstadoFacultad(fac: FacultadItem): void {
-    this.adminService.cambiarEstadoFacultad(fac.id);
-    this.toast.info(`Estado de la facultad cambiado a ${fac.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO'}.`);
+    if (this.facultadCambiandoEstado() !== null) return;
+    const activar = fac.estado !== 'ACTIVO';
+    this.facultadCambiandoEstado.set(fac.id);
+    this.adminService.cambiarEstadoFacultad(fac.id, activar).subscribe({
+      next: (res) => {
+        this.facultadCambiandoEstado.set(null);
+        if (res.exitoso) {
+          this.toast.success(`Facultad ${activar ? 'activada' : 'desactivada'} correctamente.`);
+        } else {
+          this.toast.error(res.mensajeUsuario || 'No fue posible cambiar el estado de la facultad.');
+        }
+      },
+      error: (err) => {
+        this.facultadCambiandoEstado.set(null);
+        this.toast.error(this.mensajeBackend(err, 'No fue posible cambiar el estado de la facultad.'));
+      },
+    });
   }
 
   verProgramasFacultad(fac: FacultadItem): void {
@@ -755,18 +781,30 @@ export class AdminFacultadesComponent implements OnInit {
   confirmarAsignacionDecano(): void {
     const fac = this.facultadParaDecano();
     const decano = this.decanoSeleccionadoObjeto();
-    if (!fac || !decano) return;
+    if (!fac || !decano || this.guardandoDecano()) return;
 
     const decanoNombre = `${decano.nombres} ${decano.apellidos}`;
 
-    this.adminService.asignarDecanoFacultad(fac.id, decano.id, decanoNombre).subscribe({
-      next: () => {
-        this.toast.success(`Decano(a) ${decanoNombre} asignado(a) exitosamente a ${fac.nombre}.`);
-        this.cerrarModalDecano();
+    this.guardandoDecano.set(true);
+    this.adminService.actualizarFacultad(fac.id, { idDecano: decano.id }).subscribe({
+      next: (res) => {
+        this.guardandoDecano.set(false);
+        if (res.exitoso) {
+          this.toast.success(`Decano(a) ${decanoNombre} asignado(a) exitosamente a ${fac.nombre}.`);
+          this.cerrarModalDecano();
+        } else {
+          this.toast.error(res.mensajeUsuario || 'No se pudo asignar el decano.');
+        }
       },
-      error: () => {
-        this.toast.error('No se pudo asignar el decano en este momento.');
+      error: (err) => {
+        this.guardandoDecano.set(false);
+        this.toast.error(this.mensajeBackend(err, 'No se pudo asignar el decano en este momento.'));
       },
     });
+  }
+
+  /** El texto proviene del backend (ApiErrorResponse.message); la UI no interpreta ni traduce errores. */
+  private mensajeBackend(err: any, respaldo: string): string {
+    return err?.error?.message || err?.error?.mensajeUsuario || respaldo;
   }
 }
