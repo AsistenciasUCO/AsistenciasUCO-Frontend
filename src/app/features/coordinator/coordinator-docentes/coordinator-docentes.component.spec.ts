@@ -23,6 +23,7 @@ describe('CoordinatorDocentesComponent', () => {
     getCandidatosDocente: jasmine.Spy;
     vincularDocente: jasmine.Spy;
     actualizarDocente: jasmine.Spy;
+    cambiarEstadoDocente: jasmine.Spy;
     getTiposVinculacion: jasmine.Spy;
   };
   let catalogService: jasmine.SpyObj<CatalogService>;
@@ -85,6 +86,7 @@ describe('CoordinatorDocentesComponent', () => {
       ),
       vincularDocente: jasmine.createSpy('vincularDocente').and.returnValue(of({ exitoso: true, mensajeUsuario: 'ok', datos: fila('doc-3', 'Nuevo') })),
       actualizarDocente: jasmine.createSpy('actualizarDocente').and.returnValue(of({ exitoso: true, mensajeUsuario: 'Docente actualizado.', datos: fila('doc-1', 'Roberto') })),
+      cambiarEstadoDocente: jasmine.createSpy('cambiarEstadoDocente').and.returnValue(of({ exitoso: true, mensajeUsuario: 'Estado del docente actualizado.', datos: fila('doc-1', 'Roberto', false) })),
       getTiposVinculacion: jasmine.createSpy('getTiposVinculacion').and.returnValue(of([{ id: 'tv-1', codigo: 'CAT', nombre: 'Cátedra' }])),
     };
     catalogService = jasmine.createSpyObj<CatalogService>('CatalogService', ['getTiposIdentificacion']);
@@ -196,14 +198,92 @@ describe('CoordinatorDocentesComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('No se encontraron docentes');
   }));
 
-  it('T-FE-05: el botón de estado está deshabilitado y no invoca ningún servicio (HU093 pendiente)', fakeAsync(() => {
+  it('HU093: el botón de estado está habilitado y solo pide confirmación; no llama al servicio todavía', fakeAsync(() => {
     crear();
     tick(300);
     fixture.detectChanges();
 
     const boton = fixture.debugElement.query(By.css('[data-testid="toggle-estado"]'));
     expect(boton).toBeTruthy();
-    expect((boton.nativeElement as HTMLButtonElement).disabled).toBeTrue();
+    expect((boton.nativeElement as HTMLButtonElement).disabled).toBeFalse();
+
+    (boton.nativeElement as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(component.docentePendienteEstado()).not.toBeNull();
+    expect(coordService.cambiarEstadoDocente).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('[data-testid="confirmar-estado"]')).toBeTruthy();
+  }));
+
+  it('HU093: confirmar inactivación llama al servicio con el nuevo estado y recarga desde el servidor', fakeAsync(() => {
+    crear();
+    tick(300);
+    const activo = fila('doc-1', 'Roberto', true);
+    component.solicitarCambioEstado(activo);
+    coordService.getDocentesPrograma.calls.reset();
+
+    component.confirmarCambioEstado();
+    fixture.detectChanges();
+    tick(300);
+
+    expect(coordService.cambiarEstadoDocente).toHaveBeenCalledWith('doc-1', false);
+    expect(toast.success).toHaveBeenCalledWith('Estado del docente actualizado.');
+    expect(component.docentePendienteEstado()).toBeNull();
+    expect(coordService.getDocentesPrograma).toHaveBeenCalledTimes(1);
+  }));
+
+  it('HU093: confirmar sobre un docente inactivo lo reactiva (estaActivo=true)', fakeAsync(() => {
+    crear();
+    tick(300);
+    component.solicitarCambioEstado(fila('doc-2', 'Luisa', false));
+
+    component.confirmarCambioEstado();
+    tick(300);
+
+    expect(coordService.cambiarEstadoDocente).toHaveBeenCalledWith('doc-2', true);
+  }));
+
+  it('HU093: cancelar la confirmación no llama al servicio', fakeAsync(() => {
+    crear();
+    tick(300);
+    component.solicitarCambioEstado(fila('doc-1', 'Roberto'));
+
+    component.cancelarCambioEstado();
+
+    expect(component.docentePendienteEstado()).toBeNull();
+    expect(coordService.cambiarEstadoDocente).not.toHaveBeenCalled();
+  }));
+
+  it('HU093: confirmar sin docente pendiente no hace nada', fakeAsync(() => {
+    crear();
+    tick(300);
+
+    component.confirmarCambioEstado();
+
+    expect(coordService.cambiarEstadoDocente).not.toHaveBeenCalled();
+  }));
+
+  it('HU093: un error del backend se muestra y la lista no se modifica localmente', fakeAsync(() => {
+    coordService.cambiarEstadoDocente.and.returnValue(
+      throwError(() => new HttpErrorResponse({
+        status: 404,
+        error: {
+          timestamp: '2026-10-22T10:00:00Z', status: 404, error: 'Not Found', code: 'ERR_DOCENTE_NO_VINCULADO_PROGRAMA',
+          message: 'El docente no está vinculado a este programa.', path: '/api/v1/coordinador/docentes/doc-1/estado', correlationId: null,
+        },
+      }))
+    );
+    crear();
+    tick(300);
+    component.solicitarCambioEstado(fila('doc-1', 'Roberto'));
+    coordService.getDocentesPrograma.calls.reset();
+
+    component.confirmarCambioEstado();
+    tick(300);
+
+    expect(toast.error).toHaveBeenCalledWith('El docente no está vinculado a este programa.');
+    expect(component.docentePendienteEstado()).toBeNull();
+    expect(coordService.getDocentesPrograma).not.toHaveBeenCalled();
   }));
 
   it('abre y cierra el formulario de vinculación', fakeAsync(() => {

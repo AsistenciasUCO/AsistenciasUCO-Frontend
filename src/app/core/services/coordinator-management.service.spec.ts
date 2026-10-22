@@ -265,6 +265,26 @@ describe('CoordinatorManagementService', () => {
       expect(status).toBe(404);
     });
 
+    it('cambiarEstadoDocente (HU093) envía PATCH con estaActivo y no toca la lista local', () => {
+      service.cambiarEstadoDocente('doc-1', false).subscribe((res) => expect(res.datos.estaActivo).toBeFalse());
+
+      const req = http.expectOne(`${environment.apiUrl}/coordinador/docentes/doc-1/estado`);
+      expect(req.request.method).toBe('PATCH');
+      expect(req.request.body).toEqual({ estaActivo: false });
+      req.flush({ exitoso: true, datos: { ...fila, estaActivo: false } });
+      expect(service.docentes()).toEqual([]);
+    });
+
+    it('cambiarEstadoDocente propaga el 404 del backend', () => {
+      let status = 0;
+      service.cambiarEstadoDocente('doc-x', true).subscribe({ error: (e) => (status = e.status) });
+
+      http.expectOne(`${environment.apiUrl}/coordinador/docentes/doc-x/estado`)
+        .flush({ message: 'x' }, { status: 404, statusText: 'Not Found' });
+
+      expect(status).toBe(404);
+    });
+
     it('getTiposVinculacion consulta el catálogo de la DB', () => {
       service.getTiposVinculacion().subscribe((tipos) => expect(tipos[0].codigo).toBe('PLA'));
 
