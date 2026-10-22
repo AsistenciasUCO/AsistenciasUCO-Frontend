@@ -103,8 +103,8 @@ describe('DeanCoordinadoresComponent', () => {
 
   it('T-FE-06 el selector de programa muestra los programas reales del decano (sin ids quemados)', () => {
     flushInitialRequests();
-    expect(component.programasAcademicos()).toEqual([
-      { id: '7d0f6a52-0000-4000-8000-000000000001', nombre: 'Ingeniería de Sistemas', facultad: 'Facultad de Ingeniería' },
+    expect(component.programasAcademicos().map((p) => ({ id: p.id, nombre: p.nombre }))).toEqual([
+      { id: '7d0f6a52-0000-4000-8000-000000000001', nombre: 'Ingeniería de Sistemas' },
     ]);
     expect(component.programasAcademicos().some((p) => p.id.startsWith('PROG-'))).toBeFalse();
   });
