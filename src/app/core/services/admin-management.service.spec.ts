@@ -224,6 +224,75 @@ describe('AdminManagementService', () => {
     });
   });
 
+  describe('normalizacion de la respuesta de facultad', () => {
+    it('una respuesta minima conserva nombre y decano actuales y asume estado ACTIVO', () => {
+      service.cargarFacultades().subscribe();
+      http.expectOne(`${environment.apiUrl}/admin/facultades`).flush({
+        exitoso: true,
+        datos: [
+          { id: 'fac-1', codigo: 'FAC', nombreFacultad: 'Facultad Base', idDecano: 'dec-1', nombreCompletoDecano: 'Dr. Base', estaActivaFacultad: false },
+        ],
+      });
+
+      service.cambiarEstadoFacultad('fac-1', true).subscribe();
+      http.expectOne(`${environment.apiUrl}/admin/facultades/fac-1/estado`).flush({ exitoso: true, datos: { id: 'fac-1' } });
+
+      const f = service.facultades()[0];
+      expect(f.nombre).toBe('Facultad Base');
+      expect(f.decanoId).toBe('dec-1');
+      expect(f.decanoNombre).toBe('Dr. Base');
+      expect(f.estado).toBe('ACTIVO');
+    });
+
+    it('usa el campo nombre cuando no viene nombreFacultad', () => {
+      service.cargarFacultades().subscribe();
+      http.expectOne(`${environment.apiUrl}/admin/facultades`).flush({
+        exitoso: true,
+        datos: [{ id: 'fac-2', nombreFacultad: 'Original', idDecano: null, estaActivaFacultad: true }],
+      });
+
+      service.actualizarFacultad('fac-2', { nombre: 'Alterno' }).subscribe();
+      http.expectOne(`${environment.apiUrl}/admin/facultades/fac-2`).flush({
+        exitoso: true,
+        datos: { id: 'fac-2', nombre: 'Alterno', estaActivaFacultad: true },
+      });
+
+      expect(service.facultades()[0].nombre).toBe('Alterno');
+    });
+
+    it('solo reemplaza la facultad modificada y deja intactas las demas', () => {
+      service.cargarFacultades().subscribe();
+      http.expectOne(`${environment.apiUrl}/admin/facultades`).flush({
+        exitoso: true,
+        datos: [
+          { id: 'fac-a', nombreFacultad: 'Facultad A', idDecano: 'dec-a', estaActivaFacultad: true },
+          { id: 'fac-b', nombreFacultad: 'Facultad B', idDecano: 'dec-b', estaActivaFacultad: true },
+        ],
+      });
+
+      service.actualizarFacultad('fac-a', { nombre: 'Facultad A2' }).subscribe();
+      http.expectOne(`${environment.apiUrl}/admin/facultades/fac-a`).flush({
+        exitoso: true,
+        datos: { id: 'fac-a', nombreFacultad: 'Facultad A2', idDecano: 'dec-a', estaActivaFacultad: true },
+      });
+
+      expect(service.facultades().map((f) => f.nombre)).toEqual(['Facultad A2', 'Facultad B']);
+    });
+
+    it('si la facultad no estaba cargada usa valores por defecto y no altera la lista', () => {
+      let resultado: any;
+      service.actualizarFacultad('fac-9', { nombre: 'Nueva' }).subscribe((r) => (resultado = r));
+
+      http.expectOne(`${environment.apiUrl}/admin/facultades/fac-9`).flush({ exitoso: true, datos: {} });
+
+      expect(resultado.datos.id).toBe('fac-9');
+      expect(resultado.datos.nombre).toBe('');
+      expect(resultado.datos.decanoNombre).toBe('Sin asignar');
+      expect(resultado.datos.estado).toBe('ACTIVO');
+      expect(service.facultades().length).toBe(0);
+    });
+  });
+
   it('el servicio ya no expone la desvinculacion de decano ni la asignacion optimista', () => {
     expect((service as any).desvincularDecanoFacultad).toBeUndefined();
     expect((service as any).asignarDecanoFacultad).toBeUndefined();

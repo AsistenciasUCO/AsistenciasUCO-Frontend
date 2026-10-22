@@ -366,4 +366,108 @@ describe('AdminFacultadesComponent', () => {
     inicializar();
     expect((component as any).desvincularDecano).toBeUndefined();
   });
+
+  describe('rutas alternas de mensajes (HU110, HU111, HU117)', () => {
+    it('editar: exitoso=false muestra mensajeUsuario del backend y mantiene el formulario', () => {
+      inicializar();
+      component.editarFacultad(mockFacultades[0]);
+      component.formFacultad.nombre = 'Nombre Nuevo';
+      spyOn(adminService, 'actualizarFacultad').and.returnValue(
+        of({ exitoso: false, mensajeUsuario: 'No se pudo actualizar por regla de negocio.', datos: null as any })
+      );
+
+      component.guardar();
+
+      expect(toastService.error).toHaveBeenCalledWith('No se pudo actualizar por regla de negocio.');
+      expect(component.vista()).toBe('FORM');
+      expect(component.guardando()).toBeFalse();
+    });
+
+    it('editar: exitoso=false sin mensajeUsuario usa el texto de respaldo', () => {
+      inicializar();
+      component.editarFacultad(mockFacultades[0]);
+      component.formFacultad.nombre = 'Nombre Nuevo';
+      spyOn(adminService, 'actualizarFacultad').and.returnValue(of({ exitoso: false, datos: null as any }));
+
+      component.guardar();
+
+      expect(toastService.error).toHaveBeenCalledWith('No fue posible actualizar la facultad.');
+    });
+
+    it('editar: un error sin message usa error.mensajeUsuario o el texto de respaldo', () => {
+      inicializar();
+      component.editarFacultad(mockFacultades[0]);
+      component.formFacultad.nombre = 'Nombre Nuevo';
+      const spy = spyOn(adminService, 'actualizarFacultad');
+
+      spy.and.returnValue(throwError(() => ({ status: 500, error: { mensajeUsuario: 'Falla controlada.' } })));
+      component.guardar();
+      expect(toastService.error).toHaveBeenCalledWith('Falla controlada.');
+
+      spy.and.returnValue(throwError(() => ({ status: 0 })));
+      component.guardar();
+      expect(toastService.error).toHaveBeenCalledWith('No fue posible actualizar la facultad.');
+    });
+
+    it('alternar estado: exitoso=false muestra mensajeUsuario o el texto de respaldo y libera el bloqueo', () => {
+      inicializar();
+      const spy = spyOn(adminService, 'cambiarEstadoFacultad');
+
+      spy.and.returnValue(of({ exitoso: false, mensajeUsuario: 'Estado no modificable.', datos: null as any }));
+      component.toggleEstadoFacultad(mockFacultades[0]);
+      expect(toastService.error).toHaveBeenCalledWith('Estado no modificable.');
+      expect(component.facultadCambiandoEstado()).toBeNull();
+
+      spy.and.returnValue(of({ exitoso: false, datos: null as any }));
+      component.toggleEstadoFacultad(mockFacultades[0]);
+      expect(toastService.error).toHaveBeenCalledWith('No fue posible cambiar el estado de la facultad.');
+    });
+
+    it('alternar estado: un error sin message usa el texto de respaldo', () => {
+      inicializar();
+      spyOn(adminService, 'cambiarEstadoFacultad').and.returnValue(throwError(() => ({ status: 0 })));
+
+      component.toggleEstadoFacultad(mockFacultades[0]);
+
+      expect(toastService.error).toHaveBeenCalledWith('No fue posible cambiar el estado de la facultad.');
+      expect(component.facultadCambiandoEstado()).toBeNull();
+    });
+
+    it('cambiar decano: exitoso=false muestra mensajeUsuario o el respaldo y mantiene el modal', () => {
+      inicializar();
+      component.abrirModalVincularDecano(mockFacultades[0]);
+      component.decanoSeleccionadoId = 'dec-2';
+      const spy = spyOn(adminService, 'actualizarFacultad');
+
+      spy.and.returnValue(of({ exitoso: false, mensajeUsuario: 'Decano no asignable.', datos: null as any }));
+      component.confirmarAsignacionDecano();
+      expect(toastService.error).toHaveBeenCalledWith('Decano no asignable.');
+      expect(component.facultadParaDecano()).not.toBeNull();
+
+      spy.and.returnValue(of({ exitoso: false, datos: null as any }));
+      component.confirmarAsignacionDecano();
+      expect(toastService.error).toHaveBeenCalledWith('No se pudo asignar el decano.');
+    });
+
+    it('cambiar decano: un error sin message usa el texto de respaldo', () => {
+      inicializar();
+      component.abrirModalVincularDecano(mockFacultades[0]);
+      component.decanoSeleccionadoId = 'dec-2';
+      spyOn(adminService, 'actualizarFacultad').and.returnValue(throwError(() => ({ status: 0 })));
+
+      component.confirmarAsignacionDecano();
+
+      expect(toastService.error).toHaveBeenCalledWith('No se pudo asignar el decano en este momento.');
+      expect(component.guardandoDecano()).toBeFalse();
+    });
+
+    it('cambiar decano: sin facultad o decano seleccionado no llama al backend', () => {
+      inicializar();
+      spyOn(adminService, 'actualizarFacultad');
+
+      component.confirmarAsignacionDecano();
+
+      expect(adminService.actualizarFacultad).not.toHaveBeenCalled();
+    });
+  });
 });
