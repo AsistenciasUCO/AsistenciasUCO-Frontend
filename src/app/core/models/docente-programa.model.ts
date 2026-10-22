@@ -60,3 +60,12 @@ export interface VincularDocenteNuevoPayload {
 }
 
 export type VincularDocentePayload = VincularDocenteExistentePayload | VincularDocenteNuevoPayload;
+
+/** HU092: solo los campos presentes se modifican; "" limpia segundo nombre/apellido. Correo y documento no se editan. */
+export interface ActualizarDocentePayload {
+  idTipoVinculacion?: string;
+  primerNombre?: string;
+  segundoNombre?: string;
+  primerApellido?: string;
+  segundoApellido?: string;
+}

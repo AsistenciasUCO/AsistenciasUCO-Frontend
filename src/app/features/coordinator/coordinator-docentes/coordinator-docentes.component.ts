@@ -8,6 +8,7 @@ import { CatalogService, TipoIdentificacionItem } from '../../../core/services/c
 import { CourseService } from '../../../core/services/course.service';
 import { Course } from '../../../core/models/course.model';
 import {
+  ActualizarDocentePayload,
   DocenteCandidato,
   DocentePrograma,
   TipoVinculacionItem,
@@ -22,6 +23,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
 import { ToastService } from '../../../shared/components/toast/toast.component';
 import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
 import { CoordinatorDocenteFormModalComponent } from './components/coordinator-docente-form-modal.component';
+import { CoordinatorDocenteEditModalComponent } from './components/coordinator-docente-edit-modal.component';
 
 type FiltroEstado = 'TODOS' | 'ACTIVO' | 'INACTIVO';
 
@@ -40,6 +42,7 @@ const MIN_CARACTERES_CANDIDATOS = 3;
     ButtonComponent,
     PaginationComponent,
     CoordinatorDocenteFormModalComponent,
+    CoordinatorDocenteEditModalComponent,
   ],
   template: `
     <div class="space-y-6 animate-fade-in">
@@ -122,6 +125,13 @@ const MIN_CARACTERES_CANDIDATOS = 3;
                 </div>
                 <button
                   type="button"
+                  (click)="abrirEdicion(docente)"
+                  class="w-full text-xs font-semibold text-warm-800 bg-white hover:bg-warm-50 border border-warm-200 py-1.5 px-3 rounded-xl transition-colors"
+                >
+                  Editar datos
+                </button>
+                <button
+                  type="button"
                   (click)="verFichaDocente(docente)"
                   class="w-full text-xs font-semibold text-primary-800 bg-primary-50 hover:bg-primary-100 border border-primary-200 py-1.5 px-3 rounded-xl transition-colors"
                 >
@@ -171,6 +181,15 @@ const MIN_CARACTERES_CANDIDATOS = 3;
         </div>
       }
 
+      @if (docenteEnEdicion(); as enEdicion) {
+        <app-coordinator-docente-edit-modal
+          [docente]="enEdicion"
+          [tiposVinculacion]="tiposVinculacion()"
+          (guardar)="guardarEdicion($event)"
+          (cerrar)="cerrarEdicion()"
+        />
+      }
+
       @if (formularioAbierto()) {
         <app-coordinator-docente-form-modal
           [tiposIdentificacion]="tiposIdentificacion()"
@@ -208,6 +227,7 @@ export class CoordinatorDocentesComponent implements OnInit {
   readonly candidatos = signal<DocenteCandidato[]>([]);
   readonly allCourses = signal<Course[]>([]);
   readonly docenteSeleccionado = signal<DocentePrograma | null>(null);
+  readonly docenteEnEdicion = signal<DocentePrograma | null>(null);
   readonly cursosDocente = signal<Course[]>([]);
 
   private readonly consulta = computed(() => ({
@@ -302,6 +322,30 @@ export class CoordinatorDocentesComponent implements OnInit {
 
   guardarExistente(payload: VincularDocenteExistentePayload): void {
     this.vincular(payload);
+  }
+
+  abrirEdicion(docente: DocentePrograma): void {
+    this.docenteEnEdicion.set(docente);
+  }
+
+  cerrarEdicion(): void {
+    this.docenteEnEdicion.set(null);
+  }
+
+  /** HU092. Sin actualizacion optimista: se espera la respuesta y se recarga la pagina desde el servidor. */
+  guardarEdicion(payload: ActualizarDocentePayload): void {
+    const docente = this.docenteEnEdicion();
+    if (!docente) {
+      return;
+    }
+    this.coordService.actualizarDocente(docente.idDocente, payload).subscribe({
+      next: (res) => {
+        this.toast.success(res.mensajeUsuario || 'Docente actualizado.');
+        this.docenteEnEdicion.set(null);
+        this.recarga.update((n) => n + 1);
+      },
+      error: (error: unknown) => this.toast.error(getApiErrorMessage(error)),
+    });
   }
 
   verFichaDocente(docente: DocentePrograma): void {

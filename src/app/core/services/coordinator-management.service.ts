@@ -4,6 +4,7 @@ import { Observable, map, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 import {
+  ActualizarDocentePayload,
   DocenteCandidato,
   DocentePrograma,
   DocentesProgramaFiltro,
@@ -128,6 +129,11 @@ export class CoordinatorManagementService {
   /** No actualiza la lista local: la pantalla recarga desde el servidor tras la respuesta (sin actualizacion optimista). */
   vincularDocente(payload: VincularDocentePayload): Observable<ApiResponse<DocentePrograma>> {
     return this.http.post<ApiResponse<DocentePrograma>>(`${environment.apiUrl}/coordinador/docentes`, payload);
+  }
+
+  /** HU092. Como en la vinculacion, la lista se recarga desde el servidor (sin actualizacion optimista). */
+  actualizarDocente(idDocente: string, payload: ActualizarDocentePayload): Observable<ApiResponse<DocentePrograma>> {
+    return this.http.put<ApiResponse<DocentePrograma>>(`${environment.apiUrl}/coordinador/docentes/${idDocente}`, payload);
   }
 
   getTiposVinculacion(): Observable<TipoVinculacionItem[]> {
