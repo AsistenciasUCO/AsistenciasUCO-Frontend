@@ -162,6 +162,28 @@ describe('CoordinatorManagementService', () => {
       expect(service.docentes()).toEqual([]);
     });
 
+    it('getDocentes (compatibilidad) adapta el directorio paginado a DocenteItem', () => {
+      service.getDocentes().subscribe((res) => {
+        expect(res.datos.length).toBe(1);
+        expect(res.datos[0]).toEqual(jasmine.objectContaining({
+          id: 'doc-1', numeroIdentificacion: '1017555444', nombres: 'Jorge', apellidos: 'Henao',
+          estado: 'ACTIVO', totalGruposAsignados: 0, correo: 'jorge.henao@uco.edu.co',
+        }));
+      });
+
+      const req = http.expectOne((r) => r.url === `${environment.apiUrl}/coordinador/docentes`);
+      expect(req.request.params.get('tamano')).toBe('100');
+      req.flush({ exitoso: true, datos: [{ ...fila, estaActivo: true }], total: 1 });
+    });
+
+    it('getDocentes (compatibilidad) marca INACTIVO y tolera datos nulos', () => {
+      service.getDocentes().subscribe((res) => {
+        expect(res.datos[0].estado).toBe('INACTIVO');
+      });
+      http.expectOne((r) => r.url === `${environment.apiUrl}/coordinador/docentes`)
+        .flush({ exitoso: true, datos: [{ ...fila, estaActivo: false, segundoNombre: 'Luis', segundoApellido: 'Perez' }], total: 1 });
+    });
+
     it('getCandidatosDocente consulta con la búsqueda', () => {
       service.getCandidatosDocente('ros').subscribe((res) => expect(res.datos.length).toBe(1));
 

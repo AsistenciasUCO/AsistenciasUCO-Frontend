@@ -270,6 +270,7 @@ describe('CoordinatorDocentesComponent', () => {
     component.guardarExistente({ idDocente: 'doc-9', idTipoVinculacion: 'tv-1' });
 
     expect(coordService.vincularDocente).toHaveBeenCalledWith({ idDocente: 'doc-9', idTipoVinculacion: 'tv-1' });
+    tick(300); // vaciar el debounce de la recarga posterior al vinculo
   }));
 
   it('T-FE-06: el 409 se muestra tal cual lo devuelve el backend y el formulario sigue abierto', fakeAsync(() => {
@@ -277,7 +278,7 @@ describe('CoordinatorDocentesComponent', () => {
       throwError(() => new HttpErrorResponse({
         status: 409,
         error: {
-          timestamp: '2026-10-22T10:00:00Z', status: 409, error: 'Conflict', code: 'CONFLICT',
+          timestamp: '2026-10-22T10:00:00Z', status: 409, error: 'Conflict', code: 'ERR_DOCENTE_YA_VINCULADO_PROGRAMA',
           message: 'El docente ya está vinculado a este programa.', path: '/api/v1/coordinador/docentes', correlationId: null,
         },
       }))

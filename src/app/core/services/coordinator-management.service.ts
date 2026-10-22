@@ -1,8 +1,15 @@
 import { Injectable, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, map, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
+import {
+  DocenteCandidato,
+  DocentePrograma,
+  DocentesProgramaFiltro,
+  TipoVinculacionItem,
+  VincularDocentePayload,
+} from '../models/docente-programa.model';
 import {
   DocenteItem,
   PlanEstudioItem,
@@ -25,6 +32,12 @@ export interface DirectorioEstudiantesQuery {
   providedIn: 'root',
 })
 export class CoordinatorManagementService {
+  private docentesSignal = signal<DocentePrograma[]>([]);
+  public docentes = this.docentesSignal.asReadonly();
+
+  private totalDocentesSignal = signal(0);
+  public totalDocentes = this.totalDocentesSignal.asReadonly();
+
   private planesSignal = signal<PlanEstudioItem[]>([]);
   public planes = this.planesSignal.asReadonly();
 
@@ -52,17 +65,73 @@ export class CoordinatorManagementService {
     this.getPeriodosAcademicos().subscribe({ error: () => undefined });
   }
 
-  // --- DOCENTES ---
+  // --- DOCENTES DEL PROGRAMA (HU062/HU063/HU089/HU090/HU091) ---
+  getDocentesPrograma(filtro: DocentesProgramaFiltro): Observable<ApiResponse<DocentePrograma[]>> {
+    let params = new HttpParams().set('pagina', filtro.pagina).set('tamano', filtro.tamano);
+    const busqueda = filtro.busqueda?.trim();
+    if (busqueda) {
+      params = params.set('busqueda', busqueda);
+    }
+    if (filtro.estaActivo !== undefined) {
+      params = params.set('estaActivo', filtro.estaActivo);
+    }
+    if (filtro.idTipoVinculacion) {
+      params = params.set('idTipoVinculacion', filtro.idTipoVinculacion);
+    }
+    return this.http
+      .get<ApiResponse<DocentePrograma[]>>(`${environment.apiUrl}/coordinador/docentes`, { params })
+      .pipe(
+        tap((res) => {
+          if (res.exitoso) {
+            this.docentesSignal.set(res.datos ?? []);
+            this.totalDocentesSignal.set(res.total ?? 0);
+          }
+        })
+      );
+  }
+
+  /**
+   * Compatibilidad para consumidores de solo lectura (resumen del dashboard y lista de respaldo del picker) que aun
+   * trabajan con {@link DocenteItem}. Reutiliza el directorio paginado del servidor; no mantiene datos propios.
+   */
   getDocentes(): Observable<ApiResponse<DocenteItem[]>> {
-    return this.http.get<ApiResponse<DocenteItem[]>>(`${environment.apiUrl}/coordinador/docentes`);
+    return this.getDocentesPrograma({ pagina: 1, tamano: 100 }).pipe(
+      map((res) => ({
+        ...res,
+        datos: (res.datos ?? []).map(
+          (d): DocenteItem => ({
+            id: d.idDocente,
+            tipoIdentificacion: d.codigoTipoIdentificacion,
+            numeroIdentificacion: String(d.numeroIdentificacion),
+            primerNombre: d.primerNombre,
+            segundoNombre: d.segundoNombre ?? '',
+            primerApellido: d.primerApellido,
+            segundoApellido: d.segundoApellido ?? '',
+            nombres: [d.primerNombre, d.segundoNombre].filter(Boolean).join(' '),
+            apellidos: [d.primerApellido, d.segundoApellido].filter(Boolean).join(' '),
+            correo: d.correo,
+            departamento: '',
+            especialidad: d.nombreTipoVinculacion,
+            estado: d.estaActivo ? 'ACTIVO' : 'INACTIVO',
+            totalGruposAsignados: d.totalGruposPrograma,
+          })
+        ),
+      }))
+    );
   }
 
-  createDocente(nuevoDocente: Omit<DocenteItem, 'id' | 'totalGruposAsignados'>): Observable<ApiResponse<DocenteItem>> {
-    return this.http.post<ApiResponse<DocenteItem>>(`${environment.apiUrl}/coordinador/docentes`, nuevoDocente);
+  getCandidatosDocente(busqueda: string): Observable<ApiResponse<DocenteCandidato[]>> {
+    const params = new HttpParams().set('busqueda', busqueda);
+    return this.http.get<ApiResponse<DocenteCandidato[]>>(`${environment.apiUrl}/coordinador/docentes/candidatos`, { params });
   }
 
-  toggleDocenteStatus(id: string): Observable<ApiResponse<DocenteItem | null>> {
-    return this.http.patch<ApiResponse<DocenteItem | null>>(`${environment.apiUrl}/coordinador/docentes/${id}/toggle`, {});
+  /** No actualiza la lista local: la pantalla recarga desde el servidor tras la respuesta (sin actualizacion optimista). */
+  vincularDocente(payload: VincularDocentePayload): Observable<ApiResponse<DocentePrograma>> {
+    return this.http.post<ApiResponse<DocentePrograma>>(`${environment.apiUrl}/coordinador/docentes`, payload);
+  }
+
+  getTiposVinculacion(): Observable<TipoVinculacionItem[]> {
+    return this.http.get<TipoVinculacionItem[]>(`${environment.apiUrl}/tipos-vinculacion`);
   }
 
   // --- PLANES DE ESTUDIO ---

@@ -13,7 +13,6 @@ import { FormsModule } from '@angular/forms';
 import { ButtonComponent } from '../button/button.component';
 import { BadgeComponent } from '../badge/badge.component';
 import { TeacherService } from '../../../core/services/teacher.service';
-import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
 import { MOCK_DOCENTES } from '../../../core/mocks/role-management.mock';
 
 export interface UserPickerItem {
@@ -196,7 +195,6 @@ export interface UserPickerItem {
 })
 export class UserPickerModalComponent implements OnInit {
   private teacherService = inject(TeacherService);
-  private coordinatorService = inject(CoordinatorManagementService);
 
   isOpen = input<boolean>(false);
   title = input<string>('Seleccionar Docente o Funcionario');
@@ -275,41 +273,21 @@ export class UserPickerModalComponent implements OnInit {
   }
 
   private cargarFallbackMock(): void {
-    this.coordinatorService.getDocentes().subscribe({
-      next: (res) => {
-        const source = res.datos && res.datos.length > 0 ? res.datos : MOCK_DOCENTES;
-        const mapped: UserPickerItem[] = source.map((d) => ({
-          id: d.id,
-          numeroIdentificacion: d.numeroIdentificacion,
-          tipoIdentificacion: 'CC',
-          nombres: d.nombres,
-          apellidos: d.apellidos,
-          primerNombre: d.nombres.split(' ')[0] || '',
-          primerApellido: d.apellidos.split(' ')[0] || '',
-          correo: d.correo,
-          dependenciaOPrograma: d.departamento || 'Facultad de Ingeniería',
-          rolActual: 'DOCENTE',
-        }));
-        this.usersList.set(mapped);
-        this.isLoading.set(false);
-      },
-      error: () => {
-        const mapped: UserPickerItem[] = MOCK_DOCENTES.map((d) => ({
-          id: d.id,
-          numeroIdentificacion: d.numeroIdentificacion,
-          tipoIdentificacion: 'CC',
-          nombres: d.nombres,
-          apellidos: d.apellidos,
-          primerNombre: d.nombres.split(' ')[0] || '',
-          primerApellido: d.apellidos.split(' ')[0] || '',
-          correo: d.correo,
-          dependenciaOPrograma: d.departamento || 'Facultad de Ingeniería',
-          rolActual: 'DOCENTE',
-        }));
-        this.usersList.set(mapped);
-        this.isLoading.set(false);
-      },
-    });
+    // Los directorios de decano/administrador no deben consultar endpoints del coordinador (403): lista de respaldo local.
+    const mapped: UserPickerItem[] = MOCK_DOCENTES.map((d) => ({
+      id: d.id,
+      numeroIdentificacion: d.numeroIdentificacion,
+      tipoIdentificacion: 'CC',
+      nombres: d.nombres,
+      apellidos: d.apellidos,
+      primerNombre: d.nombres.split(' ')[0] || '',
+      primerApellido: d.apellidos.split(' ')[0] || '',
+      correo: d.correo,
+      dependenciaOPrograma: d.departamento || 'Facultad de Ingeniería',
+      rolActual: 'DOCENTE',
+    }));
+    this.usersList.set(mapped);
+    this.isLoading.set(false);
   }
 
   getInitials(nombres: string, apellidos: string): string {
