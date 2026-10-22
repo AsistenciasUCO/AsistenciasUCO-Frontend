@@ -108,28 +108,94 @@ describe('DeanManagementService', () => {
     req.flush({ exitoso: true, datos: { id: 'coord-2', ...nuevo, totalDocentes: 0, totalGrupos: 0 } });
   });
 
-  it('toggleCoordinadorStatus envía PATCH para alternar el estado del coordinador', () => {
-    service.toggleCoordinadorStatus('coord-1').subscribe((res) => {
+  // HU121-HU122 (CONTRACT §4, congelado 2026-10-22, D6): el antiguo `toggleCoordinadorStatus` llamaba a
+  // `PATCH …/{id}/toggle`, ruta que el backend nunca tuvo (es `…/estado`). Se reemplaza su prueba por estas.
+  it('setCoordinadorEstado envía PATCH …/estado con el estado explícito en el cuerpo', () => {
+    service.setCoordinadorEstado('coord-1', false).subscribe((res) => {
       expect(res.exitoso).toBeTrue();
-      expect(res.datos?.estado).toBe('INACTIVO');
+      expect(res.datos?.idCoordinador).toBe('coord-1');
+      expect(res.datos?.sincronizacionIdentidad).toBe('OK');
     });
 
-    const req = http.expectOne(`${environment.apiUrl}/decano/coordinadores/coord-1/toggle`);
+    const req = http.expectOne(`${environment.apiUrl}/decano/coordinadores/coord-1/estado`);
     expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ estaActivo: false });
+    req.flush({ exitoso: true, datos: { idCoordinador: 'coord-1', sincronizacionIdentidad: 'OK', mensajeUsuario: null } });
+  });
+
+  it('setCoordinadorEstado reactiva enviando estaActivo=true', () => {
+    service.setCoordinadorEstado('coord-1', true).subscribe();
+
+    const req = http.expectOne(`${environment.apiUrl}/decano/coordinadores/coord-1/estado`);
+    expect(req.request.body).toEqual({ estaActivo: true });
+    req.flush({ exitoso: true, datos: { idCoordinador: 'coord-1', sincronizacionIdentidad: 'OK', mensajeUsuario: null } });
+  });
+
+  it('ya no existe la llamada a la ruta /toggle del coordinador', () => {
+    expect('toggleCoordinadorStatus' in service).toBeFalse();
+  });
+
+  it('updateCoordinador envía PUT con los datos editables y sin documento', () => {
+    service
+      .updateCoordinador('coord-1', {
+        primerNombre: 'Ana',
+        segundoNombre: 'Maria',
+        primerApellido: 'Perez',
+        segundoApellido: 'Gomez',
+        correo: 'ana@uco.edu.co',
+      })
+      .subscribe((res) => {
+        expect(res.exitoso).toBeTrue();
+        expect(res.datos?.sincronizacionIdentidad).toBe('PENDIENTE');
+        expect(res.datos?.mensajeUsuario).toBe('Se sincronizará pronto.');
+      });
+
+    const req = http.expectOne(`${environment.apiUrl}/decano/coordinadores/coord-1`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({
+      primerNombre: 'Ana',
+      segundoNombre: 'Maria',
+      primerApellido: 'Perez',
+      segundoApellido: 'Gomez',
+      correo: 'ana@uco.edu.co',
+    });
+    expect(Object.keys(req.request.body)).not.toContain('numeroIdentificacion');
     req.flush({
       exitoso: true,
-      datos: {
-        id: 'coord-1',
-        numeroIdentificacion: '10170001',
-        nombres: 'Carlos',
-        apellidos: 'Ramírez',
-        correo: 'cramirez@uco.edu.co',
-        facultad: 'Facultad de Ingeniería',
-        programaAcademico: 'Ingeniería de Sistemas',
-        estado: 'INACTIVO',
-        totalDocentes: 12,
-        totalGrupos: 18,
-      },
+      datos: { idCoordinador: 'coord-1', sincronizacionIdentidad: 'PENDIENTE', mensajeUsuario: 'Se sincronizará pronto.' },
+    });
+  });
+
+  it('getCoordinadores conserva los datos editables que entrega el backend', () => {
+    service.getCoordinadores().subscribe((res) => {
+      const item = res.datos?.[0];
+      expect(item?.primerNombre).toBe('Ana');
+      expect(item?.segundoNombre).toBe('Maria');
+      expect(item?.primerApellido).toBe('Perez');
+      expect(item?.segundoApellido).toBe('Gomez');
+      expect(item?.correo).toBe('ana@uco.edu.co');
+      expect(item?.estado).toBe('INACTIVO');
+    });
+
+    http.expectOne(`${environment.apiUrl}/decano/coordinadores`).flush({
+      exitoso: true,
+      datos: [
+        {
+          id: 'coord-1',
+          idUsuario: 'usr-1',
+          numeroIdentificacion: '1017555444',
+          nombreCompleto: 'Ana Maria Perez Gomez',
+          primerNombre: 'Ana',
+          segundoNombre: 'Maria',
+          primerApellido: 'Perez',
+          segundoApellido: 'Gomez',
+          correo: 'ana@uco.edu.co',
+          idPrograma: null,
+          nombrePrograma: null,
+          estaActivoCoordinador: false,
+          estaActivoRolCoordinador: false,
+        },
+      ],
     });
   });
 });
