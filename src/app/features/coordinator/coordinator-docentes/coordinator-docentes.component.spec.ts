@@ -436,6 +436,18 @@ describe('CoordinatorDocentesComponent', () => {
     expect(coordService.actualizarDocente).not.toHaveBeenCalled();
   }));
 
+  it('la pantalla NO consulta cursos al cargar (evita un 403 para el coordinador) sino al abrir la ficha, una sola vez', fakeAsync(() => {
+    crear();
+    tick(300);
+    expect(courseService.getTeacherCourses).not.toHaveBeenCalled();
+
+    component.verFichaDocente(fila('doc-1', 'Roberto'));
+    component.verFichaDocente(fila('doc-1', 'Roberto'));
+
+    expect(courseService.getTeacherCourses).toHaveBeenCalledTimes(1);
+    expect(component.cursosDocente().map((c) => c.id)).toEqual(['crs-1']);
+  }));
+
   it('verFichaDocente empareja cursos por idDocente real y cerrarFichaDocente limpia', fakeAsync(() => {
     crear();
     tick(300);
@@ -448,6 +460,20 @@ describe('CoordinatorDocentesComponent', () => {
     component.cerrarFichaDocente();
     expect(component.docenteSeleccionado()).toBeNull();
     expect(component.cursosDocente()).toEqual([]);
+  }));
+
+  it('un error al cargar los cursos de la ficha deja la lista vacía y permite reintentar', fakeAsync(() => {
+    courseService.getTeacherCourses.and.returnValue(throwError(() => new HttpErrorResponse({ status: 403 })));
+    crear();
+    tick(300);
+
+    component.verFichaDocente(fila('doc-1', 'Roberto'));
+    expect(component.cursosDocente()).toEqual([]);
+
+    courseService.getTeacherCourses.and.returnValue(of({ exitoso: true, datos: [curso] }));
+    component.verFichaDocente(fila('doc-1', 'Roberto'));
+    expect(courseService.getTeacherCourses).toHaveBeenCalledTimes(2);
+    expect(component.cursosDocente().length).toBe(1);
   }));
 
   it('no usa setInterval ni polling para refrescar', () => {

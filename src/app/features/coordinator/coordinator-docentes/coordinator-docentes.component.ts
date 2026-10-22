@@ -240,6 +240,7 @@ export class CoordinatorDocentesComponent implements OnInit {
   readonly pagina = signal(1);
   readonly tamano = signal(10);
   private readonly recarga = signal(0);
+  private cursosCargados = false;
 
   readonly isLoading = signal(true);
   readonly formularioAbierto = signal(false);
@@ -288,10 +289,6 @@ export class CoordinatorDocentesComponent implements OnInit {
     this.coordService.getTiposVinculacion().subscribe({
       next: (tipos) => this.tiposVinculacion.set(tipos),
       error: (error: unknown) => this.toast.error(getApiErrorMessage(error)),
-    });
-    this.courseService.getTeacherCourses().subscribe({
-      next: (res) => this.allCourses.set(res.datos ?? []),
-      error: () => this.allCourses.set([]),
     });
   }
 
@@ -394,9 +391,28 @@ export class CoordinatorDocentesComponent implements OnInit {
     });
   }
 
+  /**
+   * Los cursos se cargan solo al abrir la ficha (no al entrar a la pantalla): el endpoint de cursos es del portal
+   * docente y un coordinador recibiria un 403 innecesario al listar el directorio.
+   */
   verFichaDocente(docente: DocentePrograma): void {
     this.docenteSeleccionado.set(docente);
-    this.cursosDocente.set(this.allCourses().filter((c) => c.docenteId === docente.idDocente));
+    if (this.cursosCargados) {
+      this.cursosDocente.set(this.allCourses().filter((c) => c.docenteId === docente.idDocente));
+      return;
+    }
+    this.cursosCargados = true;
+    this.courseService.getTeacherCourses().subscribe({
+      next: (res) => {
+        this.allCourses.set(res.datos ?? []);
+        this.cursosDocente.set(this.allCourses().filter((c) => c.docenteId === docente.idDocente));
+      },
+      error: () => {
+        this.cursosCargados = false;
+        this.allCourses.set([]);
+        this.cursosDocente.set([]);
+      },
+    });
   }
 
   cerrarFichaDocente(): void {
