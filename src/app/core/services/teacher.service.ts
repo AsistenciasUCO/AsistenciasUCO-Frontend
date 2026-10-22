@@ -9,7 +9,6 @@ import {
   DocenteApiDto,
   DocenteDetalleApiDto,
 } from '../api/models/docente-api-dto.model';
-import { AsignarDocenteGrupoRequest } from '../api/models/asignar-docente-grupo-request.model';
 import { OperationResultResponse } from '../api/models/operation-result-response.model';
 import { RegistrarDocenteRequest } from '../api/models/registrar-docente-request.model';
 import { AuthService } from './auth.service';
@@ -84,21 +83,6 @@ export class TeacherService {
 
     return this.http.post<OperationResultResponse>(
       `${environment.apiUrl}/docentes`,
-      request
-    );
-  }
-
-  assignTeacherToGroup(
-    docenteId: string,
-    grupoId: string
-  ): Observable<OperationResultResponse> {
-    const request: AsignarDocenteGrupoRequest = {
-      docente: docenteId,
-      grupo: grupoId,
-    };
-
-    return this.http.post<OperationResultResponse>(
-      `${environment.apiUrl}/docentes/asignaciones/grupo`,
       request
     );
   }
