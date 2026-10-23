@@ -78,10 +78,11 @@ describe('DeanCoordinadoresComponent', () => {
         datos: [{ id: 'tipo-1', tipoIdentificacion: 'CC', nombre: 'Cédula de Ciudadanía' }],
       })
     );
-    http.match(`${environment.apiUrl}/programas-academicos`).forEach((r) =>
+    http.match((r) => r.url === `${environment.apiUrl}/decano/programas`).forEach((r) =>
       r.flush({
         exitoso: true,
-        datos: [{ id: 'prog-1', codigo: 'IS', nombre: 'Ingeniería de Sistemas' }],
+        datos: [{ id: '7d0f6a52-0000-4000-8000-000000000001', nombre: 'Ingeniería de Sistemas', nombreFacultad: 'Facultad de Ingeniería' }],
+        total: 1,
       })
     );
 
@@ -98,6 +99,14 @@ describe('DeanCoordinadoresComponent', () => {
     expect(component).toBeTruthy();
     expect(component.coordinadores().length).toBe(2);
     expect(component.isLoading()).toBeFalse();
+  });
+
+  it('T-FE-06 el selector de programa muestra los programas reales del decano (sin ids quemados)', () => {
+    flushInitialRequests();
+    expect(component.programasAcademicos().map((p) => ({ id: p.id, nombre: p.nombre }))).toEqual([
+      { id: '7d0f6a52-0000-4000-8000-000000000001', nombre: 'Ingeniería de Sistemas' },
+    ]);
+    expect(component.programasAcademicos().some((p) => p.id.startsWith('PROG-'))).toBeFalse();
   });
 
   it('filteredCoordinadores filtra por texto de búsqueda', () => {
@@ -133,15 +142,142 @@ describe('DeanCoordinadoresComponent', () => {
     expect(component.vistaActual()).toBe('LISTA');
   });
 
-  it('toggleEstado envía PATCH para alternar estado y notifica', () => {
+  // HU121-HU122 (CONTRACT §4, D6): antes `toggleEstado` enviaba PATCH …/toggle al instante (ruta inexistente en el
+  // backend). Ahora abre una confirmación y, al confirmar, envía PATCH …/estado con el estado explícito.
+  function expectRecarga(lista: CoordinadorItem[] = mockCoordinadores) {
+    http.expectOne(`${environment.apiUrl}/decano/coordinadores`).flush({ exitoso: true, datos: lista });
+  }
+
+  const resultadoOk = { exitoso: true, datos: { idCoordinador: 'coord-1', sincronizacionIdentidad: 'OK', mensajeUsuario: null } };
+
+  it('toggleEstado solo abre la confirmación y no envía ninguna petición', () => {
+    flushInitialRequests();
+
+    component.toggleEstado(mockCoordinadores[0]);
+
+    expect(component.coordinadorParaCambioEstado()).toEqual(mockCoordinadores[0]);
+    http.expectNone(`${environment.apiUrl}/decano/coordinadores/coord-1/estado`);
+    http.expectNone(`${environment.apiUrl}/decano/coordinadores/coord-1/toggle`);
+  });
+
+  it('confirmarCambioEstado desactiva a un coordinador activo con PATCH …/estado y recarga la lista', () => {
     flushInitialRequests();
     component.toggleEstado(mockCoordinadores[0]);
 
-    const req = http.expectOne(`${environment.apiUrl}/decano/coordinadores/coord-1/toggle`);
+    component.confirmarCambioEstado();
+
+    const req = http.expectOne(`${environment.apiUrl}/decano/coordinadores/coord-1/estado`);
     expect(req.request.method).toBe('PATCH');
-    req.flush({ exitoso: true, datos: { ...mockCoordinadores[0], estado: 'INACTIVO' } });
+    expect(req.request.body).toEqual({ estaActivo: false });
+    req.flush(resultadoOk);
+    expectRecarga();
 
     expect(toastService.success).toHaveBeenCalled();
+    expect(component.coordinadorParaCambioEstado()).toBeNull();
+  });
+
+  it('confirmarCambioEstado reactiva a un coordinador inactivo con estaActivo=true', () => {
+    flushInitialRequests();
+    component.toggleEstado(mockCoordinadores[1]);
+
+    component.confirmarCambioEstado();
+
+    const req = http.expectOne(`${environment.apiUrl}/decano/coordinadores/coord-2/estado`);
+    expect(req.request.body).toEqual({ estaActivo: true });
+    req.flush({ exitoso: true, datos: { idCoordinador: 'coord-2', sincronizacionIdentidad: 'OK', mensajeUsuario: null } });
+    expectRecarga();
+  });
+
+  it('cancelarCambioEstado cierra la confirmación sin enviar peticiones', () => {
+    flushInitialRequests();
+    component.toggleEstado(mockCoordinadores[0]);
+
+    component.cancelarCambioEstado();
+
+    expect(component.coordinadorParaCambioEstado()).toBeNull();
+    http.expectNone(`${environment.apiUrl}/decano/coordinadores/coord-1/estado`);
+  });
+
+  it('con identidad pendiente muestra la advertencia del backend como warning', () => {
+    flushInitialRequests();
+    component.toggleEstado(mockCoordinadores[0]);
+    component.confirmarCambioEstado();
+
+    http.expectOne(`${environment.apiUrl}/decano/coordinadores/coord-1/estado`).flush({
+      exitoso: true,
+      datos: { idCoordinador: 'coord-1', sincronizacionIdentidad: 'PENDIENTE', mensajeUsuario: 'El cambio se guardó; la cuenta se sincronizará pronto.' },
+    });
+    expectRecarga();
+
+    expect(toastService.warning).toHaveBeenCalledWith('El cambio se guardó; la cuenta se sincronizará pronto.');
+    expect(toastService.success).not.toHaveBeenCalled();
+  });
+
+  it('un 409 del backend se muestra tal cual, sin interpretar su texto', () => {
+    flushInitialRequests();
+    component.toggleEstado(mockCoordinadores[0]);
+    component.confirmarCambioEstado();
+
+    http.expectOne(`${environment.apiUrl}/decano/coordinadores/coord-1/estado`).flush(
+      { message: 'No se puede desactivar al coordinador mientras tenga un programa activo a cargo.' },
+      { status: 409, statusText: 'Conflict' },
+    );
+
+    expect(toastService.error).toHaveBeenCalledWith('No se puede desactivar al coordinador mientras tenga un programa activo a cargo.');
+    expect(component.coordinadorParaCambioEstado()).toBeNull();
+  });
+
+  it('abrirEdicion selecciona al coordinador y cerrarEdicion lo limpia', () => {
+    flushInitialRequests();
+
+    component.abrirEdicion(mockCoordinadores[0]);
+    expect(component.coordinadorEnEdicion()).toEqual(mockCoordinadores[0]);
+
+    component.cerrarEdicion();
+    expect(component.coordinadorEnEdicion()).toBeNull();
+  });
+
+  it('guardarEdicion envía PUT con los datos editables, recarga y notifica', () => {
+    flushInitialRequests();
+    component.abrirEdicion(mockCoordinadores[0]);
+
+    component.guardarEdicion({
+      primerNombre: 'Carlos',
+      segundoNombre: '',
+      primerApellido: 'Ramírez',
+      segundoApellido: '',
+      correo: 'carlos.nuevo@uco.edu.co',
+    });
+
+    const req = http.expectOne(`${environment.apiUrl}/decano/coordinadores/coord-1`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body.correo).toBe('carlos.nuevo@uco.edu.co');
+    req.flush(resultadoOk);
+    expectRecarga();
+
+    expect(toastService.success).toHaveBeenCalled();
+    expect(component.coordinadorEnEdicion()).toBeNull();
+  });
+
+  it('guardarEdicion con correo duplicado (409) muestra el mensaje del backend y conserva el formulario abierto', () => {
+    flushInitialRequests();
+    component.abrirEdicion(mockCoordinadores[0]);
+
+    component.guardarEdicion({
+      primerNombre: 'Carlos',
+      segundoNombre: '',
+      primerApellido: 'Ramírez',
+      segundoApellido: '',
+      correo: 'agomez@uco.edu.co',
+    });
+
+    http.expectOne(`${environment.apiUrl}/decano/coordinadores/coord-1`).flush(
+      { message: 'La dirección de correo electrónico ya se encuentra registrada.' },
+      { status: 409, statusText: 'Conflict' },
+    );
+
+    expect(toastService.error).toHaveBeenCalledWith('La dirección de correo electrónico ya se encuentra registrada.');
+    expect(component.coordinadorEnEdicion()).toEqual(mockCoordinadores[0]);
   });
 
   it('onNumeroIdentificacionInput limpia caracteres no numéricos', () => {

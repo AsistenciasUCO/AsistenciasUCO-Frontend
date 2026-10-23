@@ -6,13 +6,14 @@ import { CoordinatorManagementService } from '../../../core/services/coordinator
 import { PlanEstudioItem } from '../../../core/models/role-management.model';
 import { BadgeComponent } from '../../../shared/components/badge/badge.component';
 import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
+import { DeanProgramasGestionComponent } from './components/dean-programas-gestion.component';
 
 @Component({
   selector: 'app-dean-programas',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block w-full' },
-  imports: [CommonModule, FormsModule, BadgeComponent, PaginationComponent],
+  imports: [CommonModule, FormsModule, BadgeComponent, PaginationComponent, DeanProgramasGestionComponent],
   template: `
     <div class="space-y-6 animate-fade-in">
       <!-- Header Bento -->
@@ -46,6 +47,9 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
           </span>
         </div>
       </div>
+
+      <!-- Gestión de programas (HU076, HU077, HU078, HU108) -->
+      <app-dean-programas-gestion />
 
       <!-- KPIs Bento -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">

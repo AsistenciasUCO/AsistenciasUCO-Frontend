@@ -226,7 +226,8 @@ describe('mockBackendInterceptor', () => {
 
     const coordId = mockStore.coordinadores[0].id;
     let toggleCoordRes: any;
-    httpClient.patch(`${environment.apiUrl}/decano/coordinadores/${coordId}/toggle`, {}).subscribe((r) => (toggleCoordRes = r));
+    // HU121-HU122 D6: la ruta del estado del coordinador es PATCH .../estado con estaActivo explicito (antes /toggle).
+    httpClient.patch(`${environment.apiUrl}/decano/coordinadores/${coordId}/estado`, { estaActivo: false }).subscribe((r) => (toggleCoordRes = r));
     tick(250);
     expect(toggleCoordRes?.exitoso).toBeTrue();
 

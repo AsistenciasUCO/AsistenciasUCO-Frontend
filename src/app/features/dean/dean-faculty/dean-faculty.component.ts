@@ -337,7 +337,7 @@ export class DeanFacultyComponent implements OnInit {
 
   ngOnInit(): void {
     this.coordService.cargarDatosAcademicosBase();
-    this.courseService.getTeacherCourses().subscribe({
+    this.courseService.getDeanCourses().subscribe({
       next: (res) => this.courses.set(res.datos || []),
     });
     this.adminService.cargarSedes().subscribe();

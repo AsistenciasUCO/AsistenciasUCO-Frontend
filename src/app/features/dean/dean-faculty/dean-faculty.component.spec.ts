@@ -42,12 +42,9 @@ describe('DeanFacultyComponent', () => {
     fixture.detectChanges();
 
     http = TestBed.inject(HttpTestingController);
-    http.expectOne(`${environment.apiUrl}/docente/asignaturas`).flush({
-      exitoso: true,
-      total: 0,
-      datos: [],
-    });
-    http.expectOne(`${environment.apiUrl}/docente/horarios`).flush({
+    // Hallazgo del recorrido de vistas: el decano recibia 403 al pedir /docente/asignaturas y /docente/horarios
+    // (endpoints del docente autenticado). Su listado de grupos sale de GET /decano/grupos (ambito de facultad).
+    http.expectOne(`${environment.apiUrl}/decano/grupos`).flush({
       exitoso: true,
       total: 0,
       datos: [],

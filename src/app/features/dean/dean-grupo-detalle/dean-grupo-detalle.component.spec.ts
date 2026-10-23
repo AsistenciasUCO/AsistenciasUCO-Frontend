@@ -47,22 +47,26 @@ describe('DeanGrupoDetalleComponent', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
 
-    http.expectOne(`${environment.apiUrl}/docente/asignaturas`).flush({
+    // Hallazgo del recorrido de vistas: el decano recibia 403 al pedir /docente/asignaturas y /docente/horarios
+    // (endpoints del docente autenticado). Su listado de grupos sale de GET /decano/grupos (ambito de facultad).
+    http.expectOne(`${environment.apiUrl}/decano/grupos`).flush({
       exitoso: true,
       datos: [
         {
+          id: mockCourseApi.idGrupo,
+          codigo: mockCourseApi.codigoMateria,
+          nombre: mockCourseApi.seccion,
           idAsignatura: 'asig-1',
           nombreAsignatura: mockCourseApi.nombreMateria,
-          idGrupo: mockCourseApi.idGrupo,
-          nombreGrupo: mockCourseApi.seccion,
-          idPrograma: 'prog-1',
-          nombrePrograma: 'Ingeniería de Sistemas',
+          idDocente: mockCourseApi.idDocente,
+          capacidadMaximaPermitida: 35,
+          estudiantesActivos: mockCourseApi.totalEstudiantes,
+          cuposDisponibles: 35 - (mockCourseApi.totalEstudiantes ?? 0),
+          grupoHabilitado: true,
+          fechaInicioPeriodoAcademico: '2026-01-15',
+          fechaFinPeriodoAcademico: '2026-06-15',
         },
       ],
-    });
-    http.expectOne(`${environment.apiUrl}/docente/horarios`).flush({
-      exitoso: true,
-      datos: [mockCourseApi],
     });
     http.expectOne(`${environment.apiUrl}/sesiones/grupo/crs-1`).flush({
       exitoso: true,

@@ -268,21 +268,20 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
     mockStore.coordinadores = [nuevo, ...mockStore.coordinadores];
     return of(okResponse(nuevo, 'Coordinador registrado exitosamente.')).pipe(delay(300));
   }
-  if (url.includes('/decano/coordinadores/') && url.endsWith('/toggle') && method === 'PATCH') {
+  if (url.includes('/decano/coordinadores/') && url.endsWith('/estado') && method === 'PATCH') {
     const segments = url.split('/');
     const id = segments[segments.length - 2];
+    const body = req.body as { estaActivo: boolean };
     mockStore.coordinadores = mockStore.coordinadores.map((c) =>
-      c.id === id ? { ...c, estado: c.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO' } : c
+      c.id === id ? { ...c, estado: body.estaActivo ? 'ACTIVO' : 'INACTIVO' } : c
     );
-    const coord = mockStore.coordinadores.find((c) => c.id === id);
-    return of(okResponse(coord, `Estado del coordinador actualizado a ${coord?.estado}.`)).pipe(delay(200));
+    return of(okResponse({ idCoordinador: id, sincronizacionIdentidad: 'OK', mensajeUsuario: null }, 'Estado del coordinador actualizado.')).pipe(delay(200));
   }
   if (url.includes('/decano/coordinadores/') && method === 'PUT') {
     const id = url.split('/').pop()!;
     const body = req.body as any;
     mockStore.coordinadores = mockStore.coordinadores.map((c) => (c.id === id ? { ...c, ...body } : c));
-    const coord = mockStore.coordinadores.find((c) => c.id === id);
-    return of(okResponse(coord, 'Datos del coordinador actualizados con éxito.')).pipe(delay(250));
+    return of(okResponse({ idCoordinador: id, sincronizacionIdentidad: 'OK', mensajeUsuario: null }, 'Datos del coordinador actualizados con éxito.')).pipe(delay(250));
   }
   if (url.includes('/decano/coordinadores/') && url.endsWith('/facultad') && method === 'PATCH') {
     const segments = url.split('/');

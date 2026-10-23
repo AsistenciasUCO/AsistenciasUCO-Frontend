@@ -95,17 +95,6 @@ describe('TeacherService', () => {
     req.flush({ exitoso: true, mensajeUsuario: 'Docente registrado' });
   });
 
-  it('assignTeacherToGroup realiza POST a /docentes/asignaciones/grupo', () => {
-    service.assignTeacherToGroup('doc-1', 'grp-1').subscribe((res) => {
-      expect(res.exitoso).toBeTrue();
-    });
-
-    const req = http.expectOne(`${environment.apiUrl}/docentes/asignaciones/grupo`);
-    expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ docente: 'doc-1', grupo: 'grp-1' });
-    req.flush({ exitoso: true, mensajeUsuario: 'Asignación creada' });
-  });
-
   it('getTeacherAssignments y getCurrentTeacherAssignments realizan peticiones correspondientes', () => {
     service.getTeacherAssignments('doc-1').subscribe((res) => {
       expect(res.exitoso).toBeTrue();

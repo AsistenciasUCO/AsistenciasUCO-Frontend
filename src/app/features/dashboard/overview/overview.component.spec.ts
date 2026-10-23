@@ -198,7 +198,7 @@ describe('OverviewComponent', () => {
     ]);
     claimServiceSpy.getHorarioDocente.and.returnValue(of({ exitoso: true, datos: mockHorarioDocente }));
     claimServiceSpy.getReclamosDocente.and.returnValue(
-      of({ exitoso: true, datos: [{ id: 'r1', estadoSolicitud: 'PENDIENTE' } as any] })
+      of({ exitoso: true, datos: [{ id: 'r1', estadoSolicitud: 'PENDIENTE' } as any], total: 7 })
     );
 
     await TestBed.configureTestingModule({
@@ -231,9 +231,28 @@ describe('OverviewComponent', () => {
     expect(component).toBeTruthy();
     expect(claimServiceSpy.getHorarioDocente).toHaveBeenCalled();
     expect(courseServiceSpy.getTeacherCourses).toHaveBeenCalled();
-    expect(claimServiceSpy.getReclamosDocente).toHaveBeenCalled();
-    expect(component.pendingClaimsCount()).toBe(1);
+    expect(claimServiceSpy.getReclamosDocente.calls.mostRecent().args as unknown[]).toEqual([{ estado: 'P', pagina: 1, tamano: 1 }]);
+    expect(component.pendingClaimsCount()).toBe(7);
     expect(component.totalStudentsCount()).toBe(25);
+    expect(component.isLoading()).toBeFalse();
+  });
+
+  it('usa el total del servidor y no la longitud de la primera página para el contador de pendientes', () => {
+    claimServiceSpy.getReclamosDocente.and.returnValue(of({ exitoso: true, datos: [], total: 42 }));
+    createComponentWithRole('DOCENTE');
+    expect(component.pendingClaimsCount()).toBe(42);
+  });
+
+  it('cae a la longitud de datos si el servidor no informa total', () => {
+    claimServiceSpy.getReclamosDocente.and.returnValue(of({ exitoso: true, datos: [{ id: 'r1' } as any] }));
+    createComponentWithRole('DOCENTE');
+    expect(component.pendingClaimsCount()).toBe(1);
+  });
+
+  it('deja el contador vacío (null) cuando la consulta de reclamos falla', () => {
+    claimServiceSpy.getReclamosDocente.and.returnValue(throwError(() => ({ status: 501 })));
+    createComponentWithRole('DOCENTE');
+    expect(component.pendingClaimsCount()).toBeNull();
     expect(component.isLoading()).toBeFalse();
   });
 

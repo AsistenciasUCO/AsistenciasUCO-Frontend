@@ -3,7 +3,10 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DeanManagementService } from '../../../core/services/dean-management.service';
 import { CatalogService, TipoIdentificacionItem } from '../../../core/services/catalog.service';
-import { CoordinadorItem } from '../../../core/models/role-management.model';
+import { ActualizarCoordinadorPayload, CoordinadorItem, ResultadoGestionCoordinador } from '../../../core/models/role-management.model';
+import { ApiResponse } from '../../../core/models/api-response.model';
+import { DeanCoordinadorEditModalComponent } from './components/dean-coordinador-edit-modal.component';
+import { DeanCoordinadorEstadoModalComponent } from './components/dean-coordinador-estado-modal.component';
 import { CardComponent } from '../../../shared/components/card/card.component';
 import { BadgeComponent } from '../../../shared/components/badge/badge.component';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
@@ -31,6 +34,8 @@ type VistaDecano = 'LISTA' | 'REGISTRO';
     ButtonComponent,
     FormFieldComponent,
     UserPickerModalComponent,
+    DeanCoordinadorEditModalComponent,
+    DeanCoordinadorEstadoModalComponent,
   ],
   template: `
     <div class="space-y-6 animate-fade-in">
@@ -131,13 +136,22 @@ type VistaDecano = 'LISTA' | 'REGISTRO';
                         </app-badge>
                       </div>
 
-                      <button
-                        type="button"
-                        (click)="toggleEstado(coord)"
-                        class="text-xs px-2.5 py-1 rounded-lg border border-warm-200 hover:bg-warm-100 text-warm-700 transition-colors"
-                      >
-                        {{ coord.estado === 'ACTIVO' ? 'Desactivar' : 'Reactivar' }}
-                      </button>
+                      <div class="flex items-center gap-2">
+                        <button
+                          type="button"
+                          (click)="abrirEdicion(coord)"
+                          class="text-xs px-2.5 py-1 rounded-lg border border-warm-200 hover:bg-warm-100 text-warm-700 transition-colors"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          (click)="toggleEstado(coord)"
+                          class="text-xs px-2.5 py-1 rounded-lg border border-warm-200 hover:bg-warm-100 text-warm-700 transition-colors"
+                        >
+                          {{ coord.estado === 'ACTIVO' ? 'Desactivar' : 'Reactivar' }}
+                        </button>
+                      </div>
                     </div>
 
                     <h3 class="font-serif font-bold text-lg text-warm-900 leading-snug">
@@ -382,6 +396,24 @@ type VistaDecano = 'LISTA' | 'REGISTRO';
         (requestNew)="onSolicitarRegistroNuevo()"
         (cancelled)="isPickerModalOpen.set(false)"
       />
+
+      <!-- HU121: edición de datos del coordinador -->
+      @if (coordinadorEnEdicion(); as coordEdicion) {
+        <app-dean-coordinador-edit-modal
+          [coordinador]="coordEdicion"
+          (guardar)="guardarEdicion($event)"
+          (cancelar)="cerrarEdicion()"
+        />
+      }
+
+      <!-- HU122: confirmación de activación o desactivación -->
+      @if (coordinadorParaCambioEstado(); as coordEstado) {
+        <app-dean-coordinador-estado-modal
+          [coordinador]="coordEstado"
+          (confirmar)="confirmarCambioEstado()"
+          (cancelar)="cancelarCambioEstado()"
+        />
+      }
     </div>
   `,
 })
@@ -391,6 +423,8 @@ export class DeanCoordinadoresComponent implements OnInit {
   private toast = inject(ToastService);
 
   isPickerModalOpen = signal<boolean>(false);
+  coordinadorEnEdicion = signal<CoordinadorItem | null>(null);
+  coordinadorParaCambioEstado = signal<CoordinadorItem | null>(null);
   vistaActual = signal<VistaDecano>('LISTA');
   coordinadores = signal<CoordinadorItem[]>([]);
   tiposIdentificacion = signal<TipoIdentificacionItem[]>([]);
@@ -486,17 +520,65 @@ export class DeanCoordinadoresComponent implements OnInit {
     });
   }
 
+  /** HU122: abre la confirmación; el cambio se envía solo al confirmar (con el estado destino explícito). */
   toggleEstado(coord: CoordinadorItem): void {
-    this.deanService.toggleCoordinadorStatus(coord.id).subscribe({
+    this.coordinadorParaCambioEstado.set(coord);
+  }
+
+  cancelarCambioEstado(): void {
+    this.coordinadorParaCambioEstado.set(null);
+  }
+
+  confirmarCambioEstado(): void {
+    const coord = this.coordinadorParaCambioEstado();
+    if (!coord) {
+      return;
+    }
+    this.deanService.setCoordinadorEstado(coord.id, coord.estado !== 'ACTIVO').subscribe({
       next: (res) => {
-        if (res.exitoso && res.datos) {
-          const updated = this.coordinadores().map((c) => (c.id === coord.id ? res.datos! : c));
-          this.coordinadores.set(updated);
-          this.toast.success(res.mensajeUsuario || 'Estado actualizado.');
-        }
+        this.coordinadorParaCambioEstado.set(null);
+        this.notificarResultado(res);
+        this.cargarCoordinadores();
       },
+      error: (err) => {
+        this.coordinadorParaCambioEstado.set(null);
+        this.toast.error(getApiErrorMessage(err));
+      },
+    });
+  }
+
+  /** HU121: abre el formulario de edición con los datos del coordinador. */
+  abrirEdicion(coord: CoordinadorItem): void {
+    this.coordinadorEnEdicion.set(coord);
+  }
+
+  cerrarEdicion(): void {
+    this.coordinadorEnEdicion.set(null);
+  }
+
+  guardarEdicion(payload: ActualizarCoordinadorPayload): void {
+    const coord = this.coordinadorEnEdicion();
+    if (!coord) {
+      return;
+    }
+    this.deanService.updateCoordinador(coord.id, payload).subscribe({
+      next: (res) => {
+        this.coordinadorEnEdicion.set(null);
+        this.notificarResultado(res);
+        this.cargarCoordinadores();
+      },
+      // El formulario queda abierto para corregir; el mensaje viene del backend tal cual.
       error: (err) => this.toast.error(getApiErrorMessage(err)),
     });
+  }
+
+  private notificarResultado(res: ApiResponse<ResultadoGestionCoordinador>): void {
+    const mensaje = res.datos?.mensajeUsuario ?? res.mensajeUsuario;
+    if (res.datos?.sincronizacionIdentidad === 'PENDIENTE') {
+      this.toast.warning(mensaje ?? 'El cambio se guardó. La cuenta de acceso se sincronizará pronto.');
+    } else {
+      this.toast.success(mensaje ?? 'Cambio guardado.');
+    }
   }
 
   abrirFormularioRegistro(): void {

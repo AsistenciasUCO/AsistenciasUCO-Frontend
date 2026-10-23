@@ -9,6 +9,7 @@ import {
   EspacioFisicoItem,
   FacultadItem,
   AreaConocimientoItem,
+  TipoProgramaItem,
   ParametroInstitucionalItem,
   RegistroAuditoriaItem,
   CierrePeriodoReporte,
@@ -42,6 +43,10 @@ export class AdminManagementService {
   // Áreas de Conocimiento
   private _areas = signal<AreaConocimientoItem[]>([]);
   areas = this._areas.asReadonly();
+
+  // Tipos de Programa
+  private _tiposPrograma = signal<TipoProgramaItem[]>([]);
+  tiposPrograma = this._tiposPrograma.asReadonly();
 
   // Parámetros Institucionales
   private _parametros = signal<ParametroInstitucionalItem[]>([]);
@@ -327,6 +332,47 @@ export class AdminManagementService {
         }
       })
     ).subscribe();
+  }
+
+  // ================= TIPOS DE PROGRAMA (HU154) =================
+  cargarTiposPrograma(): Observable<ApiResponse<TipoProgramaItem[]>> {
+    return this.http.get<ApiResponse<TipoProgramaItem[]>>(`${environment.apiUrl}/admin/tipos-programa`).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._tiposPrograma.set(res.datos);
+        }
+      })
+    );
+  }
+
+  /** La señal solo cambia con la respuesta exitosa del backend; los errores HTTP llegan al llamador. */
+  crearTipoPrograma(item: { codigo: string; nombre: string }): Observable<ApiResponse<TipoProgramaItem>> {
+    return this.http.post<ApiResponse<TipoProgramaItem>>(`${environment.apiUrl}/admin/tipos-programa`, item).pipe(
+      tap((res) => {
+        if (res.exitoso && res.datos) {
+          this._tiposPrograma.update((prev) => [...prev, res.datos]);
+        }
+      })
+    );
+  }
+
+  actualizarTipoPrograma(id: string, cambios: { nombre: string }): Observable<ApiResponse<TipoProgramaItem>> {
+    return this.http.put<ApiResponse<TipoProgramaItem>>(`${environment.apiUrl}/admin/tipos-programa/${id}`, cambios).pipe(
+      tap((res) => this.reemplazarTipoPrograma(id, res))
+    );
+  }
+
+  /** Recibe el estado deseado (idempotente), no un toggle ciego. */
+  cambiarEstadoTipoPrograma(id: string, activo: boolean): Observable<ApiResponse<TipoProgramaItem>> {
+    return this.http.patch<ApiResponse<TipoProgramaItem>>(`${environment.apiUrl}/admin/tipos-programa/${id}/estado`, { activo }).pipe(
+      tap((res) => this.reemplazarTipoPrograma(id, res))
+    );
+  }
+
+  private reemplazarTipoPrograma(id: string, res: ApiResponse<TipoProgramaItem>): void {
+    if (res.exitoso && res.datos) {
+      this._tiposPrograma.update((prev) => prev.map((t) => (t.id === id ? res.datos : t)));
+    }
   }
 
   // ================= PARÁMETROS INSTITUCIONALES =================
