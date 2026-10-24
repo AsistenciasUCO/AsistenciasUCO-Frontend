@@ -142,7 +142,9 @@ export class DeanProgramasGestionComponent implements OnInit {
   readonly filtroNombre = signal('');
   readonly filtroEstado = signal('');
 
-  readonly coordinadores = signal<Array<{ id: string; idPrograma?: string | null; nombreCompleto?: string }>>([]);
+  readonly coordinadores = signal<
+    Array<{ id: string; idPrograma?: string | null; nombreCompleto?: string; estaActivoCoordinador?: boolean; estaActivoRolCoordinador?: boolean }>
+  >([]);
   readonly tipos = signal<CatalogoPrograma[]>([]);
   readonly modalidades = signal<CatalogoPrograma[]>([]);
   readonly jornadas = signal<CatalogoPrograma[]>([]);
@@ -156,7 +158,8 @@ export class DeanProgramasGestionComponent implements OnInit {
 
   readonly coordinadoresDisponibles = computed<CoordinadorOpcion[]>(() =>
     this.coordinadores()
-      .filter((c) => !c.idPrograma)
+      // HU121/HU122: solo coordinadores libres con usuario y rol activos (el SP lo vuelve a validar).
+      .filter((c) => !c.idPrograma && c.estaActivoCoordinador !== false && c.estaActivoRolCoordinador !== false)
       .map((c) => ({ id: c.id, nombre: c.nombreCompleto ?? c.id }))
   );
 
