@@ -1,0 +1,104 @@
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { CoordinatorFichaModalComponent } from './coordinator-ficha-modal.component';
+import { environment } from '../../../../../environments/environment';
+import { BitacoraSesion, FichaEstudiante } from '../../../../core/models/coordinator-indicators.model';
+
+describe('CoordinatorFichaModalComponent', () => {
+  let fixture: ComponentFixture<CoordinatorFichaModalComponent>;
+  let component: CoordinatorFichaModalComponent;
+  let http: HttpTestingController;
+  const base = `${environment.apiUrl}/coordinador/estudiantes/e-1`;
+
+  const ficha: FichaEstudiante = {
+    idEstudiante: 'e-1', tipoIdentificacion: 'CC', numeroIdentificacion: 1017000001, primerNombre: 'Ana', segundoNombre: 'Maria', primerApellido: 'Pérez',
+    segundoApellido: 'Gómez', nombreCompleto: 'Ana Maria Pérez Gómez', correo: 'ana@uco.edu.co', estaActivoUsuario: true, idPrograma: 'p-1', nombrePrograma: 'Sistemas',
+    resumenPorAsignatura: [{
+      idGrupo: 'g-1', codigoGrupo: 931001, idAsignatura: 'a-1', nombreAsignatura: 'Estructuras de Datos', codigoEstadoEstudiante: 'A', nombreEstadoEstudiante: 'activo',
+      sesionesEjecutadas: 6, asistencias: 4, faltasSinJustaCausa: 2, excusas: 0, porcentajeInasistencia: 33.33, codigoPermanencia: 'PERDIDA',
+    }],
+  };
+  const sesion = (n: number, asistio: boolean | null): BitacoraSesion => ({
+    idSesion: `s-${n}`, numeroSesion: n, nombreSesion: `Sesión ${n}`, fechaHoraInicio: '2026-10-23T14:00:00Z', fechaHoraFin: '2026-10-23T16:00:00Z',
+    idGrupo: 'g-1', codigoGrupo: 931001, idAsignatura: 'a-1', nombreAsignatura: 'Estructuras de Datos', asistio,
+    codigoRazonCausa: asistio === false ? 'SJC' : null, nombreRazonCausa: asistio === false ? 'sin justa causa' : null,
+  });
+  const texto = () => (fixture.nativeElement as HTMLElement).textContent ?? '';
+
+  function abrir(): void {
+    fixture = TestBed.createComponent(CoordinatorFichaModalComponent);
+    component = fixture.componentInstance;
+    fixture.componentRef.setInput('idEstudiante', 'e-1');
+    fixture.componentRef.setInput('nombre', 'Ana Pérez');
+    fixture.detectChanges();
+  }
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [CoordinatorFichaModalComponent], providers: [provideHttpClient(), provideHttpClientTesting()] });
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('T-FE-04 carga la ficha y la primera página de la bitácora al abrirse', () => {
+    abrir();
+    http.expectOne(`${base}/ficha`).flush({ exitoso: true, datos: ficha });
+    const req = http.expectOne((r) => r.url === `${base}/bitacora`);
+    expect(req.request.params.get('pagina')).toBe('1');
+    expect(req.request.params.get('tamano')).toBe('10');
+    req.flush({ exitoso: true, datos: [sesion(7, null), sesion(6, true), sesion(5, false)], total: 25 });
+    fixture.detectChanges();
+
+    const t = texto();
+    expect(t).toContain('ana@uco.edu.co');
+    expect(t).toContain('Estructuras de Datos');
+    expect(t).toContain('33.33%');
+    expect(t).not.toContain('Teléfono');
+    expect(component.totalBitacora()).toBe(25);
+  });
+
+  it('T-FE-04 una sesión sin registro se muestra como "Sin registro" (no como falta)', () => {
+    abrir();
+    http.expectOne(`${base}/ficha`).flush({ exitoso: true, datos: ficha });
+    http.expectOne((r) => r.url === `${base}/bitacora`).flush({ exitoso: true, datos: [sesion(7, null)], total: 1 });
+    fixture.detectChanges();
+
+    expect(texto()).toContain('Sin registro');
+    expect(component.etiquetaAsistencia(null)).toBe('Sin registro');
+    expect(component.etiquetaAsistencia(true)).toBe('Asistió');
+    expect(component.etiquetaAsistencia(false)).toBe('No asistió');
+  });
+
+  it('T-FE-04 cambiar de página de la bitácora pide esa página', () => {
+    abrir();
+    http.expectOne(`${base}/ficha`).flush({ exitoso: true, datos: ficha });
+    http.expectOne((r) => r.url === `${base}/bitacora`).flush({ exitoso: true, datos: [], total: 25 });
+
+    component.onPageChange(3);
+    const req = http.expectOne((r) => r.url === `${base}/bitacora`);
+    expect(req.request.params.get('pagina')).toBe('3');
+    req.flush({ exitoso: true, datos: [], total: 25 });
+  });
+
+  it('T-FE-04 un 404 muestra el mensaje del servidor y no inventa datos', () => {
+    abrir();
+    http.expectOne(`${base}/ficha`).flush({ message: 'El estudiante especificado no existe en el sistema.' }, { status: 404, statusText: 'Not Found' });
+    http.expectOne((r) => r.url === `${base}/bitacora`).flush({ message: 'El estudiante especificado no existe en el sistema.' }, { status: 404, statusText: 'Not Found' });
+    fixture.detectChanges();
+
+    expect(component.error()).toBe('El estudiante especificado no existe en el sistema.');
+    expect(component.ficha()).toBeNull();
+    expect(texto()).toContain('El estudiante especificado no existe en el sistema.');
+  });
+
+  it('cerrar emite el evento de cierre', () => {
+    abrir();
+    http.expectOne(`${base}/ficha`).flush({ exitoso: true, datos: ficha });
+    http.expectOne((r) => r.url === `${base}/bitacora`).flush({ exitoso: true, datos: [], total: 0 });
+    let cerrado = false;
+    component.cerrar.subscribe(() => (cerrado = true));
+    component.cancelar();
+    expect(cerrado).toBeTrue();
+  });
+});
