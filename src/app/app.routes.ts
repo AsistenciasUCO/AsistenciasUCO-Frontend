@@ -262,6 +262,15 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'coordinador/indicadores',
+        canActivate: [roleGuard],
+        data: { roles: ['COORDINADOR'] },
+        loadComponent: () =>
+          import(
+            './features/coordinator/coordinator-indicators/coordinator-indicators.component'
+          ).then((m) => m.CoordinatorIndicatorsComponent),
+      },
+      {
         path: 'coordinador/estudiantes',
         canActivate: [roleGuard],
         data: { roles: ['COORDINADOR'] },

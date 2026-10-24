@@ -308,6 +308,12 @@ export class DashboardLayoutComponent {
       icon: 'horarios',
     },
     {
+      label: 'Indicadores',
+      route: '/app/coordinador/indicadores',
+      roles: ['COORDINADOR'],
+      icon: 'estudiantes',
+    },
+    {
       label: 'Estudiantes del Programa',
       route: '/app/coordinador/estudiantes',
       roles: ['COORDINADOR'],
