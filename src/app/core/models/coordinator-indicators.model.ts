@@ -1,4 +1,4 @@
-export type SemaforoAlerta = 'ROJO' | 'AMARILLO' | 'VERDE';
+export type SemaforoAlerta = 'ROJO' | 'AMBAR' | 'VERDE';
 
 export interface KpisCoordinador {
   idPrograma: string;

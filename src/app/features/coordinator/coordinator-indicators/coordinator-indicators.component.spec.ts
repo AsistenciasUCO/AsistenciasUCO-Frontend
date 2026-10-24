@@ -82,6 +82,11 @@ describe('CoordinatorIndicatorsComponent', () => {
     req.flush({ exitoso: true, datos: [alerta], total: 1 });
   });
 
+  it('T-FE-03 las opciones del filtro de semáforo usan los códigos del contrato (VERDE/AMBAR/ROJO)', () => {
+    const valores = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('select[aria-label="Semáforo"] option')).map((o) => (o as HTMLOptionElement).value);
+    expect(valores).toEqual(['', 'ROJO', 'AMBAR']);
+  });
+
   it('T-FE-03 un error al cargar muestra el mensaje del backend', () => {
     spyOn(toast, 'error');
     component.cargar();

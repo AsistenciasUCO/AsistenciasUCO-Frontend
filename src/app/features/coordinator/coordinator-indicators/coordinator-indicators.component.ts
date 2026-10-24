@@ -42,7 +42,7 @@ import { CoordinatorFichaModalComponent } from './components/coordinator-ficha-m
                   (change)="filtroSemaforo.set($any($event.target).value || null); aplicarFiltros()">
             <option value="">Todos</option>
             <option value="ROJO">Rojo</option>
-            <option value="AMARILLO">Amarillo</option>
+            <option value="AMBAR">Ámbar</option>
           </select>
         </div>
 
