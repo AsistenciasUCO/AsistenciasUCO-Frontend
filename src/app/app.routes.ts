@@ -271,6 +271,15 @@ export const routes: Routes = [
           ).then((m) => m.CoordinatorIndicatorsComponent),
       },
       {
+        path: 'decano/indicadores',
+        canActivate: [roleGuard],
+        data: { roles: ['DECANO'] },
+        loadComponent: () =>
+          import('./features/dean/dean-indicators/dean-indicators.component').then(
+            (m) => m.DeanIndicatorsComponent
+          ),
+      },
+      {
         path: 'coordinador/estudiantes',
         canActivate: [roleGuard],
         data: { roles: ['COORDINADOR'] },

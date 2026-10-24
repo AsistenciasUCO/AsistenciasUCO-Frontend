@@ -34,8 +34,8 @@ import { CoordinadorItem } from '../../../../core/models/role-management.model';
         </div>
         <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
           <span class="text-xs text-warm-500 font-medium">Asistencia Promedio</span>
-          <p class="text-2xl font-serif font-bold text-emerald-700 mt-1">94%</p>
-          <span class="text-[11px] text-emerald-700 font-medium">Nivel óptimo institucional</span>
+          <p class="text-2xl font-serif font-bold text-emerald-700 mt-1">{{ porcentajeAsistencia() === null ? 'Sin datos' : porcentajeAsistencia() + '%' }}</p>
+          <span class="text-[11px] text-warm-500 font-medium">Período vigente de la facultad</span>
         </div>
       </section>
 
@@ -95,4 +95,5 @@ export class OverviewDeanComponent {
   coordinadores = input<CoordinadorItem[]>([]);
   totalDocentes = input<number>(0);
   totalGrupos = input<number>(0);
+  porcentajeAsistencia = input<number | null>(null);
 }

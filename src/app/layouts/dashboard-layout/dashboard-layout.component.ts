@@ -254,6 +254,12 @@ export class DashboardLayoutComponent {
       icon: 'sistema',
     },
     {
+      label: 'Indicadores',
+      route: '/app/decano/indicadores',
+      roles: ['DECANO'],
+      icon: 'estudiantes',
+    },
+    {
       label: 'Mi Facultad',
       route: '/app/decano/facultad',
       roles: ['DECANO'],
