@@ -304,34 +304,34 @@ export class AdminManagementService {
     );
   }
 
-  crearArea(item: Omit<AreaConocimientoItem, 'id'>): void {
-    this.http.post<ApiResponse<AreaConocimientoItem>>(`${environment.apiUrl}/admin/areas`, item).pipe(
+  /** La señal solo cambia con la respuesta exitosa del backend; los errores HTTP llegan al llamador. */
+  crearArea(item: { codigo: string; nombre: string }): Observable<ApiResponse<AreaConocimientoItem>> {
+    return this.http.post<ApiResponse<AreaConocimientoItem>>(`${environment.apiUrl}/admin/areas`, item).pipe(
       tap((res) => {
         if (res.exitoso && res.datos) {
-          this._areas.update((prev) => [res.datos, ...prev]);
+          this._areas.update((prev) => [...prev, res.datos]);
         }
       })
-    ).subscribe();
+    );
   }
 
-  actualizarArea(id: string, cambios: Partial<AreaConocimientoItem>): void {
-    this.http.put<ApiResponse<AreaConocimientoItem>>(`${environment.apiUrl}/admin/areas/${id}`, cambios).pipe(
-      tap((res) => {
-        if (res.exitoso && res.datos) {
-          this._areas.update((prev) => prev.map((a) => (a.id === id ? res.datos : a)));
-        }
-      })
-    ).subscribe();
+  actualizarArea(id: string, cambios: { nombre: string }): Observable<ApiResponse<AreaConocimientoItem>> {
+    return this.http.put<ApiResponse<AreaConocimientoItem>>(`${environment.apiUrl}/admin/areas/${id}`, cambios).pipe(
+      tap((res) => this.reemplazarArea(id, res))
+    );
   }
 
-  cambiarEstadoArea(id: string): void {
-    this.http.patch<ApiResponse<AreaConocimientoItem>>(`${environment.apiUrl}/admin/areas/${id}/estado`, {}).pipe(
-      tap((res) => {
-        if (res.exitoso && res.datos) {
-          this._areas.update((prev) => prev.map((a) => (a.id === id ? res.datos : a)));
-        }
-      })
-    ).subscribe();
+  /** Recibe el estado deseado (idempotente), no un toggle ciego. */
+  cambiarEstadoArea(id: string, activa: boolean): Observable<ApiResponse<AreaConocimientoItem>> {
+    return this.http.patch<ApiResponse<AreaConocimientoItem>>(`${environment.apiUrl}/admin/areas/${id}/estado`, { activa }).pipe(
+      tap((res) => this.reemplazarArea(id, res))
+    );
+  }
+
+  private reemplazarArea(id: string, res: ApiResponse<AreaConocimientoItem>): void {
+    if (res.exitoso && res.datos) {
+      this._areas.update((prev) => prev.map((a) => (a.id === id ? res.datos : a)));
+    }
   }
 
   // ================= TIPOS DE PROGRAMA (HU154) =================

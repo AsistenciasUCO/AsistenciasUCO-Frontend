@@ -47,7 +47,7 @@ describe('AdminManagementService - áreas de conocimiento (HU151/HU152)', () => 
     expect(service.areas()).toEqual([]);
   });
 
-  it('crearArea envia CBAT con codigo y nombre y agrega el registro devuelto', () => {
+  it('crearArea envia POST con codigo y nombre y agrega el registro devuelto', () => {
     cargarInicial();
     const nuevo: AreaConocimientoItem = { id: 't-3', codigo: 'HUM', nombre: 'Humanidades', activa: true };
 
@@ -56,7 +56,7 @@ describe('AdminManagementService - áreas de conocimiento (HU151/HU152)', () => 
     });
 
     const req = http.expectOne(base);
-    expect(req.request.method).toBe('CBAT');
+    expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ codigo: 'hum', nombre: 'Humanidades' });
     req.flush({ exitoso: true, datos: nuevo }, { status: 201, statusText: 'Created' });
 
