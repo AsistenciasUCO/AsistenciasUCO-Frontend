@@ -7,6 +7,7 @@ import { AuthService } from '../../../core/services/auth.service';
 import { CourseService } from '../../../core/services/course.service';
 import { AdminManagementService } from '../../../core/services/admin-management.service';
 import { DeanManagementService } from '../../../core/services/dean-management.service';
+import { DeanIndicatorsService } from '../../../core/services/dean-indicators.service';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
 import { StudentManagementService } from '../../../core/services/student-management.service';
 import { AttendanceClaimService } from '../../../core/services/attendance-claim.service';
@@ -31,6 +32,7 @@ describe('OverviewComponent', () => {
   let authServiceSpy: { currentUser: jasmine.Spy };
   let courseServiceSpy: jasmine.SpyObj<CourseService>;
   let adminServiceSpy: jasmine.SpyObj<AdminManagementService>;
+  let deanIndicatorsSpy: jasmine.SpyObj<DeanIndicatorsService>;
   let deanServiceSpy: jasmine.SpyObj<DeanManagementService>;
   let coordinatorServiceSpy: jasmine.SpyObj<CoordinatorManagementService>;
   let studentServiceSpy: jasmine.SpyObj<StudentManagementService>;
@@ -177,6 +179,9 @@ describe('OverviewComponent', () => {
     deanServiceSpy = jasmine.createSpyObj('DeanManagementService', ['getCoordinadores']);
     deanServiceSpy.getCoordinadores.and.returnValue(of({ exitoso: true, datos: mockCoordinadores }));
 
+    deanIndicatorsSpy = jasmine.createSpyObj('DeanIndicatorsService', ['consultarKpis']);
+    deanIndicatorsSpy.consultarKpis.and.returnValue(of({ exitoso: true, datos: { porcentajeAsistencia: 82.86 } as any }));
+
     coordinatorServiceSpy = jasmine.createSpyObj('CoordinatorManagementService', [
       'getPlanesEstudio',
       'getDocentes',
@@ -209,6 +214,7 @@ describe('OverviewComponent', () => {
         { provide: CourseService, useValue: courseServiceSpy },
         { provide: AdminManagementService, useValue: adminServiceSpy },
         { provide: DeanManagementService, useValue: deanServiceSpy },
+        { provide: DeanIndicatorsService, useValue: deanIndicatorsSpy },
         { provide: CoordinatorManagementService, useValue: coordinatorServiceSpy },
         { provide: StudentManagementService, useValue: studentServiceSpy },
         { provide: AttendanceClaimService, useValue: claimServiceSpy },
@@ -282,6 +288,30 @@ describe('OverviewComponent', () => {
     expect(component.coordinadores().length).toBe(1);
     expect(component.totalDocentesFacultad()).toBe(10);
     expect(component.totalGruposFacultad()).toBe(15);
+    expect(component.isLoading()).toBeFalse();
+  });
+
+  it('DECANO: la tarjeta de asistencia refleja el porcentaje que entrega el backend y no un valor fijo', () => {
+    createComponentWithRole('DECANO');
+    expect(deanIndicatorsSpy.consultarKpis).toHaveBeenCalled();
+    expect(component.porcentajeAsistenciaFacultad()).toBe(82.86);
+    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(texto).toContain('82.86%');
+    expect(texto).not.toContain('94%');
+  });
+
+  it('DECANO: sin porcentaje (null) la tarjeta muestra Sin datos, no 0%', () => {
+    deanIndicatorsSpy.consultarKpis.and.returnValue(of({ exitoso: true, datos: { porcentajeAsistencia: null } as any }));
+    createComponentWithRole('DECANO');
+    expect(component.porcentajeAsistenciaFacultad()).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Sin datos');
+  });
+
+  it('DECANO: si la consulta de indicadores falla la tarjeta queda en Sin datos y el resto de la vista carga', () => {
+    deanIndicatorsSpy.consultarKpis.and.returnValue(throwError(() => ({ status: 403 })));
+    createComponentWithRole('DECANO');
+    expect(component.porcentajeAsistenciaFacultad()).toBeNull();
+    expect(component.coordinadores().length).toBe(1);
     expect(component.isLoading()).toBeFalse();
   });
 
