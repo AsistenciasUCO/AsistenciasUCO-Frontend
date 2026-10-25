@@ -114,14 +114,51 @@ describe('CoordinatorStudyPlanMeshPageComponent', () => {
   });
 
   it('agregarSemestre agrega el siguiente semestre con el endpoint HU082', () => {
+    component.planes.set([{ ...mockPlan, totalSemestres: 9 }]);
     component.agregarSemestre();
 
     const postReq = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/PLAN-SIS-2024/semestres`);
     expect(postReq.request.method).toBe('POST');
     postReq.flush({ exitoso: true, datos: null });
 
-    expect(toastSpy.success).toHaveBeenCalledWith('Semestre 11 agregado al plan.');
-    expect(component.selectedPlan()?.totalSemestres).toBe(11);
+    expect(toastSpy.success).toHaveBeenCalledWith('Semestre 10 agregado al plan.');
+    expect(component.selectedPlan()?.totalSemestres).toBe(10);
+    expect(component.aviso()).toBeNull();
+  });
+
+  it('agregarSemestre en el máximo de 10 avisa sin llamar al backend', () => {
+    component.agregarSemestre();
+
+    http.expectNone(`${environment.apiUrl}/coordinador/planes-estudio/PLAN-SIS-2024/semestres`);
+    expect(component.aviso()).toContain('máximo de 10 semestres');
+    expect(toastSpy.error).toHaveBeenCalled();
+  });
+
+  it('agregarSemestre rechazado por el backend muestra el aviso y recarga los planes', () => {
+    component.planes.set([{ ...mockPlan, totalSemestres: 9 }]);
+    component.agregarSemestre();
+
+    http
+      .expectOne(`${environment.apiUrl}/coordinador/planes-estudio/PLAN-SIS-2024/semestres`)
+      .flush({ exitoso: false }, { status: 409, statusText: 'Conflict' });
+    http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio`).flush({ exitoso: true, datos: [mockPlan] });
+
+    expect(component.aviso()).toBeTruthy();
+    expect(component.selectedPlan()?.totalSemestres).toBe(10);
+  });
+
+  it('eliminarSemestreVacio avisa sin llamar al backend si el último semestre tiene asignaturas (codigoSemestre)', () => {
+    component.asignaturas.set([{ id: 'a-10', codigoSemestre: 'S10' } as any]);
+    component.eliminarSemestreVacio();
+
+    http.expectNone(`${environment.apiUrl}/coordinador/planes-estudio/PLAN-SIS-2024/semestres/10`);
+    expect(component.aviso()).toContain('El semestre 10 tiene asignaturas');
+  });
+
+  it('eliminarSemestreVacio con un solo semestre avisa que debe conservarlo', () => {
+    component.planes.set([{ ...mockPlan, totalSemestres: 1 }]);
+    component.eliminarSemestreVacio();
+    expect(component.aviso()).toContain('al menos un semestre');
   });
 
   it('eliminarSemestreVacio quita el último semestre con el endpoint HU083', () => {
@@ -143,8 +180,10 @@ describe('CoordinatorStudyPlanMeshPageComponent', () => {
       { exitoso: false, mensajeUsuario: 'El semestre tiene asignaturas asociadas. Reubíquelas o elimínelas primero.' },
       { status: 409, statusText: 'Conflict' }
     );
+    http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio`).flush({ exitoso: true, datos: [mockPlan] });
 
     expect(toastSpy.error).toHaveBeenCalled();
+    expect(component.aviso()).toBeTruthy();
     expect(component.selectedPlan()?.totalSemestres).toBe(10);
   });
 });

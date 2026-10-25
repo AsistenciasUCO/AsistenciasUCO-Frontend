@@ -42,6 +42,24 @@ export function normalizarPlanEstudio(raw: any): PlanEstudioItem {
   };
 }
 
+/**
+ * HU082/HU083: la malla agrupa por número de semestre. El backend envía `codigoSemestre` (p. ej. "S8"),
+ * `credito`, `nombreArea` y `nombreComponente`; se adaptan a `AsignaturaPlanItem` conservando lo que ya venga.
+ */
+export function normalizarAsignaturaPlan(raw: any): AsignaturaPlanItem {
+  const semestre = raw?.semestre ?? Number(String(raw?.codigoSemestre ?? '').replace(/\D/g, '') || 0);
+  return {
+    ...raw,
+    planEstudioId: raw?.planEstudioId ?? raw?.idPlanEstudio,
+    creditos: raw?.creditos ?? raw?.credito ?? 0,
+    semestre,
+    area: raw?.area ?? raw?.nombreArea ?? '',
+    componente: raw?.componente ?? raw?.nombreComponente ?? '',
+    prerrequisitos: raw?.prerrequisitos ?? [],
+    horasSemanales: raw?.horasSemanales ?? 0,
+  };
+}
+
 export interface DirectorioEstudiantesQuery {
   page: number;
   size: number;
@@ -215,6 +233,7 @@ export class CoordinatorManagementService {
 
   getAsignaturasPorPlan(planId: string): Observable<ApiResponse<AsignaturaPlanItem[]>> {
     return this.http.get<ApiResponse<AsignaturaPlanItem[]>>(`${environment.apiUrl}/coordinador/planes-estudio/${planId}/asignaturas`).pipe(
+      map((res) => (res.datos ? { ...res, datos: res.datos.map(normalizarAsignaturaPlan) } : res)),
       tap((res) => {
         if (res.exitoso && res.datos) {
           this.asignaturasSignal.update((map) => ({ ...map, [planId]: res.datos }));

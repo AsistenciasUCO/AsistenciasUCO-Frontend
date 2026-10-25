@@ -1,7 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { CoordinatorManagementService, normalizarPlanEstudio } from './coordinator-management.service';
+import {
+  CoordinatorManagementService,
+  normalizarAsignaturaPlan,
+  normalizarPlanEstudio,
+} from './coordinator-management.service';
 import { environment } from '../../../environments/environment';
 import {
   ActualizarDocentePayload,
@@ -337,6 +341,19 @@ describe('CoordinatorManagementService', () => {
       req.flush({ exitoso: true, datos: { ...mockPlanes[0], estado: 'INACTIVO' } });
 
       expect(service.planes().find((p) => p.id === 'plan-1')?.estado).toBe('INACTIVO');
+    });
+
+    it('normalizarAsignaturaPlan adapta codigoSemestre, créditos, área y componente del backend', () => {
+      const asig = normalizarAsignaturaPlan({
+        id: 'a-1', codigo: 'ARQ-402', nombre: 'Arquitectura', credito: 3, nombreArea: 'Software',
+        nombreComponente: 'Profesional', codigoSemestre: 'S8', idPlanEstudio: 'p-1',
+      });
+      expect(asig.semestre).toBe(8);
+      expect(asig.creditos).toBe(3);
+      expect(asig.area).toBe('Software');
+      expect(asig.componente as string).toBe('Profesional');
+      expect(asig.planEstudioId).toBe('p-1');
+      expect(normalizarAsignaturaPlan({ id: 'm', semestre: 2, creditos: 4 }).semestre).toBe(2);
     });
 
     it('getPlanesEstudio adapta la respuesta del backend (HU081-HU083) a PlanEstudioItem', () => {
