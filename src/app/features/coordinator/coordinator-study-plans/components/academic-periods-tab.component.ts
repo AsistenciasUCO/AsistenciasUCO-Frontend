@@ -21,12 +21,16 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
           <p class="text-xs text-warm-500">Configuración de ciclos lectivos, fechas límites y activación de períodos.</p>
         </div>
 
-        <app-button variant="primary" size="sm" (clicked)="abrirCrear()">
-          <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
-          + Nuevo Período Académico
-        </app-button>
+        @if (!soloLectura()) {
+          <app-button variant="primary" size="sm" (clicked)="abrirCrear()">
+            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            + Nuevo Período Académico
+          </app-button>
+        } @else {
+          <span class="text-xs text-warm-500">Los períodos los administra la institución.</span>
+        }
       </div>
 
       <!-- Grid de Períodos -->
@@ -71,14 +75,15 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
                   </div>
                 </div>
 
+                @if (!soloLectura()) {
                 <div class="flex items-center justify-between pt-2 border-t border-warm-100 text-xs">
                   <button
                     type="button"
-                    (click)="togglePeriodo.emit(periodo)"
-                    class="font-semibold text-primary-700 hover:text-primary-900"
-                    title="Cambiar estado de vigencia del período"
+                    (click)="deletePeriodo.emit(periodo)"
+                    class="font-semibold text-rose-700 hover:text-rose-900"
+                    title="Eliminar el período (solo si no tiene grupos ni sesiones)"
                   >
-                    Cambiar Estado
+                    Eliminar
                   </button>
                   <button
                     type="button"
@@ -89,6 +94,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
                     Editar Fechas
                   </button>
                 </div>
+                }
               </div>
             </app-card>
           }
@@ -128,28 +134,9 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
               />
             </app-form-field>
 
-            <app-form-field label="Estado del Período" [required]="true">
-              <select
-                [(ngModel)]="periodoForm.estado"
-                class="w-full px-3 py-2 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              >
-                <option value="PLANEACION">PLANEACION</option>
-                <option value="ACTIVO">ACTIVO</option>
-                <option value="INACTIVO">INACTIVO</option>
-                <option value="CERRADO">CERRADO</option>
-              </select>
-            </app-form-field>
-
-            <div class="sm:col-span-2">
-              <app-form-field label="Nombre Descriptivo" [required]="true">
-                <input
-                  type="text"
-                  [(ngModel)]="periodoForm.nombre"
-                  placeholder="Ej. Primer Semestre Académico 2027"
-                  class="w-full px-3 py-2 bg-warm-50 border border-warm-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                />
-              </app-form-field>
-            </div>
+            <p class="text-xs text-warm-500 self-center">
+              El estado (planeación, activo o cerrado) se calcula con las fechas del período.
+            </p>
 
             <app-form-field label="Fecha de Inicio" [required]="true">
               <input
@@ -175,7 +162,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
             <app-button
               variant="primary"
               size="sm"
-              [disabled]="!periodoForm.codigo.trim() || !periodoForm.nombre.trim()"
+              [disabled]="!periodoForm.codigo.trim() || !periodoForm.fechaInicio || !periodoForm.fechaFin"
               (clicked)="guardar()"
             >
               Guardar Período
@@ -188,9 +175,12 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
 })
 export class AcademicPeriodsTabComponent {
   periodos = input.required<PeriodoAcademicoItem[]>();
+  /** HU096-HU098: decano y coordinador solo consultan; crear, editar y eliminar es del administrador. */
+  soloLectura = input(false);
 
   savePeriodo = output<{ modo: 'CREAR' | 'EDITAR'; id?: string; datos: any }>();
-  togglePeriodo = output<PeriodoAcademicoItem>();
+  /** HU098: solicita eliminar el período; el backend lo rechaza si tiene grupos o sesiones. */
+  deletePeriodo = output<PeriodoAcademicoItem>();
 
   currentPage = signal(1);
   pageSize = signal(6);
@@ -245,11 +235,16 @@ export class AcademicPeriodsTabComponent {
     this.mostrarModal.set(true);
   }
 
+  /** HU096/HU097: el código del período (p. ej. 2027-1) es su nombre único en la institución. */
   guardar(): void {
     this.savePeriodo.emit({
       modo: this.modoModal(),
       id: this.selectedPeriodoId || undefined,
-      datos: { ...this.periodoForm },
+      datos: {
+        nombre: this.periodoForm.codigo.trim(),
+        fechaInicio: this.periodoForm.fechaInicio,
+        fechaFin: this.periodoForm.fechaFin,
+      },
     });
     this.mostrarModal.set(false);
   }

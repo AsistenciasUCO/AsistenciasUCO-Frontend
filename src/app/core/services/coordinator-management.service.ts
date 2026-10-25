@@ -43,6 +43,29 @@ export function normalizarPlanEstudio(raw: any): PlanEstudioItem {
 }
 
 /**
+ * HU096-HU098: el backend devuelve el período con `nombre` (p. ej. 2026-2), `codigo` numérico y fechas; la pantalla
+ * muestra el nombre como código y calcula el estado con las fechas (sin columna de estado en la DB).
+ */
+export function normalizarPeriodoAcademico(raw: any, hoy: Date = new Date()): PeriodoAcademicoItem {
+  const fechaInicio = String(raw?.fechaInicio ?? '');
+  const fechaFin = String(raw?.fechaFin ?? '');
+  const dia = hoy.toISOString().slice(0, 10);
+  const calculado: PeriodoAcademicoItem['estado'] =
+    fechaInicio && dia < fechaInicio ? 'PLANEACION' : fechaFin && dia > fechaFin ? 'CERRADO' : 'ACTIVO';
+  const estado = raw?.estado ?? calculado;
+  return {
+    id: raw?.id,
+    codigo: raw?.idInstitucion !== undefined ? String(raw?.nombre ?? '') : String(raw?.codigo ?? raw?.nombre ?? ''),
+    nombre: raw?.idInstitucion !== undefined ? `Período ${raw?.nombre ?? ''}` : String(raw?.nombre ?? ''),
+    fechaInicio,
+    fechaFin,
+    fechaLimiteNotas: raw?.fechaLimiteNotas,
+    estado,
+    esActual: raw?.esActual ?? estado === 'ACTIVO',
+  };
+}
+
+/**
  * HU082/HU083: la malla agrupa por número de semestre. El backend envía `codigoSemestre` (p. ej. "S8"),
  * `credito`, `nombreArea` y `nombreComponente`; se adaptan a `AsignaturaPlanItem` conservando lo que ya venga.
  */
@@ -293,6 +316,7 @@ export class CoordinatorManagementService {
   // --- PERÍODOS ACADÉMICOS ---
   getPeriodosAcademicos(): Observable<ApiResponse<PeriodoAcademicoItem[]>> {
     return this.http.get<ApiResponse<PeriodoAcademicoItem[]>>(`${environment.apiUrl}/coordinador/periodos-academicos`).pipe(
+      map((res) => (res.datos ? { ...res, datos: res.datos.map((p) => normalizarPeriodoAcademico(p)) } : res)),
       tap((res) => {
         if (res.exitoso && res.datos) {
           this.periodosSignal.set(res.datos);
@@ -302,7 +326,7 @@ export class CoordinatorManagementService {
   }
 
   crearPeriodoAcademico(datos: Partial<PeriodoAcademicoItem>): Observable<ApiResponse<PeriodoAcademicoItem>> {
-    return this.http.post<ApiResponse<PeriodoAcademicoItem>>(`${environment.apiUrl}/coordinador/periodos-academicos`, datos).pipe(
+    return this.http.post<ApiResponse<PeriodoAcademicoItem>>(`${environment.apiUrl}/admin/periodos-academicos`, datos).pipe(
       tap((res) => {
         if (res.exitoso && res.datos) {
           this.periodosSignal.update((prev) => [res.datos, ...prev]);
@@ -312,7 +336,7 @@ export class CoordinatorManagementService {
   }
 
   actualizarPeriodoAcademico(id: string, cambios: Partial<PeriodoAcademicoItem>): Observable<ApiResponse<PeriodoAcademicoItem>> {
-    return this.http.put<ApiResponse<PeriodoAcademicoItem>>(`${environment.apiUrl}/coordinador/periodos-academicos/${id}`, cambios).pipe(
+    return this.http.put<ApiResponse<PeriodoAcademicoItem>>(`${environment.apiUrl}/admin/periodos-academicos/${id}`, cambios).pipe(
       tap((res) => {
         if (res.exitoso && res.datos) {
           this.periodosSignal.update((prev) => prev.map((p) => (p.id === id ? res.datos : p)));
@@ -321,8 +345,15 @@ export class CoordinatorManagementService {
     );
   }
 
-  toggleEstadoPeriodoAcademico(id: string): Observable<ApiResponse<PeriodoAcademicoItem>> {
-    return this.http.patch<ApiResponse<PeriodoAcademicoItem>>(`${environment.apiUrl}/coordinador/periodos-academicos/${id}/estado`, {});
+  /** HU098. El backend rechaza con 409 si el período tiene grupos o sesiones; la pantalla recarga tras el éxito. */
+  eliminarPeriodoAcademico(id: string): Observable<ApiResponse<null>> {
+    return this.http.delete<ApiResponse<null>>(`${environment.apiUrl}/admin/periodos-academicos/${id}`).pipe(
+      tap((res) => {
+        if (res.exitoso) {
+          this.periodosSignal.update((prev) => prev.filter((p) => p.id !== id));
+        }
+      })
+    );
   }
 
   agregarSemestrePlan(planId: string): Observable<ApiResponse<{ planEstudioId: string }>> {

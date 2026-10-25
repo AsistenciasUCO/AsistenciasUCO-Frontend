@@ -438,18 +438,23 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
   if (url.endsWith('/coordinador/periodos-academicos') && method === 'GET') {
     return of(okResponse(mockStore.periodosAcademicos)).pipe(delay(200));
   }
-  if (url.endsWith('/coordinador/periodos-academicos') && method === 'POST') {
+  if (url.endsWith('/admin/periodos-academicos') && method === 'POST') {
     const body = req.body as any;
     const nuevo = { ...body, id: `PER-${mockStore.periodosAcademicos.length + 1}` };
     mockStore.periodosAcademicos = [nuevo, ...mockStore.periodosAcademicos];
     return of(okResponse(nuevo, `Período académico ${nuevo.codigo} creado exitosamente.`)).pipe(delay(250));
   }
-  if (url.includes('/coordinador/periodos-academicos/') && method === 'PUT') {
+  if (url.includes('/admin/periodos-academicos/') && method === 'PUT') {
     const id = url.split('/').pop()!;
     const body = req.body as any;
     mockStore.periodosAcademicos = mockStore.periodosAcademicos.map((p) => (p.id === id ? { ...p, ...body } : p));
     const actualizado = mockStore.periodosAcademicos.find((p) => p.id === id);
     return of(okResponse(actualizado, 'Parámetros del período académico actualizados.')).pipe(delay(250));
+  }
+  if (url.includes('/admin/periodos-academicos/') && method === 'DELETE') {
+    const id = url.split('/').pop()!;
+    mockStore.periodosAcademicos = mockStore.periodosAcademicos.filter((p) => p.id !== id);
+    return of(okResponse(null, 'Período académico eliminado exitosamente.')).pipe(delay(200));
   }
 
   // ================= RECLAMOS Y JUSTIFICACIONES =================

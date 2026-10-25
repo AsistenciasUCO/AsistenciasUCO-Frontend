@@ -102,6 +102,16 @@ export const routes: Routes = [
           ),
       },
       {
+        // HU096-HU098: el período es único por institución; solo el administrador lo gestiona.
+        path: 'admin/periodos',
+        canActivate: [roleGuard],
+        data: { roles: ['ADMINISTRADOR', 'ADMIN'] },
+        loadComponent: () =>
+          import('./features/admin/admin-periodos/admin-periodos.component').then(
+            (m) => m.AdminPeriodosComponent
+          ),
+      },
+      {
         path: 'admin/catalogos',
         redirectTo: 'admin/facultades',
         pathMatch: 'full',

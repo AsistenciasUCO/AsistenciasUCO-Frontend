@@ -248,6 +248,12 @@ export class DashboardLayoutComponent {
       icon: 'materias',
     },
     {
+      label: 'Períodos Académicos',
+      route: '/app/admin/periodos',
+      roles: ['ADMINISTRADOR', 'ADMIN'],
+      icon: 'horarios',
+    },
+    {
       label: 'Sistema & Auditoría',
       route: '/app/admin/sistema',
       roles: ['ADMINISTRADOR', 'ADMIN'],

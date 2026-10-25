@@ -323,5 +323,29 @@ describe('mockBackendInterceptor', () => {
     expect(delSemRes?.exitoso).toBeTrue();
     expect(mockStore.planesEstudio[0].totalSemestres).toBe(semestresIniciales);
   }));
+
+  it('HU096-HU098: el administrador crea, modifica y elimina períodos en el mock', fakeAsync(() => {
+    auth.setMockMode(true);
+    const total = mockStore.periodosAcademicos.length;
+    let creado: any;
+    httpClient
+      .post(`${environment.apiUrl}/admin/periodos-academicos`, { nombre: 'QA-2099-1', fechaInicio: '2099-02-01', fechaFin: '2099-06-30' })
+      .subscribe((r) => (creado = r));
+    tick(300);
+    expect(creado?.exitoso).toBeTrue();
+    expect(mockStore.periodosAcademicos.length).toBe(total + 1);
+
+    const id = mockStore.periodosAcademicos[0].id;
+    let editado: any;
+    httpClient.put(`${environment.apiUrl}/admin/periodos-academicos/${id}`, { nombre: 'QA-2099-2' }).subscribe((r) => (editado = r));
+    tick(300);
+    expect(editado?.exitoso).toBeTrue();
+
+    let eliminado: any;
+    httpClient.delete(`${environment.apiUrl}/admin/periodos-academicos/${id}`).subscribe((r) => (eliminado = r));
+    tick(300);
+    expect(eliminado?.exitoso).toBeTrue();
+    expect(mockStore.periodosAcademicos.length).toBe(total);
+  }));
 });
 

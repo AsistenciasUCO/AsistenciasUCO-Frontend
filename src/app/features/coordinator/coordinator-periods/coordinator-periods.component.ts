@@ -29,7 +29,7 @@ import { AcademicPeriodsTabComponent } from '../coordinator-study-plans/componen
             Períodos Académicos
           </h1>
           <p class="text-sm text-warm-600 mt-1">
-            Configura las vigencias de períodos lectivos, fechas de apertura y cierre académico del programa.
+            Consulta de los períodos académicos de la institución (los administra el administrador institucional).
           </p>
         </div>
 
@@ -94,8 +94,7 @@ import { AcademicPeriodsTabComponent } from '../coordinator-study-plans/componen
       <!-- Gestión de Períodos Académicos -->
       <app-academic-periods-tab
         [periodos]="periodos()"
-        (savePeriodo)="guardarPeriodo($event)"
-        (togglePeriodo)="alternarEstadoPeriodo($event)"
+        [soloLectura]="true"
       />
     </div>
   `,
@@ -128,53 +127,5 @@ export class CoordinatorPeriodsComponent implements OnInit {
 
   irAPlanes(): void {
     void this.router.navigate(['/app/coordinador/planes-estudio']);
-  }
-
-  guardarPeriodo(event: { modo: 'CREAR' | 'EDITAR'; id?: string; datos: Partial<PeriodoAcademicoItem> }): void {
-    if (event.modo === 'CREAR') {
-      this.coordService.crearPeriodoAcademico(event.datos).subscribe({
-        next: (res) => {
-          if (res.exitoso) {
-            this.toast.success(res.mensajeUsuario || 'Período académico creado.');
-            this.cargarPeriodos();
-          }
-        },
-        error: (err) => this.toast.error(getApiErrorMessage(err)),
-      });
-    } else if (event.id) {
-      this.coordService.actualizarPeriodoAcademico(event.id, event.datos).subscribe({
-        next: (res) => {
-          if (res.exitoso) {
-            this.toast.success(res.mensajeUsuario || 'Período académico actualizado.');
-            this.cargarPeriodos();
-          }
-        },
-        error: (err) => this.toast.error(getApiErrorMessage(err)),
-      });
-    }
-  }
-
-  alternarEstadoPeriodo(periodo: PeriodoAcademicoItem): void {
-    this.coordService.toggleEstadoPeriodoAcademico(periodo.id).subscribe({
-      next: (res) => {
-        if (res.exitoso) {
-          const nuevo = res.datos?.estado || (periodo.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO');
-          this.toast.success(res.mensajeUsuario || `Período ${periodo.codigo} actualizado a ${nuevo}.`);
-          this.cargarPeriodos();
-        }
-      },
-      error: () => {
-        const nuevoEstado = periodo.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
-        this.coordService.actualizarPeriodoAcademico(periodo.id, { estado: nuevoEstado }).subscribe({
-          next: (res) => {
-            if (res.exitoso) {
-              this.toast.success(`Período ${periodo.codigo} actualizado a ${nuevoEstado}.`);
-              this.cargarPeriodos();
-            }
-          },
-          error: (err) => this.toast.error(getApiErrorMessage(err)),
-        });
-      },
-    });
   }
 }

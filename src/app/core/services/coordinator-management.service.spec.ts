@@ -4,6 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import {
   CoordinatorManagementService,
   normalizarAsignaturaPlan,
+  normalizarPeriodoAcademico,
   normalizarPlanEstudio,
 } from './coordinator-management.service';
 import { environment } from '../../../environments/environment';
@@ -354,6 +355,38 @@ describe('CoordinatorManagementService', () => {
       expect(asig.componente as string).toBe('Profesional');
       expect(asig.planEstudioId).toBe('p-1');
       expect(normalizarAsignaturaPlan({ id: 'm', semestre: 2, creditos: 4 }).semestre).toBe(2);
+    });
+
+    it('getPeriodosAcademicos adapta la respuesta del backend (HU096-HU098) y calcula el estado por fechas', () => {
+      service.getPeriodosAcademicos().subscribe();
+
+      http.expectOne(`${environment.apiUrl}/coordinador/periodos-academicos`).flush({
+        exitoso: true,
+        datos: [
+          { id: 'per-1', idInstitucion: 'inst-1', nombreInstitucion: 'UCO', nombre: '2026-2', codigo: '20262',
+            fechaInicio: '2026-08-01', fechaFin: '2026-12-15', anio: 2026 },
+        ],
+      });
+
+      const periodo = service.periodos()[0];
+      expect(periodo.codigo).toBe('2026-2');
+      expect(periodo.nombre).toBe('Período 2026-2');
+    });
+
+    it('normalizarPeriodoAcademico calcula planeación, activo y cerrado con las fechas', () => {
+      const dto = { id: 'p', idInstitucion: 'i', nombre: '2030-1', fechaInicio: '2030-02-01', fechaFin: '2030-06-30' };
+      expect(normalizarPeriodoAcademico(dto, new Date('2030-01-15T12:00:00Z')).estado).toBe('PLANEACION');
+      expect(normalizarPeriodoAcademico(dto, new Date('2030-03-15T12:00:00Z')).estado).toBe('ACTIVO');
+      expect(normalizarPeriodoAcademico(dto, new Date('2030-03-15T12:00:00Z')).esActual).toBeTrue();
+      expect(normalizarPeriodoAcademico(dto, new Date('2030-07-15T12:00:00Z')).estado).toBe('CERRADO');
+      expect(normalizarPeriodoAcademico({ id: 'm', codigo: '2027-1', nombre: 'Mock', estado: 'INACTIVO' }).codigo).toBe('2027-1');
+    });
+
+    it('eliminarPeriodoAcademico usa DELETE y quita el período de la señal', () => {
+      service.eliminarPeriodoAcademico('per-1').subscribe();
+      const req = http.expectOne(`${environment.apiUrl}/admin/periodos-academicos/per-1`);
+      expect(req.request.method).toBe('DELETE');
+      req.flush({ exitoso: true, datos: null });
     });
 
     it('getPlanesEstudio adapta la respuesta del backend (HU081-HU083) a PlanEstudioItem', () => {
