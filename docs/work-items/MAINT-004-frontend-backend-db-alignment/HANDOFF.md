@@ -39,3 +39,12 @@
 
 Repetir `npm run verify` con Node 20/ChromeHeadless operativo y ejecutar el smoke SSE en un ambiente backend/DB compatible; después activar v2 y recorrer la guía por rol. `npm ci` quedó bloqueado por EPERM de OneDrive; `npm install --ignore-scripts` permitió recuperar `node_modules`, pero no sustituye la validación limpia.
 
+
+## Decisión técnica: UTC V2 como flujo predeterminado (2026-10-25)
+
+El responsable del proyecto (José Alejandro Valencia Henao) autoriza técnicamente que
+UTC V2 sea el único flujo normal de sesiones en el frontend (`/api/v2/sesiones`, sin
+bandera `USE_SESSIONS_V2` ni fallback a V1). Esta decisión no sustituye la aprobación
+formal de los owners de backend, DB y contratos, que sigue pendiente y se tramita en la
+revisión del PR antes del merge. `FRONTEND_GOLDEN_PATH_CONTRACT.sha256` se regeneró sobre
+el contenido normalizado a LF del contrato modificado.
