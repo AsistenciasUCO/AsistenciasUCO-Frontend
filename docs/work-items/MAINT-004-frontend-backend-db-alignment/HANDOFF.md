@@ -1,10 +1,20 @@
 # MAINT-004 — Handoff
 
+## Actualización 2026-10-24
+
+- UTC V2 queda predeterminado localmente sin leer `localStorage.USE_SESSIONS_V2`; `window.env` tampoco lo controla; no existe fallback silencioso a V1.
+- La selección de zona horaria de presentación (`asistenciasuco.session-timezone`) se conserva; no es una bandera de versión.
+- `teacher-grupos` ya no impone `Hora Fin > Hora Inicio` en el formulario: las sesiones que cruzan medianoche se delegan a la conversión UTC, que rechaza horas iguales, inexistentes o ambiguas.
+- `npm run verify`: `1044 SUCCESS`; E2E HTTP UTC/Bogotá: `28/28 PASS`; build de producción: PASS.
+- Stack local comprobado: frontend, backend, SQL Server, Keycloak, MinIO y ClamAV accesibles.
+- DB pendiente: `test_summary.ps1` terminó `DB GATE INCOMPLETE` por drift de `usp_consultar_detalle_solicitud_revision_docente`; D1/R2 siguen requiriendo aprobación del owner DB.
+- No declarar `READY_FOR_NEXT_PHASE` hasta cerrar el gate DB y completar el recorrido visual autenticado, incluido un usuario decano autorizado.
+
 ## Listo para revisión
 
 - Rama de integración creada sin merge a `develop`.
 - v1 preservado y v2 encapsulado en `SessionV2Service`.
-- URLs de API separadas y feature flag `USE_SESSIONS_V2`.
+- URLs de API v1/v2 separadas; UTC V2 es el flujo normal sin bandera.
 - Zona IANA, DST explícito, medianoche y precisión de strings v2.
 - Estados temporales visibles y sesiones históricas no reinterpretadas.
 - POST/PATCH recargan desde backend; no hay selección por coincidencia de nombre/fecha.

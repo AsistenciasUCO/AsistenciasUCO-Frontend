@@ -9,7 +9,7 @@ Alinear el frontend Angular 18 con el OpenAPI del backend `develop` disponible e
 - HEAD auditado: `e2d4cdb7b14abb652878f30462b3aa0e246cc1e4`.
 - La referencia local `origin/develop` aportó `dfbd00c`; `git fetch origin --prune` no pudo actualizar `.git/FETCH_HEAD` por permisos del entorno.
 - Rama de trabajo: `jose-valencia/maint-004-frontend-utc-v2-integration`.
-- La bandera `USE_SESSIONS_V2` y `APP_SESIONES_V2_ENABLED` son independientes: el frontend solo intenta v2 cuando la primera está activa y el backend debe estar preparado.
+- Superado (2026-10-25): el frontend no tiene bandera `USE_SESSIONS_V2` y usa UTC V2 siempre. El backend (`APP_SESIONES_V2_ENABLED`, `true` por defecto) verifica el contrato SQL UTC-D06 al arrancar.
 
 ## Fases
 

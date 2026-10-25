@@ -1,5 +1,13 @@
 # MAINT-004 — Validación
 
+## Actualización de cierre — 2026-10-24
+
+El resultado actual está documentado en [AUDIT.md](AUDIT.md). El frontend ya no está bloqueado por Karma: `npm run verify` terminó con `1044 SUCCESS`, cobertura de líneas `90.17%`, gate realtime PASS y build de producción PASS. La validación UTC enfocada terminó `34 SUCCESS`, las fixtures V1 `38/38 PASS` y el E2E HTTP local UTC con `America/Bogota` terminó `28/28 PASS`.
+
+La decisión de integración es **NOT_READY_FOR_NEXT_PHASE** por el gate DB: `TOTAL_EXPECTED=245`, `TOTAL_EXECUTED=70`, `PASSED=47`, `FAILED=23`, `CRITICAL_MISSING=198`, `SQL_ERROR_COUNT=1`, `DB GATE INCOMPLETE`. El detalle y el respaldo verificable están en `AUDIT.md`. No se aplicaron cambios SQL ni se modificaron contratos aprobados.
+
+El resto de este archivo conserva la evidencia histórica de la fase inicial de MAINT-004 y no debe interpretarse como el resultado actual.
+
 ## Baseline
 
 - HEAD auditado: `e2d4cdb7b14abb652878f30462b3aa0e246cc1e4`.

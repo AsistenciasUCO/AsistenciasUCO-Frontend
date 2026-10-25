@@ -1,6 +1,6 @@
 # MAINT-004 — Guía de pruebas manuales por rol
 
-Usar `USE_MOCKS=false`. Para UTC v2, activar además `USE_SESSIONS_V2=true` en el runtime y verificar que el backend tenga `app.sesiones.v2.enabled=true`. Registrar cada evidencia sin tokens.
+Usar `USE_MOCKS=false`. UTC v2 es el flujo normal y no requiere ninguna bandera en el frontend; verificar que el backend tenga `app.sesiones.v2.enabled` ausente o en `true`. Registrar cada evidencia sin tokens.
 
 ## ADMINISTRADOR
 

@@ -17,10 +17,10 @@ Las filas se deduplican por `idGrupo` y sus bloques únicos forman `Course.sched
 ### Sesiones
 
 ```http
-GET /api/v1/sesiones/grupo/{grupoId}
+GET /api/v2/sesiones/grupo/{grupoId}
 ```
 
-Se usa `SesionConsultadaApiDto`. No existe fallback a `POST /sesiones/consultas`. `POST /api/v1/sesiones` responde `ApiMessageResponse`; después de crear, el frontend vuelve a consultar el listado y selecciona la sesión más reciente.
+Se usa `SesionV2ApiDto` (UTC V2, sin bandera ni fallback a V1). No existe fallback a `POST /sesiones/consultas`. `POST /api/v2/sesiones` responde `ApiMessageResponse`; después de crear, el frontend vuelve a consultar el listado y selecciona la sesión más reciente.
 
 ### Estudiantes del grupo
 

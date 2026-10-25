@@ -1,17 +1,17 @@
 # MAINT-004 — Matriz contractual
 
-Fuente primaria consultada: `C:\Users\josev\AsistenciasUCO\AsistenciasUCO\docs\contracts\openapi\openapi-golden-path.yaml`, versión 1.1.0 (MAINT-003F), y `application.yml` del backend, donde `app.sesiones.v2.enabled` queda `false` por defecto. La copia frontend de `BACKEND_GOLDEN_PATH_CONTRACT.md` es un snapshot histórico de septiembre y no congela el wire v2.
+Fuente primaria consultada: `C:\Users\josev\AsistenciasUCO\AsistenciasUCO\docs\contracts\openapi\openapi-golden-path.yaml`, versión 1.1.0 (MAINT-003F), y `application.yml` del backend local, donde UTC V2 queda `true` por defecto. V1 permanece solo como compatibilidad del servidor; el frontend no lo selecciona. La copia frontend de `BACKEND_GOLDEN_PATH_CONTRACT.md` es un snapshot histórico de septiembre y no congela el wire v2.
 
 | Método y URL | Consumidor / servicio | DTO HTTP | Rol | Estado | Cambio / prueba |
 |---|---|---|---|---|---|
 | `GET /api/v1/docente/horarios` | grupos docentes / `CourseService` | `ApiListResponse<HorarioDocenteDTO>` | DOCENTE | IMPLEMENTADO | Preservar golden path; specs existentes |
-| `GET /api/v1/sesiones/grupo/{grupoId}` | sesiones v1 / `SessionService` | `ApiListResponse<SesionConsultadaDTO>` | DOCENTE | LEGACY COMPATIBLE | Sigue activo con bandera v2 apagada |
+| `GET /api/v1/sesiones/grupo/{grupoId}` | sesiones v1 / `SessionService` | `ApiListResponse<SesionConsultadaDTO>` | DOCENTE | LEGACY COMPATIBLE (servidor) | Sin consumidor frontend en modo real; el listado usa `GET /api/v2/sesiones/grupo/{grupoId}` |
 | `POST /api/v1/sesiones` | creación v1 / `SessionService` | `ApiMessageResponse`, 201 | DOCENTE | LEGACY COMPATIBLE | Sin campos fantasma; spec contractual existente |
 | `PATCH /api/v1/sesiones/{sesionId}` | edición v1 / `SessionService` | `ApiDataResponse<Void>`, 200 | DOCENTE | LEGACY COMPATIBLE | No se agrega PUT; spec existente |
-| `POST /api/v2/sesiones` | creación UTC / `SessionV2Service` | `{grupo,nombre,fechaHoraInicio,fechaHoraFin}`, 201 | DOCENTE | IMPLEMENTADO, PENDIENTE_E2E | `session-v2.service.spec.ts`; requiere flag backend |
-| `GET /api/v2/sesiones/{sesionId}` | detalle UTC / `SessionV2Service` | `SesionV2DataResponse` | DOCENTE | IMPLEMENTADO, PENDIENTE_E2E | Fechas nulas en `INDETERMINADA` |
-| `GET /api/v2/sesiones/grupo/{grupoId}` | listado UTC / `SessionV2Service` | `SesionV2ListResponse` | DOCENTE | IMPLEMENTADO, PENDIENTE_E2E | Sin ocultar históricos |
-| `PATCH /api/v2/sesiones/{sesionId}` | edición UTC / `SessionV2Service` | `ApiVoidResponse`, 200 | DOCENTE | IMPLEMENTADO, PENDIENTE_E2E | No existe PUT v2; conserva strings al cambiar solo nombre |
+| `POST /api/v2/sesiones` | creación UTC / `SessionV2Service` | `{grupo,nombre,fechaHoraInicio,fechaHoraFin}`, 201 | DOCENTE | IMPLEMENTADO, E2E HTTP PASS | `session-v2.service.spec.ts`; UTC por defecto local |
+| `GET /api/v2/sesiones/{sesionId}` | detalle UTC / `SessionV2Service` | `SesionV2DataResponse` | DOCENTE | IMPLEMENTADO, E2E HTTP PASS | Fechas nulas en `INDETERMINADA` |
+| `GET /api/v2/sesiones/grupo/{grupoId}` | listado UTC / `SessionV2Service` | `SesionV2ListResponse` | DOCENTE | IMPLEMENTADO, E2E HTTP PASS | Sin ocultar históricos |
+| `PATCH /api/v2/sesiones/{sesionId}` | edición UTC / `SessionV2Service` | `ApiVoidResponse`, 200 | DOCENTE | IMPLEMENTADO, E2E HTTP PASS | No existe PUT v2; conserva strings al cambiar solo nombre |
 | `GET /api/v1/grupos/{grupoId}/estudiantes` | golden path / `GroupService`, `StudentService` | `ApiListResponse<EstudianteGrupoDTO>` | DOCENTE/COORDINADOR/ADMINISTRADOR | IMPLEMENTADO | IDs reales preservados |
 | `GET /api/v1/grupos/{grupoId}/asistencias?sesionId=` | control / `AttendanceService` | `ApiListResponse<AsistenciaConsultadaDTO>` | DOCENTE/COORDINADOR/ADMINISTRADOR | IMPLEMENTADO | `EX` no se convierte a `AN` |
 | `POST /api/v1/asistencias/lote` | control / `AttendanceService` | `ApiMessageResponse`, 201 | DOCENTE | IMPLEMENTADO | SSE posterior recarga HTTP |
