@@ -47,7 +47,10 @@ export const environment = {
     return this.useFrontendMocks;
   },
   get useSessionsV2(): boolean {
-    return runtimeFlag('USE_SESSIONS_V2');
+    // UTC V2 is the only normal session flow. V1 remains a server-side
+    // compatibility surface during migration and is not selectable by a
+    // runtime flag or a browser preference.
+    return true;
   },
   features: {
     sessionsEnabled: true,

@@ -514,11 +514,6 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
       this.toast.warning('La zona horaria activa cambió mientras editabas. Se recargó el horario original; revisa los datos antes de guardar.');
       return;
     }
-    if (!environment.useSessionsV2 && this.sesionForm.startTime >= this.sesionForm.endTime) {
-      this.toast.warning('El campo Hora Fin de la sesión debe ser posterior a la Hora Inicio.');
-      return;
-    }
-
     if (this.modoFormSesion === 'CREAR') {
       this.sessionService
         .createSession(course.id, {

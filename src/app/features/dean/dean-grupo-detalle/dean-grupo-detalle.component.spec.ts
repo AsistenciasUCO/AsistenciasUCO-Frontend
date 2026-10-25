@@ -5,7 +5,7 @@ import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { DeanGrupoDetalleComponent } from './dean-grupo-detalle.component';
 import { environment } from '../../../../environments/environment';
 import { HorarioDocenteApiDto } from '../../../core/api/models/horario-docente-api-dto.model';
-import { SesionConsultadaApiDto } from '../../../core/api/models/sesion-consultada-api-dto.model';
+import { SesionV2ApiDto } from '../../../core/api/models/sesion-consultada-api-dto.model';
 
 describe('DeanGrupoDetalleComponent', () => {
   let fixture: ComponentFixture<DeanGrupoDetalleComponent>;
@@ -68,7 +68,7 @@ describe('DeanGrupoDetalleComponent', () => {
         },
       ],
     });
-    http.expectOne(`${environment.apiUrl}/sesiones/grupo/crs-1`).flush({
+    http.expectOne(`${environment.apiV2Url}/sesiones/grupo/crs-1`).flush({
       exitoso: true,
       datos: [
         {
@@ -80,9 +80,11 @@ describe('DeanGrupoDetalleComponent', () => {
           numeroSemana: 38,
           codigoGrupo: 'GRP-01',
           nombreGrupo: 'Sección A',
-          fechaHoraInicio: '2026-09-14T08:00:00',
-          fechaHoraFin: '2026-09-14T10:00:00',
-        } satisfies SesionConsultadaApiDto,
+          estadoTemporal: 'CONFIRMADA',
+          procedenciaTemporal: 'UTC_V2',
+          fechaHoraInicio: '2026-09-14T08:00:00Z',
+          fechaHoraFin: '2026-09-14T10:00:00Z',
+        } satisfies SesionV2ApiDto,
       ],
     });
     fixture.detectChanges();

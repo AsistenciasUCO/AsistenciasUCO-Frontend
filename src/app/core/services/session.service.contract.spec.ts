@@ -6,6 +6,7 @@ import {
 import { TestBed } from '@angular/core/testing';
 import { environment } from '../../../environments/environment';
 import { SessionService } from './session.service';
+import { SessionTimeZoneService } from './session-timezone.service';
 
 describe('SessionService contract operations', () => {
   let service: SessionService;
@@ -17,32 +18,34 @@ describe('SessionService contract operations', () => {
     });
     service = TestBed.inject(SessionService);
     http = TestBed.inject(HttpTestingController);
+    TestBed.inject(SessionTimeZoneService).setManualTimeZone('UTC');
   });
 
   afterEach(() => http.verify());
 
-  it('rechaza LocalDateTime que no cumple el formato explícito', () => {
+  it('rechaza un instante RFC3339 que no cumple el formato explícito', () => {
     let receivedError: unknown;
     service.getSessionsByGroup('grupo-1').subscribe({
       error: (error) => (receivedError = error),
     });
 
-    http.expectOne(`${environment.apiUrl}/sesiones/grupo/grupo-1`).flush({
+    http.expectOne(`${environment.apiV2Url}/sesiones/grupo/grupo-1`).flush({
       exitoso: true,
       datos: [{
         sesion: 'ses-1',
         grupo: 'grupo-1',
         nombre: 'Sesión',
         numero: 1,
+        estadoTemporal: 'CONFIRMADA',
         fechaHoraInicio: 'fecha-inválida',
-        fechaHoraFin: '2026-09-22T10:00:00',
+        fechaHoraFin: '2026-09-22T10:00:00Z',
       }],
     });
 
     expect(receivedError).toEqual(jasmine.any(Error));
   });
 
-  it('crea una sesión serializando LocalDateTime sin conversión de zona ni parámetros fantasma', () => {
+  it('crea una sesión serializando instantes UTC y sin parámetros fantasma', () => {
     // TARGET (PLAN.md LB-001B.1B, AS-IS #5): createSession() deja de aceptar/enviar
     // topic/room/tipo — descripcion/aula/tipo eran ghost parameters que usp_crear_sesion
     // acepta y descarta (confirmado por el PLAN.md del backend LB-001B.1). El body real
@@ -55,13 +58,13 @@ describe('SessionService contract operations', () => {
       endTime: '10:00',
     } as any).subscribe((value) => (response = value));
 
-    const request = http.expectOne(`${environment.apiUrl}/sesiones`);
+    const request = http.expectOne(`${environment.apiV2Url}/sesiones`);
     expect(request.request.method).toBe('POST');
     expect(request.request.body).toEqual({
       grupo: 'grupo-1',
       nombre: 'Sesión local',
-      fechaHoraInicio: '2026-09-22T08:00:00',
-      fechaHoraFin: '2026-09-22T10:00:00',
+      fechaHoraInicio: '2026-09-22T08:00:00Z',
+      fechaHoraFin: '2026-09-22T10:00:00Z',
     });
     expect(request.request.body.descripcion).toBeUndefined();
     expect(request.request.body.aula).toBeUndefined();
@@ -80,12 +83,12 @@ describe('SessionService contract operations', () => {
     })
       .subscribe((value) => (response = value));
 
-    const request = http.expectOne(`${environment.apiUrl}/sesiones/ses-1`);
+    const request = http.expectOne(`${environment.apiV2Url}/sesiones/ses-1`);
     expect(request.request.method).toBe('PATCH');
     expect(request.request.body).toEqual({
       nombre: 'Sesión editada',
-      fechaHoraInicio: '2026-09-23T09:15:00',
-      fechaHoraFin: '2026-09-23T11:45:00',
+      fechaHoraInicio: '2026-09-23T09:15:00Z',
+      fechaHoraFin: '2026-09-23T11:45:00Z',
     });
     for (const ghostField of [
       'room',
@@ -116,12 +119,12 @@ describe('SessionService contract operations', () => {
     const input = { title: 'Editada', date: '2026-09-23', startTime: '09:00', endTime: '11:00' };
 
     service.updateSession('grupo-1', 'ses-1', input).subscribe();
-    http.expectOne((r) => r.method === 'PATCH' && r.url === `${environment.apiUrl}/sesiones/ses-1`)
+    http.expectOne((r) => r.method === 'PATCH' && r.url === `${environment.apiV2Url}/sesiones/ses-1`)
       .flush({ exitoso: true, datos: null });
 
     let failed = false;
     service.updateSession('grupo-1', 'ses-2', input).subscribe({ error: () => (failed = true) });
-    http.expectOne((r) => r.method === 'PATCH' && r.url === `${environment.apiUrl}/sesiones/ses-2`)
+    http.expectOne((r) => r.method === 'PATCH' && r.url === `${environment.apiV2Url}/sesiones/ses-2`)
       .flush({ codigo: 'X' }, { status: 500, statusText: 'Server Error' });
 
     expect(failed).toBeTrue();
@@ -140,7 +143,7 @@ describe('SessionService contract operations', () => {
       const datos: null = value.datos;
       expect(datos).toBeNull();
     });
-    http.expectOne(`${environment.apiUrl}/sesiones/ses-1`).flush({ exitoso: true, datos: null });
+    http.expectOne(`${environment.apiV2Url}/sesiones/ses-1`).flush({ exitoso: true, datos: null });
   });
 
   it('rechaza por diseño de tipos datos fantasma al actualizar sesión', () => {

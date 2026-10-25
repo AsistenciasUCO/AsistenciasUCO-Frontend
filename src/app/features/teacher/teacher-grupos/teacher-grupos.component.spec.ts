@@ -353,10 +353,28 @@ describe('TeacherGruposComponent', () => {
     component.sesionForm = { title: 'Valida', date: '', startTime: '08:00', endTime: '10:00', sessionNumber: 1 };
     component.guardarSesion();
     expect(sessionService.createSession).not.toHaveBeenCalled();
+  });
 
-    component.sesionForm = { title: 'Valida', date: '2026-09-15', startTime: '10:00', endTime: '08:00', sessionNumber: 1 };
+  it('guardarSesion permite una sesión que cruza medianoche y delega la conversión UTC V2', () => {
+    sessionService.createSession.and.returnValue(of({ exitoso: true, mensaje: 'Sesión creada' } as any));
+    component.verHubGrupo(course);
+    component.abrirCrearSesionExtraordinaria();
+    component.sesionForm = {
+      title: 'Sesión nocturna',
+      date: '2026-09-15',
+      startTime: '23:30',
+      endTime: '01:30',
+      sessionNumber: 1,
+    };
+
     component.guardarSesion();
-    expect(sessionService.createSession).not.toHaveBeenCalled();
+
+    expect(sessionService.createSession).toHaveBeenCalledWith('crs-1', {
+      title: 'Sesión nocturna',
+      date: '2026-09-15',
+      startTime: '23:30',
+      endTime: '01:30',
+    });
   });
 
   it('permite abrir y cerrar modal de matrícula de grupo', () => {
