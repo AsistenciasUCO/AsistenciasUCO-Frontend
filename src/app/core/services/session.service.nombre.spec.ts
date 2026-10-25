@@ -6,6 +6,7 @@ import {
 import { TestBed } from '@angular/core/testing';
 import { environment } from '../../../environments/environment';
 import { SessionService } from './session.service';
+import { SessionTimeZoneService } from './session-timezone.service';
 
 describe('SessionService nombre 1..50 (no depende del rechazo del backend)', () => {
   let service: SessionService;
@@ -19,6 +20,7 @@ describe('SessionService nombre 1..50 (no depende del rechazo del backend)', () 
     });
     service = TestBed.inject(SessionService);
     http = TestBed.inject(HttpTestingController);
+    TestBed.inject(SessionTimeZoneService).setManualTimeZone('UTC');
   });
 
   afterEach(() => {
@@ -30,7 +32,7 @@ describe('SessionService nombre 1..50 (no depende del rechazo del backend)', () 
     const nombre = 'x'.repeat(50);
     service.createSession('g1', { title: nombre, ...base }).subscribe();
 
-    const req = http.expectOne(`${environment.apiUrl}/sesiones`);
+    const req = http.expectOne(`${environment.apiV2Url}/sesiones`);
     expect(Object.keys(req.request.body).sort()).toEqual(
       ['fechaHoraFin', 'fechaHoraInicio', 'grupo', 'nombre']
     );
@@ -44,7 +46,7 @@ describe('SessionService nombre 1..50 (no depende del rechazo del backend)', () 
       error: (e) => (error = e),
     });
     expect(error).toEqual(jasmine.any(Error));
-    http.expectNone(`${environment.apiUrl}/sesiones`);
+    http.expectNone(`${environment.apiV2Url}/sesiones`);
   });
 
   it('create con nombre vacío falla localmente', () => {
@@ -53,12 +55,12 @@ describe('SessionService nombre 1..50 (no depende del rechazo del backend)', () 
       error: (e) => (error = e),
     });
     expect(error).toEqual(jasmine.any(Error));
-    http.expectNone(`${environment.apiUrl}/sesiones`);
+    http.expectNone(`${environment.apiV2Url}/sesiones`);
   });
 
   it('update con 50 caracteres envía exactamente {nombre,fechaHoraInicio,fechaHoraFin}', () => {
     service.updateSession('g1', 's1', { title: 'x'.repeat(50), ...base }).subscribe();
-    const req = http.expectOne(`${environment.apiUrl}/sesiones/s1`);
+    const req = http.expectOne(`${environment.apiV2Url}/sesiones/s1`);
     expect(Object.keys(req.request.body).sort()).toEqual(
       ['fechaHoraFin', 'fechaHoraInicio', 'nombre']
     );
@@ -71,6 +73,6 @@ describe('SessionService nombre 1..50 (no depende del rechazo del backend)', () 
       error: (e) => (error = e),
     });
     expect(error).toEqual(jasmine.any(Error));
-    http.expectNone(`${environment.apiUrl}/sesiones/s1`);
+    http.expectNone(`${environment.apiV2Url}/sesiones/s1`);
   });
 });

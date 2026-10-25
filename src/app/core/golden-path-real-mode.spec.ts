@@ -59,7 +59,7 @@ describe('Golden Path en modo REAL (USE_MOCKS=false)', () => {
 
   it('SessionService → GET /sesiones/grupo/{id}', () => {
     TestBed.inject(SessionService).getSessionsByGroup('g1').subscribe();
-    http.expectOne(`${api()}/sesiones/grupo/g1`).flush({ exitoso: true, datos: [], total: 0 });
+    http.expectOne(`${environment.apiV2Url}/sesiones/grupo/g1`).flush({ exitoso: true, datos: [], total: 0 });
   });
 
   it('AttendanceService → GET /grupos/{id}/asistencias?sesionId= y POST /asistencias/lote', () => {
@@ -89,7 +89,7 @@ describe('Golden Path en modo REAL (USE_MOCKS=false)', () => {
       next: () => results.push('next'),
       error: () => results.push('error'),
     });
-    http.expectOne(`${api()}/sesiones/grupo/g1`).flush(null, { status: 500, statusText: 'Server Error' });
+    http.expectOne(`${environment.apiV2Url}/sesiones/grupo/g1`).flush(null, { status: 500, statusText: 'Server Error' });
 
     TestBed.inject(GroupService).getStudentsByGroup('g1').subscribe({
       next: () => results.push('next'),
@@ -129,7 +129,7 @@ describe('Golden Path en modo REAL (USE_MOCKS=false)', () => {
       .updateSession('g1', 's1', { title: 'Editada', date: '2026-09-23', startTime: '09:00', endTime: '11:00' })
       .subscribe((r) => (response = r));
 
-    const req = http.expectOne(`${api()}/sesiones/s1`);
+    const req = http.expectOne(`${environment.apiV2Url}/sesiones/s1`);
     expect(req.request.method).toBe('PATCH');
     req.flush({ exitoso: true, datos: null });
 

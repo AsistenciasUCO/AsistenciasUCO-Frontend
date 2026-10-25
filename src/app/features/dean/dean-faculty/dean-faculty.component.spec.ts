@@ -89,7 +89,7 @@ describe('DeanFacultyComponent', () => {
 
   it('la ficha resumen del grupo ya no muestra docenteName', () => {
     component.abrirDetalleGrupo(course);
-    http.expectOne(`${environment.apiUrl}/sesiones/grupo/crs-1`).flush({
+    http.expectOne(`${environment.apiV2Url}/sesiones/grupo/crs-1`).flush({
       exitoso: true,
       total: 0,
       datos: [],
@@ -112,7 +112,7 @@ describe('DeanFacultyComponent', () => {
       records: [],
     };
     component.abrirDetalleGrupo(course);
-    http.expectOne(`${environment.apiUrl}/sesiones/grupo/crs-1`).flush({
+    http.expectOne(`${environment.apiV2Url}/sesiones/grupo/crs-1`).flush({
       exitoso: true,
       total: 1,
       datos: [],
