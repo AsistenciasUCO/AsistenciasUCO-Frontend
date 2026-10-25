@@ -30,8 +30,8 @@ import { DecanoItem } from '../../../../core/models/role-management.model';
         </div>
         <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
           <span class="text-xs text-warm-500 font-medium">Programas Académicos</span>
-          <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ decanos().length > 0 ? 1 : 0 }}</p>
-          <span class="text-[11px] text-primary-700 font-medium">Pregrado y posgrado</span>
+          <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ totalProgramas() === null ? 'Sin datos' : totalProgramas() }}</p>
+          <span class="text-[11px] text-primary-700 font-medium">De la institución</span>
         </div>
         <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
           <span class="text-xs text-warm-500 font-medium">Asistencia Promedio Campus</span>
@@ -97,4 +97,5 @@ import { DecanoItem } from '../../../../core/models/role-management.model';
 export class OverviewAdminComponent {
   decanos = input<DecanoItem[]>([]);
   totalFacultades = input<number>(0);
+  totalProgramas = input<number | null>(null);
 }

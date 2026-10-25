@@ -102,6 +102,15 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'admin/indicadores',
+        canActivate: [roleGuard],
+        data: { roles: ['ADMINISTRADOR', 'ADMIN'] },
+        loadComponent: () =>
+          import('./features/admin/admin-indicators/admin-indicators.component').then(
+            (m) => m.AdminIndicatorsComponent
+          ),
+      },
+      {
         path: 'admin/catalogos',
         redirectTo: 'admin/facultades',
         pathMatch: 'full',

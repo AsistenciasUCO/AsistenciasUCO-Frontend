@@ -230,6 +230,12 @@ export class DashboardLayoutComponent {
       icon: 'facultad',
     },
     {
+      label: 'Indicadores',
+      route: '/app/admin/indicadores',
+      roles: ['ADMINISTRADOR', 'ADMIN'],
+      icon: 'estudiantes',
+    },
+    {
       label: 'Gestión de Decanos',
       route: '/app/admin/decanos',
       roles: ['ADMINISTRADOR', 'ADMIN'],
