@@ -230,6 +230,12 @@ export class DashboardLayoutComponent {
       icon: 'facultad',
     },
     {
+      label: 'Indicadores',
+      route: '/app/admin/indicadores',
+      roles: ['ADMINISTRADOR', 'ADMIN'],
+      icon: 'estudiantes',
+    },
+    {
       label: 'Gestión de Decanos',
       route: '/app/admin/decanos',
       roles: ['ADMINISTRADOR', 'ADMIN'],
@@ -252,6 +258,12 @@ export class DashboardLayoutComponent {
       route: '/app/admin/sistema',
       roles: ['ADMINISTRADOR', 'ADMIN'],
       icon: 'sistema',
+    },
+    {
+      label: 'Indicadores',
+      route: '/app/decano/indicadores',
+      roles: ['DECANO'],
+      icon: 'estudiantes',
     },
     {
       label: 'Mi Facultad',
@@ -306,6 +318,12 @@ export class DashboardLayoutComponent {
       route: '/app/coordinador/periodos',
       roles: ['COORDINADOR'],
       icon: 'horarios',
+    },
+    {
+      label: 'Indicadores',
+      route: '/app/coordinador/indicadores',
+      roles: ['COORDINADOR'],
+      icon: 'estudiantes',
     },
     {
       label: 'Estudiantes del Programa',
