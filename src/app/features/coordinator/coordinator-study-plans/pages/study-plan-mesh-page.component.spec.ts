@@ -113,23 +113,38 @@ describe('CoordinatorStudyPlanMeshPageComponent', () => {
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/app/coordinador/planes-estudio']);
   });
 
-  it('agregarSemestre incrementa el total de semestres del plan', () => {
+  it('agregarSemestre agrega el siguiente semestre con el endpoint HU082', () => {
     component.agregarSemestre();
 
-    const putReq = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/PLAN-SIS-2024`);
-    expect(putReq.request.method).toBe('PUT');
-    putReq.flush({ exitoso: true, datos: { ...mockPlan, totalSemestres: 11 } });
+    const postReq = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/PLAN-SIS-2024/semestres`);
+    expect(postReq.request.method).toBe('POST');
+    postReq.flush({ exitoso: true, datos: null });
 
     expect(toastSpy.success).toHaveBeenCalledWith('Semestre 11 agregado al plan.');
+    expect(component.selectedPlan()?.totalSemestres).toBe(11);
   });
 
-  it('eliminarSemestreVacio disminuye semestres si el último no tiene asignaturas', () => {
+  it('eliminarSemestreVacio quita el último semestre con el endpoint HU083', () => {
     component.eliminarSemestreVacio();
 
-    const putReq = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/PLAN-SIS-2024`);
-    expect(putReq.request.method).toBe('PUT');
-    putReq.flush({ exitoso: true, datos: { ...mockPlan, totalSemestres: 9 } });
+    const delReq = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/PLAN-SIS-2024/semestres/10`);
+    expect(delReq.request.method).toBe('DELETE');
+    delReq.flush({ exitoso: true, datos: null });
 
     expect(toastSpy.success).toHaveBeenCalledWith('Semestre 10 vacío eliminado.');
+    expect(component.selectedPlan()?.totalSemestres).toBe(9);
+  });
+
+  it('eliminarSemestreVacio muestra el rechazo del backend sin cambiar el plan', () => {
+    component.eliminarSemestreVacio();
+
+    const delReq = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/PLAN-SIS-2024/semestres/10`);
+    delReq.flush(
+      { exitoso: false, mensajeUsuario: 'El semestre tiene asignaturas asociadas. Reubíquelas o elimínelas primero.' },
+      { status: 409, statusText: 'Conflict' }
+    );
+
+    expect(toastSpy.error).toHaveBeenCalled();
+    expect(component.selectedPlan()?.totalSemestres).toBe(10);
   });
 });

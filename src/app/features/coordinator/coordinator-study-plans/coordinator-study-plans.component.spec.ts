@@ -98,7 +98,7 @@ describe('CoordinatorStudyPlansComponent', () => {
   it('permite alternar el estado de un plan de estudio con éxito', () => {
     component.toggleEstadoPlan(mockPlanes[0]);
 
-    const patchReq = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/PLAN-SIS-2024/toggle`);
+    const patchReq = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/PLAN-SIS-2024/toggle-estado`);
     expect(patchReq.request.method).toBe('PATCH');
     patchReq.flush({
       exitoso: true,
@@ -116,7 +116,7 @@ describe('CoordinatorStudyPlansComponent', () => {
   it('muestra error toast si alternar el estado del plan falla', () => {
     component.toggleEstadoPlan(mockPlanes[0]);
 
-    const patchReq = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/PLAN-SIS-2024/toggle`);
+    const patchReq = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/PLAN-SIS-2024/toggle-estado`);
     patchReq.flush({ error: 'Error del servidor' }, { status: 500, statusText: 'Server Error' });
 
     expect(toastSpy.error).toHaveBeenCalled();

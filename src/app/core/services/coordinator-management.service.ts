@@ -21,6 +21,27 @@ import {
 } from '../models/role-management.model';
 import { EstudiantePaginaApiDto } from '../api/models/estudiante-api-dto.model';
 
+/**
+ * HU081-HU083: el backend devuelve el plan con `inp`, `nombrePrograma`, `estaActivoPlanEstudio` y `totalSemestres`;
+ * la pantalla trabaja con `PlanEstudioItem`. Los campos que ya vienen con la forma de la pantalla se conservan.
+ */
+export function normalizarPlanEstudio(raw: any): PlanEstudioItem {
+  const inp = raw?.inp != null ? String(raw.inp) : '';
+  return {
+    id: raw?.id,
+    codigo: raw?.codigo ?? (inp ? `INP-${inp}` : ''),
+    nombre: raw?.nombre ?? (inp ? `Plan ${inp}` : 'Plan de estudio'),
+    anioVigencia: raw?.anioVigencia ?? (Number(inp) || 0),
+    programa: raw?.programa ?? raw?.nombrePrograma ?? '',
+    facultad: raw?.facultad ?? '',
+    totalCreditos: raw?.totalCreditos ?? 0,
+    totalSemestres: raw?.totalSemestres ?? 0,
+    totalAsignaturas: raw?.totalAsignaturas ?? 0,
+    estado: raw?.estado ?? (raw?.estaActivoPlanEstudio === false ? 'INACTIVO' : 'VIGENTE'),
+    descripcion: raw?.descripcion ?? raw?.justificacionEstado ?? '',
+  };
+}
+
 export interface DirectorioEstudiantesQuery {
   page: number;
   size: number;
@@ -152,6 +173,7 @@ export class CoordinatorManagementService {
 
   getPlanesEstudio(): Observable<ApiResponse<PlanEstudioItem[]>> {
     return this.http.get<ApiResponse<PlanEstudioItem[]>>(`${environment.apiUrl}/coordinador/planes-estudio`).pipe(
+      map((res) => (res.datos ? { ...res, datos: res.datos.map(normalizarPlanEstudio) } : res)),
       tap((res) => {
         if (res.exitoso && res.datos) {
           this.planesSignal.set(res.datos);
@@ -180,8 +202,9 @@ export class CoordinatorManagementService {
     );
   }
 
+  /** HU081. El backend responde sin datos: la pantalla recarga la lista tras el exito. */
   toggleEstadoPlanEstudio(id: string): Observable<ApiResponse<PlanEstudioItem>> {
-    return this.http.patch<ApiResponse<PlanEstudioItem>>(`${environment.apiUrl}/coordinador/planes-estudio/${id}/toggle`, {}).pipe(
+    return this.http.patch<ApiResponse<PlanEstudioItem>>(`${environment.apiUrl}/coordinador/planes-estudio/${id}/toggle-estado`, {}).pipe(
       tap((res) => {
         if (res.exitoso && res.datos) {
           this.planesSignal.update((prev) => prev.map((p) => (p.id === id ? res.datos : p)));

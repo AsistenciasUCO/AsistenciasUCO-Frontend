@@ -306,9 +306,22 @@ describe('mockBackendInterceptor', () => {
     expect(putPlanRes?.exitoso).toBeTrue();
 
     let patchPlanRes: any;
-    httpClient.patch(`${environment.apiUrl}/coordinador/planes-estudio/${planId}/toggle`, {}).subscribe((r) => (patchPlanRes = r));
+    httpClient.patch(`${environment.apiUrl}/coordinador/planes-estudio/${planId}/toggle-estado`, {}).subscribe((r) => (patchPlanRes = r));
     tick(250);
     expect(patchPlanRes?.exitoso).toBeTrue();
+
+    const semestresIniciales = mockStore.planesEstudio[0].totalSemestres;
+    let postSemRes: any;
+    httpClient.post(`${environment.apiUrl}/coordinador/planes-estudio/${planId}/semestres`, {}).subscribe((r) => (postSemRes = r));
+    tick(250);
+    expect(postSemRes?.exitoso).toBeTrue();
+    expect(mockStore.planesEstudio[0].totalSemestres).toBe(semestresIniciales + 1);
+
+    let delSemRes: any;
+    httpClient.delete(`${environment.apiUrl}/coordinador/planes-estudio/${planId}/semestres/${semestresIniciales + 1}`).subscribe((r) => (delSemRes = r));
+    tick(250);
+    expect(delSemRes?.exitoso).toBeTrue();
+    expect(mockStore.planesEstudio[0].totalSemestres).toBe(semestresIniciales);
   }));
 });
 

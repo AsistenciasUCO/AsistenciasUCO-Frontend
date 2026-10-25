@@ -402,7 +402,7 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
     const actualizado = mockStore.planesEstudio.find((p) => p.id === id);
     return of(okResponse(actualizado, 'Plan de estudio modificado con éxito.')).pipe(delay(250));
   }
-  if (url.includes('/coordinador/planes-estudio/') && url.endsWith('/toggle') && method === 'PATCH') {
+  if (url.includes('/coordinador/planes-estudio/') && url.endsWith('/toggle-estado') && method === 'PATCH') {
     const segments = url.split('/');
     const id = segments[segments.length - 2];
     mockStore.planesEstudio = mockStore.planesEstudio.map((p) =>
@@ -410,6 +410,22 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
     );
     const plan = mockStore.planesEstudio.find((p) => p.id === id);
     return of(okResponse(plan, `Estado del plan actualizado a ${plan?.estado}.`)).pipe(delay(200));
+  }
+  if (url.includes('/coordinador/planes-estudio/') && url.endsWith('/semestres') && method === 'POST') {
+    const segments = url.split('/');
+    const id = segments[segments.length - 2];
+    mockStore.planesEstudio = mockStore.planesEstudio.map((p) =>
+      p.id === id ? { ...p, totalSemestres: p.totalSemestres + 1 } : p
+    );
+    return of(okResponse(null, 'Semestre del plan de estudio registrado(a) exitosamente.')).pipe(delay(200));
+  }
+  if (url.includes('/coordinador/planes-estudio/') && url.includes('/semestres/') && method === 'DELETE') {
+    const segments = url.split('/');
+    const id = segments[segments.length - 3];
+    mockStore.planesEstudio = mockStore.planesEstudio.map((p) =>
+      p.id === id ? { ...p, totalSemestres: Math.max(0, p.totalSemestres - 1) } : p
+    );
+    return of(okResponse(null, 'Plan de estudio actualizado(a) exitosamente.')).pipe(delay(200));
   }
   if (url.includes('/coordinador/planes-estudio/') && url.endsWith('/asignaturas') && method === 'GET') {
     const segments = url.split('/');

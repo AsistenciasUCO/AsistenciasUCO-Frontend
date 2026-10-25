@@ -86,7 +86,7 @@ export class CoordinatorStudyPlanMeshPageComponent implements OnInit {
     const plan = this.selectedPlan();
     if (!plan) return;
     const nuevoTotal = plan.totalSemestres + 1;
-    this.coordService.actualizarPlanEstudio(plan.id, { totalSemestres: nuevoTotal }).subscribe({
+    this.coordService.agregarSemestrePlan(plan.id).subscribe({
       next: (res) => {
         if (res.exitoso) {
           this.toast.success(`Semestre ${nuevoTotal} agregado al plan.`);
@@ -111,7 +111,7 @@ export class CoordinatorStudyPlanMeshPageComponent implements OnInit {
     }
 
     const nuevoTotal = ultimoSem - 1;
-    this.coordService.actualizarPlanEstudio(plan.id, { totalSemestres: nuevoTotal }).subscribe({
+    this.coordService.eliminarSemestrePlan(plan.id, ultimoSem).subscribe({
       next: (res) => {
         if (res.exitoso) {
           this.toast.success(`Semestre ${ultimoSem} vacío eliminado.`);

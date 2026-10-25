@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { CoordinatorManagementService } from './coordinator-management.service';
+import { CoordinatorManagementService, normalizarPlanEstudio } from './coordinator-management.service';
 import { environment } from '../../../environments/environment';
 import {
   ActualizarDocentePayload,
@@ -332,11 +332,37 @@ describe('CoordinatorManagementService', () => {
         expect(res.exitoso).toBeTrue();
       });
 
-      const req = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/plan-1/toggle`);
+      const req = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/plan-1/toggle-estado`);
       expect(req.request.method).toBe('PATCH');
       req.flush({ exitoso: true, datos: { ...mockPlanes[0], estado: 'INACTIVO' } });
 
       expect(service.planes().find((p) => p.id === 'plan-1')?.estado).toBe('INACTIVO');
+    });
+
+    it('getPlanesEstudio adapta la respuesta del backend (HU081-HU083) a PlanEstudioItem', () => {
+      service.getPlanesEstudio().subscribe();
+
+      const req = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio`);
+      req.flush({
+        exitoso: true,
+        datos: [
+          { id: 'p-1', idPrograma: 'pr-1', nombrePrograma: 'Ingeniería de Sistemas', inp: '2026', estaActivoPlanEstudio: false,
+            estaActivoTextoPlanEstudio: 'NO', justificacionEstado: 'Plan Estudio inactivado por el coordinador del programa.', totalSemestres: 8 },
+        ],
+      });
+
+      const plan = service.planes()[0];
+      expect(plan.estado).toBe('INACTIVO');
+      expect(plan.totalSemestres).toBe(8);
+      expect(plan.programa).toBe('Ingeniería de Sistemas');
+      expect(plan.codigo).toBe('INP-2026');
+    });
+
+    it('normalizarPlanEstudio conserva los campos que ya vienen con la forma de la pantalla', () => {
+      const plan = normalizarPlanEstudio({ ...mockPlanes[0] });
+      expect(plan).toEqual(mockPlanes[0]);
+      expect(normalizarPlanEstudio({ id: 'p-2', inp: 7, estaActivoPlanEstudio: true }).estado).toBe('VIGENTE');
+      expect(normalizarPlanEstudio({ id: 'p-3' }).totalSemestres).toBe(0);
     });
 
     it('getAsignaturasPorPlan actualiza las asignaturas del plan', () => {
