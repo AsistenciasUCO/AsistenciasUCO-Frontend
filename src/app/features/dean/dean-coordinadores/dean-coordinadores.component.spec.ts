@@ -332,6 +332,35 @@ describe('DeanCoordinadoresComponent', () => {
     expect(toastService.warning).toHaveBeenCalled();
   });
 
+  it('tras registrar un coordinador consulta y muestra el estado de acceso real (pendiente, sin declarar acceso)', () => {
+    flushInitialRequests();
+    component.abrirFormularioRegistro();
+    component.formData.numeroIdentificacion = '1017555444';
+    component.formData.primerNombre = 'Jorge';
+    component.formData.primerApellido = 'Henao';
+    component.formData.correo = 'jorge.henao@uco.edu.co';
+    component.formData.programaAcademico = 'Ingeniería de Sistemas';
+    component.formData.password = 'ClaveSegura2026!';
+
+    component.guardarCoordinador();
+    http.expectOne(`${environment.apiUrl}/decano/coordinadores`).flush({ exitoso: true, mensajeUsuario: 'Coordinador creado.', datos: {} });
+    http.expectOne(`${environment.apiUrl}/decano/coordinadores`).flush({ exitoso: true, datos: mockCoordinadores });
+
+    fixture.detectChanges();
+    fixture.detectChanges();
+    const consulta = http.expectOne(`${environment.apiUrl}/identidad/cuentas/acceso/consultas`);
+    expect(consulta.request.body).toEqual({ correo: 'jorge.henao@uco.edu.co' });
+    consulta.flush({
+      exitoso: true,
+      datos: { usuario: 'u-9', estado: 'PENDIENTE_SINCRONIZACION', detalle: 'COORDINADOR: perfil por asignar', roles: [] },
+    });
+    fixture.detectChanges();
+
+    const panel = fixture.nativeElement.querySelector('[data-testid="account-access-status"]') as HTMLElement;
+    expect(panel.textContent).toContain('PENDIENTE DE SINCRONIZACIÓN');
+    expect(panel.textContent).not.toContain('ACTIVA');
+  });
+
   it('guardarCoordinador envía POST y agrega el nuevo coordinador a la lista', () => {
     flushInitialRequests();
     component.abrirFormularioRegistro();

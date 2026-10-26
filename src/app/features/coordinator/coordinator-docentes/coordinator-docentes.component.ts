@@ -21,6 +21,7 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 import { ToastService } from '../../../shared/components/toast/toast.component';
+import { AccountAccessStatusComponent } from '../../../shared/components/account-access-status/account-access-status.component';
 import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
 import { CoordinatorDocenteFormModalComponent } from './components/coordinator-docente-form-modal.component';
 import { CoordinatorDocenteEditModalComponent } from './components/coordinator-docente-edit-modal.component';
@@ -41,6 +42,7 @@ const MIN_CARACTERES_CANDIDATOS = 3;
     BadgeComponent,
     ButtonComponent,
     PaginationComponent,
+    AccountAccessStatusComponent,
     CoordinatorDocenteFormModalComponent,
     CoordinatorDocenteEditModalComponent,
   ],
@@ -56,6 +58,9 @@ const MIN_CARACTERES_CANDIDATOS = 3;
         </div>
         <app-button variant="primary" size="md" (clicked)="abrirFormulario()">Vincular docente</app-button>
       </div>
+
+      <!-- Estado de acceso de la ultima cuenta docente creada (verificado por el backend, nunca por la SPA) -->
+      <app-account-access-status [correo]="ultimaCuentaRegistrada()" />
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div class="sm:col-span-2">
@@ -239,6 +244,8 @@ export class CoordinatorDocentesComponent implements OnInit {
   readonly filtroEstado = signal<FiltroEstado>('TODOS');
   readonly pagina = signal(1);
   readonly tamano = signal(10);
+  /** Correo de la ultima cuenta docente creada: el panel consulta su estado de acceso real. */
+  readonly ultimaCuentaRegistrada = signal<string | null>(null);
   private readonly recarga = signal(0);
   private cursosCargados = false;
 
@@ -425,6 +432,9 @@ export class CoordinatorDocentesComponent implements OnInit {
     this.coordService.vincularDocente(payload).subscribe({
       next: (res) => {
         this.toast.success(res.mensajeUsuario || 'Docente vinculado al programa.');
+        if ('correo' in payload) {
+          this.ultimaCuentaRegistrada.set(payload.correo);
+        }
         this.formularioAbierto.set(false);
         this.recarga.update((n) => n + 1);
       },

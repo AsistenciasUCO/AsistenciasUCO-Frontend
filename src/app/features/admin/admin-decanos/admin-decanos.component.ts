@@ -10,6 +10,7 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
 import { ToastService } from '../../../shared/components/toast/toast.component';
 import { UserPickerModalComponent, UserPickerItem } from '../../../shared/components/user-picker-modal/user-picker-modal.component';
+import { AccountAccessStatusComponent } from '../../../shared/components/account-access-status/account-access-status.component';
 import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
 import { parseIdentificationNumber, validateInstitutionalEmail } from '../../../core/validation/request-form-validation.util';
 import { SessionTimeZoneService } from '../../../core/services/session-timezone.service';
@@ -28,6 +29,7 @@ type VistaAdmin = 'LISTA' | 'REGISTRO';
     ButtonComponent,
     FormFieldComponent,
     UserPickerModalComponent,
+    AccountAccessStatusComponent,
   ],
   template: `
     <div class="space-y-6 animate-fade-in">
@@ -66,6 +68,9 @@ type VistaAdmin = 'LISTA' | 'REGISTRO';
             </app-button>
           </div>
         </div>
+
+        <!-- Estado de acceso de la ultima cuenta registrada (verificado por el backend, nunca por la SPA) -->
+        <app-account-access-status [correo]="ultimaCuentaRegistrada()" />
 
         <!-- Filtros y Búsqueda -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -366,6 +371,8 @@ export class AdminDecanosComponent implements OnInit {
   private sessionTimeZone = inject(SessionTimeZoneService);
 
   isPickerModalOpen = signal<boolean>(false);
+  /** Correo de la ultima cuenta registrada: el panel consulta su estado de acceso real. */
+  ultimaCuentaRegistrada = signal<string | null>(null);
   vistaActual = signal<VistaAdmin>('LISTA');
   decanos = signal<DecanoItem[]>([]);
   tiposIdentificacion = signal<TipoIdentificacionItem[]>([]);
@@ -589,6 +596,7 @@ export class AdminDecanosComponent implements OnInit {
       next: (res) => {
         if (res.exitoso) {
           this.toast.success(res.mensajeUsuario || 'Decano registrado exitosamente.');
+          this.ultimaCuentaRegistrada.set(payload.correo);
           this.cargarDecanos();
           this.cargarFacultades();
           this.volverALista();

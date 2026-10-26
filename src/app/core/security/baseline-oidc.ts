@@ -46,9 +46,14 @@ const PENDING_TTL_MS = 10 * 60_000;
 export function base64Url(bytes: Uint8Array): string {
   let binary = '';
   for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
+    binary += String.fromCodePoint(byte);
   }
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const encoded = btoa(binary).replaceAll('+', '-').replaceAll('/', '_');
+  let end = encoded.length;
+  while (end > 0 && encoded[end - 1] === '=') {
+    end--;
+  }
+  return encoded.slice(0, end);
 }
 
 export function randomUrlSafe(byteLength = 32): string {

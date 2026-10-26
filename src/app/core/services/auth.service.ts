@@ -311,51 +311,7 @@ export class AuthService implements OnDestroy {
 
     const callback = parseCallback(window.location.search);
     if (callback.code || callback.error) {
-      const pending = loadPending();
-      clearPending();
-      if (callback.error) {
-        this.replaceBaselineUrl('/login');
-        if (callback.error !== 'login_required' && callback.error !== 'interaction_required') {
-          this.authError.set(this.resolveAuthMessage('AUTH_GENERIC_ERROR'));
-        }
-        return false;
-      }
-      if (!pending || !callback.code || callback.state !== pending.state) {
-        this.replaceBaselineUrl('/login');
-        this.authError.set(this.resolveAuthMessage('AUTH_INVALID_RESPONSE'));
-        return false;
-      }
-      try {
-        const { accessToken } = await exchangeCode(this.baselineConfig(), callback.code, pending.verifier);
-        const payload = parseJwt(accessToken);
-        const resolution = payload
-          ? await this.fetchInstitutionalIdentity(accessToken)
-          : ({ status: 'rejected' } as IdentityResolution);
-        if (resolution.status === 'unavailable') {
-          this.replaceBaselineUrl('/login');
-          this.authError.set(this.resolveAuthMessage('AUTH_NETWORK_ERROR'));
-          return false;
-        }
-        const user =
-          payload && resolution.status === 'resolved' ? this.mapIdentityToUser(payload, resolution.identity) : null;
-        if (!user) {
-          this.replaceBaselineUrl('/login');
-          this.authError.set(this.resolveAuthMessage('AUTH_NO_ROLE_ASSIGNED'));
-          return false;
-        }
-        this.token.set(accessToken);
-        this.currentUser.set(user);
-        const target = pending.returnUrl === '/' || pending.returnUrl.startsWith('/login')
-          ? this.homePathForRole(user.role)
-          : pending.returnUrl;
-        this.replaceBaselineUrl(target);
-        return true;
-      } catch (error) {
-        console.error('No se pudo completar el inicio de sesión institucional:', error);
-        this.replaceBaselineUrl('/login');
-        this.authError.set(this.resolveAuthMessage('AUTH_NETWORK_ERROR'));
-        return false;
-      }
+      return this.completeBaselineCallback(callback);
     }
 
     if (recentSilentAttempt()) {
@@ -364,6 +320,55 @@ export class AuthService implements OnDestroy {
     }
     await this.redirectToBaselineAuthorize(true, this.currentReturnPath());
     return new Promise<boolean>(() => undefined);
+  }
+
+  /** Retorno del IdP (`?code&state` o `?error`): intercambia el código por el access token, que queda SOLO en memoria. */
+  private async completeBaselineCallback(callback: ReturnType<typeof parseCallback>): Promise<boolean> {
+    const pending = loadPending();
+    clearPending();
+    if (callback.error) {
+      this.replaceBaselineUrl('/login');
+      if (callback.error !== 'login_required' && callback.error !== 'interaction_required') {
+        this.authError.set(this.resolveAuthMessage('AUTH_GENERIC_ERROR'));
+      }
+      return false;
+    }
+    if (!pending || !callback.code || callback.state !== pending.state) {
+      this.replaceBaselineUrl('/login');
+      this.authError.set(this.resolveAuthMessage('AUTH_INVALID_RESPONSE'));
+      return false;
+    }
+    try {
+      const { accessToken } = await exchangeCode(this.baselineConfig(), callback.code, pending.verifier);
+      const payload = parseJwt(accessToken);
+      const resolution = payload
+        ? await this.fetchInstitutionalIdentity(accessToken)
+        : ({ status: 'rejected' } as IdentityResolution);
+      if (resolution.status === 'unavailable') {
+        this.replaceBaselineUrl('/login');
+        this.authError.set(this.resolveAuthMessage('AUTH_NETWORK_ERROR'));
+        return false;
+      }
+      const user =
+        payload && resolution.status === 'resolved' ? this.mapIdentityToUser(payload, resolution.identity) : null;
+      if (!user) {
+        this.replaceBaselineUrl('/login');
+        this.authError.set(this.resolveAuthMessage('AUTH_NO_ROLE_ASSIGNED'));
+        return false;
+      }
+      this.token.set(accessToken);
+      this.currentUser.set(user);
+      const target = pending.returnUrl === '/' || pending.returnUrl.startsWith('/login')
+        ? this.homePathForRole(user.role)
+        : pending.returnUrl;
+      this.replaceBaselineUrl(target);
+      return true;
+    } catch (error) {
+      console.error('No se pudo completar el inicio de sesión institucional:', error);
+      this.replaceBaselineUrl('/login');
+      this.authError.set(this.resolveAuthMessage('AUTH_NETWORK_ERROR'));
+      return false;
+    }
   }
 
   /**
