@@ -20,6 +20,7 @@ import {
   PeriodoAcademicoItem,
 } from '../models/role-management.model';
 import { EstudiantePaginaApiDto } from '../api/models/estudiante-api-dto.model';
+import { AsistenciaSesionItem, GrupoProgramaItem, SesionGrupoItem } from '../models/asistencia-programa.model';
 
 /**
  * HU081-HU083: el backend devuelve el plan con `inp`, `nombrePrograma`, `estaActivoPlanEstudio` y `totalSemestres`;
@@ -506,4 +507,46 @@ export class CoordinatorManagementService {
       })
     );
   }
+
+  // --- HU064/HU060/HU061: GRUPOS, SESIONES Y ASISTENCIAS DEL PROGRAMA (SOLO LECTURA) ---
+  getGruposPrograma(filtro: {
+    idPeriodo?: string | null;
+    busqueda?: string | null;
+    pagina: number;
+    tamano: number;
+  }): Observable<ApiResponse<GrupoProgramaItem[]>> {
+    return this.http.get<ApiResponse<GrupoProgramaItem[]>>(`${environment.apiUrl}/coordinador/grupos`, {
+      params: parametrosConsulta(filtro),
+    });
+  }
+
+  getSesionesGrupo(
+    grupoId: string,
+    filtro: { desde?: string | null; hasta?: string | null; pagina: number; tamano: number }
+  ): Observable<ApiResponse<SesionGrupoItem[]>> {
+    return this.http.get<ApiResponse<SesionGrupoItem[]>>(`${environment.apiUrl}/coordinador/grupos/${grupoId}/sesiones`, {
+      params: parametrosConsulta(filtro),
+    });
+  }
+
+  getAsistenciasSesion(
+    sesionId: string,
+    filtro: { asistio?: boolean | null; pagina: number; tamano: number }
+  ): Observable<ApiResponse<AsistenciaSesionItem[]>> {
+    return this.http.get<ApiResponse<AsistenciaSesionItem[]>>(
+      `${environment.apiUrl}/coordinador/sesiones/${sesionId}/asistencias`,
+      { params: parametrosConsulta(filtro) }
+    );
+  }
+}
+
+/** Omite los filtros vacios para que el backend aplique sus valores por defecto. */
+function parametrosConsulta(filtro: Record<string, string | number | boolean | null | undefined>): HttpParams {
+  let params = new HttpParams();
+  for (const [clave, valor] of Object.entries(filtro)) {
+    if (valor !== null && valor !== undefined && String(valor).trim() !== '') {
+      params = params.set(clave, String(valor).trim());
+    }
+  }
+  return params;
 }

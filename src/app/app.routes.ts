@@ -289,6 +289,15 @@ export const routes: Routes = [
             './features/coordinator/coordinator-subjects/coordinator-subjects.component'
           ).then((m) => m.CoordinatorSubjectsComponent),
       },
+      {
+        path: 'coordinador/asistencias',
+        canActivate: [roleGuard],
+        data: { roles: ['COORDINADOR'] },
+        loadComponent: () =>
+          import(
+            './features/coordinator/coordinator-attendance/coordinator-attendance.component'
+          ).then((m) => m.CoordinatorAttendanceComponent),
+      },
       // Rutas Docente
       {
         path: 'docente/grupos',

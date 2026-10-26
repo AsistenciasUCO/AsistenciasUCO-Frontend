@@ -326,6 +326,12 @@ export class DashboardLayoutComponent {
       icon: 'materias',
     },
     {
+      label: 'Asistencias del Programa',
+      route: '/app/coordinador/asistencias',
+      roles: ['COORDINADOR'],
+      icon: 'grupos',
+    },
+    {
       label: 'Mis Grupos',
       route: '/app/docente/grupos',
       roles: ['DOCENTE'],

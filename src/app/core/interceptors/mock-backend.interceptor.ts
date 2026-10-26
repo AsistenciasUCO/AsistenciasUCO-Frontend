@@ -434,6 +434,47 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
     return of(okResponse(asignaturas)).pipe(delay(200));
   }
 
+  // ================= COORDINADOR: GRUPOS, SESIONES Y ASISTENCIAS (HU064/HU060/HU061) =================
+  if (url.endsWith('/coordinador/grupos') && method === 'GET') {
+    const grupos = [
+      {
+        id: 'GRP-MOCK-1', codigo: 1, nombre: 'Grupo 1', idAsignatura: 'ASG-1', nombreAsignatura: 'Cálculo Diferencial',
+        idDocente: 'DOC-1', capacidadMaxima: 30, estudiantesActivos: 2, cuposDisponibles: 28, habilitado: true,
+        inicioPeriodo: '2026-01-20', finPeriodo: '2026-06-05',
+      },
+    ];
+    return of(okResponse(grupos, undefined, grupos.length)).pipe(delay(200));
+  }
+  if (url.includes('/coordinador/grupos/') && url.endsWith('/sesiones') && method === 'GET') {
+    const idGrupo = url.split('/').slice(-2)[0];
+    const sesiones = [
+      {
+        id: 'SES-MOCK-1', idGrupo, codigoGrupo: 1, nombreGrupo: 'Grupo 1', nombre: 'Sesión 1', numero: 1, codigo: 'S-01',
+        numeroSemana: 1, fechaHoraInicio: '2026-01-27T07:00:00', fechaHoraFin: '2026-01-27T09:00:00',
+      },
+    ];
+    return of(okResponse(sesiones, undefined, sesiones.length)).pipe(delay(200));
+  }
+  if (url.includes('/coordinador/sesiones/') && url.endsWith('/asistencias') && method === 'GET') {
+    const idSesion = url.split('/').slice(-2)[0];
+    const asistencias = [
+      {
+        idDetalleAsistencia: 'DET-MOCK-1', idSesion, nombreSesion: 'Sesión 1', idEstudiante: 'EST-1',
+        numeroIdentificacion: '1017000111', nombreCompleto: 'Ana Ruiz', asistio: true, codigoRazonCausa: null,
+        nombreRazonCausa: null, fechaHoraInicio: '2026-01-27T07:00:00', fechaHoraFin: '2026-01-27T09:00:00',
+      },
+      {
+        idDetalleAsistencia: 'DET-MOCK-2', idSesion, nombreSesion: 'Sesión 1', idEstudiante: 'EST-2',
+        numeroIdentificacion: '1017000222', nombreCompleto: 'Luis Gómez', asistio: false, codigoRazonCausa: 'INJ',
+        nombreRazonCausa: 'Inasistencia injustificada', fechaHoraInicio: '2026-01-27T07:00:00',
+        fechaHoraFin: '2026-01-27T09:00:00',
+      },
+    ];
+    const asistio = req.params.get('asistio');
+    const filtradas = asistio === null ? asistencias : asistencias.filter((a) => String(a.asistio) === asistio);
+    return of(okResponse(filtradas, undefined, filtradas.length)).pipe(delay(200));
+  }
+
   // ================= COORDINADOR: PERÍODOS ACADÉMICOS =================
   if (url.endsWith('/coordinador/periodos-academicos') && method === 'GET') {
     return of(okResponse(mockStore.periodosAcademicos)).pipe(delay(200));
