@@ -41,7 +41,25 @@ import { CardComponent } from '../../../shared/components/card/card.component';
           </div>
         }
 
-        <!-- Formulario de Inicio de Sesión Institucional -->
+        @if (baselineMode) {
+          <div class="space-y-4 text-center">
+            <p class="text-sm text-warm-700">
+              Serás redirigido al inicio de sesión institucional seguro.
+            </p>
+            <form (ngSubmit)="onSubmit()">
+              <app-button
+                variant="primary"
+                type="submit"
+                [fullWidth]="true"
+                [loading]="isLoading()"
+                size="lg"
+              >
+                Ingresar con cuenta institucional
+              </app-button>
+            </form>
+          </div>
+        } @else {
+        <!-- Formulario legacy: password grant solo permanece en el modo legacy explícito. -->
         <form (ngSubmit)="onSubmit()" class="space-y-4">
             <!-- Campo Correo Institucional -->
             <div class="space-y-1.5 text-left">
@@ -121,13 +139,15 @@ import { CardComponent } from '../../../shared/components/card/card.component';
                 Ingresar al Sistema
               </app-button>
             </div>
-          </form>
+        </form>
+        }
       </app-card>
     </div>
   `,
 })
 export class LoginComponent {
   private authService = inject(AuthService);
+  readonly baselineMode = this.authService.isBaselineMode();
 
   username = '';
   password = '';
@@ -141,6 +161,12 @@ export class LoginComponent {
 
   async onSubmit(): Promise<void> {
     this.errorMessage.set('');
+
+    if (this.baselineMode) {
+      this.isLoading.set(true);
+      this.authService.startBaselineLogin();
+      return;
+    }
 
     const trimmedUsername = this.username.trim();
     const trimmedPassword = this.password.trim();

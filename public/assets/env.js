@@ -6,5 +6,7 @@
   window.env['KEYCLOAK_REALM'] = 'asistencias-uco';
   window.env['KEYCLOAK_CLIENT_ID'] = 'asistencias-uco-frontend';
   window.env['USE_MOCKS'] = 'false';
-  window.env['SECURITY_BASELINE_ENABLED'] = 'false';
+  window.env['SECURITY_PROVIDER'] = 'legacy';
+  window.env['SECURITY_BASELINE_URL'] = 'http://' + host + ':18080';
+  window.env['SECURITY_BASELINE_APPLICATION_NAME'] = 'AsistenciasUCO';
 })(this);

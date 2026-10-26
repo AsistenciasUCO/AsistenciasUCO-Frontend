@@ -48,6 +48,11 @@ export function rolPuedeLeer(role: UserRole, segmento: string): boolean {
 }
 
 export const roleScopeInterceptor: HttpInterceptorFn = (req, next) => {
+  // En baseline los roles del navegador son solo una ayuda de navegación y no
+  // pueden convertirse en una decisión local de autorización. El PEP decide.
+  if (environment.security.provider === 'baseline') {
+    return next(req);
+  }
   if (req.method !== 'GET') {
     return next(req);
   }
