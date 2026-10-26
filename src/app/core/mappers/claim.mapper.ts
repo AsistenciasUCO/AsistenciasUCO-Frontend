@@ -72,6 +72,12 @@ export interface ReclamoDocenteApi {
   soporteAdjunto?: ReclamoDocenteSoporteApi | null;
 }
 
+/**
+ * Elemento de `datos` de GET /estudiante/reclamos (HU010/HU011): los mismos campos del listado docente sin los datos
+ * del estudiante (son los del propio usuario autenticado).
+ */
+export type ReclamoEstudianteApi = Omit<ReclamoDocenteApi, 'estudianteId' | 'estudianteNombre'>;
+
 /** `datos` de GET /docente/reclamos/{id} (HU036): el elemento del listado más causal y estado legible. */
 export interface DetalleReclamoDocenteApi extends ReclamoDocenteApi {
   codigoEstado?: string | null;
@@ -128,6 +134,11 @@ export class ClaimMapper {
       justificacionSolicitud: dto.justificacionSolicitud,
       justificacionRespuesta: dto.justificacionRespuesta ?? undefined,
     };
+  }
+
+  /** Solicitud propia del estudiante: mismo mapeo que el docente; los datos del estudiante quedan vacíos (es el propio usuario). */
+  static fromReclamoEstudiante(dto: ReclamoEstudianteApi, formatDate: InstantDateFormatter): SolicitudRevisionItem {
+    return ClaimMapper.fromReclamoDocente({ ...dto, estudianteId: '', estudianteNombre: '' }, formatDate);
   }
 
   /** Adapta el detalle del backend: mismo mapeo que el listado más la causal real (`null` si no hay detalle de asistencia). */

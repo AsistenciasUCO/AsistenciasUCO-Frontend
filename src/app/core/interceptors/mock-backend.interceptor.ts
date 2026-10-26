@@ -584,7 +584,14 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
     return of(okResponse(mockStore.solicitudesRevision)).pipe(delay(250));
   }
   if (url.endsWith('/estudiante/reclamos') && method === 'GET') {
-    return of(okResponse(mockStore.solicitudesRevision)).pipe(delay(250));
+    // HU010/HU011: misma forma que el backend (lista con `total`), filtrada por estado y paginada.
+    const estado = req.params.get('estado');
+    const pagina = Math.max(1, Number(req.params.get('pagina') ?? 1));
+    const tamano = Math.min(100, Math.max(1, Number(req.params.get('tamano') ?? 10)));
+    const filtradas = mockStore.solicitudesRevision.filter((r) => !estado || r.estadoSolicitud === estado);
+    return of(okResponse(filtradas.slice((pagina - 1) * tamano, pagina * tamano), undefined, filtradas.length)).pipe(
+      delay(250)
+    );
   }
   if ((url.endsWith('/asistencias/revisiones') || url.endsWith('/estudiante/reclamos')) && method === 'POST') {
     const body = req.body as any;
