@@ -111,6 +111,16 @@ export const routes: Routes = [
           ),
       },
       {
+        // HU096-HU098: el período es único por institución; solo el administrador lo gestiona.
+        path: 'admin/periodos',
+        canActivate: [roleGuard],
+        data: { roles: ['ADMINISTRADOR', 'ADMIN'] },
+        loadComponent: () =>
+          import('./features/admin/admin-periodos/admin-periodos.component').then(
+            (m) => m.AdminPeriodosComponent
+          ),
+      },
+      {
         path: 'admin/catalogos',
         redirectTo: 'admin/facultades',
         pathMatch: 'full',
@@ -196,6 +206,27 @@ export const routes: Routes = [
           import('./features/dean/dean-coordinadores/dean-coordinadores.component').then(
             (m) => m.DeanCoordinadoresComponent
           ),
+      },
+      {
+        path: 'decano/estudiantes',
+        canActivate: [roleGuard],
+        data: { roles: ['DECANO'] },
+        loadComponent: () =>
+          import('./features/dean/dean-estudiantes/dean-estudiantes.component').then((m) => m.DeanEstudiantesComponent),
+      },
+      {
+        path: 'decano/estructura',
+        canActivate: [roleGuard],
+        data: { roles: ['DECANO'] },
+        loadComponent: () =>
+          import('./features/dean/dean-estructura/dean-estructura.component').then((m) => m.DeanEstructuraComponent),
+      },
+      {
+        path: 'decano/cronograma',
+        canActivate: [roleGuard],
+        data: { roles: ['DECANO'] },
+        loadComponent: () =>
+          import('./features/dean/dean-cronograma/dean-cronograma.component').then((m) => m.DeanCronogramaComponent),
       },
       // Rutas Coordinador
       {
@@ -305,6 +336,15 @@ export const routes: Routes = [
           import(
             './features/coordinator/coordinator-subjects/coordinator-subjects.component'
           ).then((m) => m.CoordinatorSubjectsComponent),
+      },
+      {
+        path: 'coordinador/asistencias',
+        canActivate: [roleGuard],
+        data: { roles: ['COORDINADOR'] },
+        loadComponent: () =>
+          import(
+            './features/coordinator/coordinator-attendance/coordinator-attendance.component'
+          ).then((m) => m.CoordinatorAttendanceComponent),
       },
       // Rutas Docente
       {

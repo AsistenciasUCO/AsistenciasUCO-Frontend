@@ -3,10 +3,8 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, of, delay, map, catchError, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
-import { ApiListResponse } from '../api/models/api-list-response.model';
 import { ApiMessageResponse } from '../api/models/api-message-response.model';
 import { ApiVoidDataResponse } from '../api/models/api-data-response.model';
-import { SesionConsultadaApiDto } from '../api/models/sesion-consultada-api-dto.model';
 import { getApiErrorMessage } from '../api/errors/api-error.util';
 import { ClassSession } from '../models/attendance.model';
 import { getSessionNameError } from '../validation/session-name.util';
@@ -99,7 +97,7 @@ export class SessionService {
   ) {}
 
   getSessionsByGroup(grupoId: string): Observable<ApiResponse<ClassSession[]>> {
-    if (environment.useSessionsV2 && !environment.useMocks) {
+    if (!environment.useMocks) {
       return this.sessionV2.getSessionsByGroup(grupoId).pipe(
         map((response) => ({
           exitoso: response.exitoso,
@@ -109,79 +107,33 @@ export class SessionService {
       );
     }
 
-    if (environment.useMocks) {
-      const map = this.sessionsByGroupSignal();
-      const existing = map[grupoId];
-      const list =
-        existing ||
-        ([
-          {
-            id: `ses-${grupoId}-1`,
-            courseId: grupoId,
-            sessionNumber: 1,
-            date: new Date().toISOString().split('T')[0],
-            startTime: '08:00',
-            endTime: '10:00',
-            title: 'Sesión Inaugural del Curso',
-            records: [],
-          },
-        ]);
+    const sessionMap = this.sessionsByGroupSignal();
+    const existing = sessionMap[grupoId];
+    const list =
+      existing ||
+      ([
+        {
+          id: `ses-${grupoId}-1`,
+          courseId: grupoId,
+          sessionNumber: 1,
+          date: new Date().toISOString().split('T')[0],
+          startTime: '08:00',
+          endTime: '10:00',
+          title: 'Sesión Inaugural del Curso',
+          records: [],
+        },
+      ]);
 
-      return of({
-        idTransaccion: `mock-tx-ses-${grupoId}`,
-        exitoso: true,
-        total: list.length,
-        datos: [...list],
-      }).pipe(delay(200));
-    }
-
-    return this.http
-      .get<ApiListResponse<SesionConsultadaApiDto>>(
-        `${environment.apiUrl}/sesiones/grupo/${grupoId}`
-      )
-      .pipe(
-        map((response) => {
-          const sessions: ClassSession[] = response.datos.map((session) => {
-            const start = this.splitLocalDateTime(session.fechaHoraInicio);
-            const end = this.splitLocalDateTime(session.fechaHoraFin);
-
-            return {
-              id: session.sesion,
-              courseId: session.grupo,
-              sessionNumber: session.numero,
-              title: session.nombre,
-              date: start.date,
-              endDate: end.date,
-              startTime: start.time,
-              endTime: end.time,
-              records: [],
-            };
-          });
-
-          return {
-            exitoso: response.exitoso,
-            total: sessions.length,
-            datos: sessions,
-          };
-        })
-      );
+    return of({
+      idTransaccion: `mock-tx-ses-${grupoId}`,
+      exitoso: true,
+      total: list.length,
+      datos: [...list],
+    }).pipe(delay(200));
   }
 
   getSession(sesionId: string): Observable<{ exitoso: boolean; datos: ClassSession }> {
-    if (environment.useSessionsV2 && !environment.useMocks) {
-      return this.sessionV2.getSession(sesionId);
-    }
-    return this.http.get<any>(`${environment.apiUrl}/sesiones/${sesionId}`);
-  }
-
-  private splitLocalDateTime(value: string): { date: string; time: string } {
-    const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?$/.exec(
-      value
-    );
-    if (!match) {
-      throw new Error(`Formato LocalDateTime no soportado: ${value}`);
-    }
-    return { date: match[1], time: match[2] };
+    return this.sessionV2.getSession(sesionId);
   }
 
   createSession(
@@ -199,10 +151,6 @@ export class SessionService {
     }
     if (data.startTime === data.endTime) {
       return throwError(() => new Error('La hora de fin debe ser posterior a la hora de inicio; una sesión de 24 horas no se crea implícitamente.'));
-    }
-
-    if (environment.useSessionsV2 && !environment.useMocks) {
-      return this.sessionV2.createSession(grupoId, data);
     }
 
     if (environment.useMocks) {
@@ -230,12 +178,7 @@ export class SessionService {
       }).pipe(delay(250));
     }
 
-    return this.http.post<ApiMessageResponse>(`${environment.apiUrl}/sesiones`, {
-        grupo: grupoId,
-        nombre: data.title.trim(),
-        fechaHoraInicio: `${data.date}T${data.startTime}:00`,
-        fechaHoraFin: `${data.date}T${data.endTime}:00`,
-      });
+    return this.sessionV2.createSession(grupoId, data);
   }
 
   /**
@@ -254,10 +197,6 @@ export class SessionService {
     }
     if (cambios.startTime === cambios.endTime) {
       return throwError(() => new Error('La hora de fin debe ser posterior a la hora de inicio; una sesión de 24 horas no se crea implícitamente.'));
-    }
-
-    if (environment.useSessionsV2 && !environment.useMocks) {
-      return this.sessionV2.updateSession(sesionId, cambios as UpdateSessionV2Input);
     }
 
     if (environment.useMocks) {
@@ -280,16 +219,7 @@ export class SessionService {
       return of<ApiVoidDataResponse>({ exitoso: true, datos: null }).pipe(delay(250));
     }
 
-    const body = {
-      nombre: cambios.title.trim(),
-      fechaHoraInicio: `${cambios.date}T${cambios.startTime}:00`,
-      fechaHoraFin: `${cambios.date}T${cambios.endTime}:00`,
-    };
-
-    return this.http.patch<ApiVoidDataResponse>(
-      `${environment.apiUrl}/sesiones/${sesionId}`,
-      body
-    );
+    return this.sessionV2.updateSession(sesionId, cambios as UpdateSessionV2Input);
   }
 
   // OUT_OF_GOLDEN_PATH (LB-001B.5A): closeSession, cancelarSesion, getQrToken y

@@ -17,10 +17,10 @@ Las filas se deduplican por `idGrupo` y sus bloques únicos forman `Course.sched
 ### Sesiones
 
 ```http
-GET /api/v1/sesiones/grupo/{grupoId}
+GET /api/v2/sesiones/grupo/{grupoId}
 ```
 
-Se usa `SesionConsultadaApiDto`. No existe fallback a `POST /sesiones/consultas`. `POST /api/v1/sesiones` responde `ApiMessageResponse`; después de crear, el frontend vuelve a consultar el listado y selecciona la sesión más reciente.
+Se usa `SesionV2ApiDto` (UTC V2, sin bandera ni fallback a V1). No existe fallback a `POST /sesiones/consultas`. `POST /api/v2/sesiones` responde `ApiMessageResponse`; después de crear, el frontend vuelve a consultar el listado y selecciona la sesión más reciente.
 
 ### Estudiantes del grupo
 
@@ -67,6 +67,18 @@ No se envían `grupoId`, `studentId`, `status`, `notes` ni `observaciones`. El f
 ## Realtime
 
 El stream es `GET /api/v1/realtime/stream?grupoId={UUID}` y publica `ASISTENCIAS_SESION_ACTUALIZADAS`. El detalle de lifecycle, scope y reconexión está en `docs/frontend-realtime.md`.
+
+## Coordinación y decanatura — HU081-HU083, HU096-HU098, HU060-HU064, HU104-HU145 y HU108 (2026-10-26)
+
+Contrato completo de cada vertical en el `CONTRACT.md` del work item homónimo del backend; aquí solo el consumo del frontend. Todas las listas usan `ApiResponse<T[]>` con `total`; los errores se muestran con `getApiErrorMessage`.
+
+| Pantalla | Llamadas | Notas de consumo |
+|---|---|---|
+| Malla del coordinador (HU081-HU083) | `PATCH /api/v1/coordinador/planes-estudio/{id}/toggle-estado`, `POST .../{id}/semestres`, `DELETE .../{id}/semestres/{numero}` | `normalizarPlanEstudio` (inp, `estaActivoPlanEstudio`, `totalSemestres`) y `normalizarAsignaturaPlan` (`credito`→`creditos`, `codigoSemestre`→`semestre`); máximo 10 semestres. |
+| `admin/periodos` (HU096-HU098) | `POST`/`PUT /{id}`/`DELETE /{id}` sobre `/api/v1/admin/periodos-academicos` | Solo el administrador; coordinador y decano consumen `GET /api/v1/coordinador/periodos-academicos` en modo lectura. El estado (planeación/activo/cerrado) se calcula con las fechas en `normalizarPeriodoAcademico`. |
+| `coordinador/asistencias` (HU064, HU060, HU061) | `GET /api/v1/coordinador/grupos`, `/grupos/{id}/sesiones`, `/sesiones/{id}/asistencias` | Filtros vacíos no se envían; paginación `pagina`/`tamano` (1..100). |
+| `decano/estudiantes`, `decano/estructura`, `decano/cronograma` (HU104, HU105, HU109, HU119, HU145) | `GET /api/v1/decano/estudiantes`, `/estudiantes/{id}`, `/estructura`, `/sesiones` | Servicio propio `DeanFacultadService`; la estructura llega como árbol Facultad → Programa → Plan. |
+| `decano/programas` y `decano/programas/:planId` (HU108) | `GET /api/v1/decano/estructura` (planes) y `GET /api/v1/decano/planes-estudio/{id}/asignaturas` (malla) | No se usan rutas `/coordinador/**` desde pantallas del decano: `SecurityConfig` no admite DECANO allí. (Rama `feature/HU108-malla-plan-decano`.) |
 
 ## Configuración
 

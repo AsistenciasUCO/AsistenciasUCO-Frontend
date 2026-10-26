@@ -56,3 +56,11 @@ definitiva sigue en backend/DB al radicar. El formulario (categoría, justificac
 Nuevas/actualizadas: mapeo de estados y de solicitud, `NO_DISPONIBLE` ≠ `AUSENTE`, `reclamable` (6 combinaciones), logging sin valores,
 horarios lunes–sábado, detalle del curso (botón solo si reclamable; solicitud existente; JUSTIFICADA/PRESENTE sin botón),
 contenedor (flujo HTTP: ausencia reclamable abre el formulario; ya radicada no; JUSTIFICADA/PRESENTE no).
+
+## Addendum de integración real — 2026-10-25
+
+La repetición contra el backend oficial confirmó que el frontend consume la ruta vigente `POST /api/v1/asistencias/revisiones`; no depende de `POST /api/v1/estudiante/reclamos`, que es legacy y responde `501`. La subida de PDF usa `POST /api/v1/archivos/subir`, y el estado se vuelve a leer mediante `GET /api/v1/estudiante/materias/{id}/sesiones`.
+
+En una corrida aislada, la aprobación docente respondió `200` y el estudiante recibió `estadoSolicitudRevision=aceptada`, pero el backend devolvió `estadoAsistencia=NO_DISPONIBLE` en lugar de `JUSTIFICADA`. La causa está en la proyección backend/DB posterior a la resolución, no en el mapper ni en la ruta frontend: el frontend conserva correctamente `NO_DISPONIBLE` como estado no reclamable. No se modificó código en esta revisión documental.
+
+El botón de retiro sigue apuntando a `DELETE /api/v1/estudiante/reclamos/{id}`; esa capacidad no queda certificada y debe tratarse como pendiente independiente de la radicación, soporte, aprobación y rechazo.

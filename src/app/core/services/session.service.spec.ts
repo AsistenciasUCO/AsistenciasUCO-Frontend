@@ -6,6 +6,7 @@ import {
 } from '@angular/common/http/testing';
 import { SessionService } from './session.service';
 import { environment } from '../../../environments/environment';
+import { SessionTimeZoneService } from './session-timezone.service';
 
 describe('SessionService', () => {
   let service: SessionService;
@@ -17,6 +18,7 @@ describe('SessionService', () => {
     });
     service = TestBed.inject(SessionService);
     http = TestBed.inject(HttpTestingController);
+    TestBed.inject(SessionTimeZoneService).setManualTimeZone('UTC');
   });
 
   afterEach(() => {
@@ -38,7 +40,7 @@ describe('SessionService', () => {
       .subscribe((response) => (mappedSession = response.datos[0]));
 
     const request = http.expectOne(
-      `${environment.apiUrl}/sesiones/grupo/grupo-1`
+      `${environment.apiV2Url}/sesiones/grupo/grupo-1`
     );
     expect(request.request.method).toBe('GET');
     request.flush({
@@ -54,8 +56,9 @@ describe('SessionService', () => {
           numeroSemana: 1,
           codigoGrupo: 'G1',
           nombreGrupo: 'Grupo 1',
-          fechaHoraInicio: '2026-09-16T08:00:00',
-          fechaHoraFin: '2026-09-16T10:00:00',
+          estadoTemporal: 'CONFIRMADA',
+          fechaHoraInicio: '2026-09-16T08:00:00Z',
+          fechaHoraFin: '2026-09-16T10:00:00Z',
         },
       ],
     });
@@ -70,15 +73,14 @@ describe('SessionService', () => {
     );
   });
 
-  it('mapea LocalDateTime mediante strings sin construir Date', () => {
-    const dateConstructor = spyOn(window, 'Date').and.callThrough();
+  it('mapea instantes RFC3339 confirmados en la zona activa', () => {
     let mappedDate = '';
 
     service
       .getSessionsByGroup('grupo-1')
       .subscribe((response) => (mappedDate = response.datos[0].date));
 
-    http.expectOne(`${environment.apiUrl}/sesiones/grupo/grupo-1`).flush({
+    http.expectOne(`${environment.apiV2Url}/sesiones/grupo/grupo-1`).flush({
       exitoso: true,
       total: 1,
       datos: [
@@ -91,14 +93,14 @@ describe('SessionService', () => {
           numeroSemana: 1,
           codigoGrupo: 'G1',
           nombreGrupo: 'Grupo 1',
-          fechaHoraInicio: '2026-09-14T08:00:00',
-          fechaHoraFin: '2026-09-14T09:30:00',
+          estadoTemporal: 'CONFIRMADA',
+          fechaHoraInicio: '2026-09-14T08:00:00Z',
+          fechaHoraFin: '2026-09-14T09:30:00Z',
         },
       ],
     });
 
     expect(mappedDate).toBe('2026-09-14');
-    expect(dateConstructor).not.toHaveBeenCalled();
   });
 
   it('propaga el error del GET sin invocar POST /sesiones/consultas', () => {
@@ -108,7 +110,7 @@ describe('SessionService', () => {
       .subscribe({ error: (error) => (receivedError = error) });
 
     http
-      .expectOne(`${environment.apiUrl}/sesiones/grupo/grupo-1`)
+      .expectOne(`${environment.apiV2Url}/sesiones/grupo/grupo-1`)
       .flush('error', { status: 500, statusText: 'Server Error' });
 
     expect(receivedError).toBeTruthy();
@@ -123,7 +125,7 @@ describe('SessionService', () => {
       .getSessionsByGroup('grupo-1')
       .subscribe((response) => (mapped = response.datos[0]));
 
-    http.expectOne(`${environment.apiUrl}/sesiones/grupo/grupo-1`).flush({
+    http.expectOne(`${environment.apiV2Url}/sesiones/grupo/grupo-1`).flush({
       exitoso: true,
       total: 1,
       datos: [
@@ -136,8 +138,9 @@ describe('SessionService', () => {
           numeroSemana: 1,
           codigoGrupo: 'G1',
           nombreGrupo: 'Grupo 1',
-          fechaHoraInicio: '2026-09-16T08:00:00',
-          fechaHoraFin: '2026-09-16T10:00:00',
+          estadoTemporal: 'CONFIRMADA',
+          fechaHoraInicio: '2026-09-16T08:00:00Z',
+          fechaHoraFin: '2026-09-16T10:00:00Z',
         },
       ],
     });

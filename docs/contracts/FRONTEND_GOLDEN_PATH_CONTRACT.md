@@ -28,9 +28,10 @@ Los enlaces a `/app/asistencia` (menú, dashboard, hub de grupos) solo se muestr
 |---|---|---|
 | `CourseService` | `getCurrentTeacherCourses()` | `GET /api/v1/docente/horarios` |
 | `GroupService` | `getStudentsByGroup(grupoId)` | `GET /api/v1/grupos/{grupoId}/estudiantes` |
-| `SessionService` | `getSessionsByGroup(grupoId)` | `GET /api/v1/sesiones/grupo/{grupoId}` |
-| `SessionService` | `createSession` | `POST /api/v1/sesiones` |
-| `SessionService` | `updateSession` | `PATCH /api/v1/sesiones/{sesionId}` → `ApiDataResponse<Void>` |
+| `SessionService` → `SessionV2Service` | `getSessionsByGroup(grupoId)` | `GET /api/v2/sesiones/grupo/{grupoId}` |
+| `SessionService` → `SessionV2Service` | `getSession(sesionId)` | `GET /api/v2/sesiones/{sesionId}` |
+| `SessionService` → `SessionV2Service` | `createSession` | `POST /api/v2/sesiones` |
+| `SessionService` → `SessionV2Service` | `updateSession` | `PATCH /api/v2/sesiones/{sesionId}` → `ApiDataResponse<Void>` |
 | `AttendanceService` | `getAttendancesByGroup(grupoId, sesionId?)` | `GET /api/v1/grupos/{grupoId}/asistencias?sesionId=` |
 | `AttendanceService` | `saveBatchAttendance` | `POST /api/v1/asistencias/lote` |
 | `RealtimeService` → `FetchSseRealtimeTransport` | `startForGroup(grupoId)` | `GET /api/v1/realtime/stream?grupoId=` |
@@ -39,7 +40,9 @@ Modo real: `USE_MOCKS=false` (valor por defecto de `environment.useMocks`). Con 
 
 ## 3. Requests
 
-**Crear sesión** — exactamente `{ grupo, nombre, fechaHoraInicio, fechaHoraFin }`.
+**Sesiones UTC V2 (AS-IS vigente, migración aprobada MAINT-003F/MAINT-004).** UTC V2 es el único flujo normal de creación, edición, listado y consulta de sesiones en modo real: no hay bandera `USE_SESSIONS_V2` (ni en `localStorage` ni en `window.env`) y no hay fallback silencioso a V1. Los instantes viajan como RFC 3339 con offset (hasta 7 decimales) y se calculan con la zona de presentación activa (`SessionTimeZoneService`: automática del navegador o IANA manual; la selección es de presentación, no una versión de API). Se rechazan horas iguales, inexistentes o ambiguas; una sesión que cruza medianoche es válida. El resto de esta sección conserva el texto histórico de V1 solo para las rutas V1 que siguen existiendo en el servidor como compatibilidad.
+
+**Crear sesión** — exactamente `{ grupo, nombre, fechaHoraInicio, fechaHoraFin }` (`POST /api/v2/sesiones`).
 
 **Actualizar sesión** — exactamente `{ nombre, fechaHoraInicio, fechaHoraFin }`. **PATCH Sesion consume `ApiDataResponse<Void>`** = `{ "exitoso": true, "datos": null }` (backend §C.8): `SessionService.updateSession()` devuelve `Observable<ApiVoidDataResponse>` (`ApiDataResponse<null>`), el consumidor solo usa `exitoso` y recarga la lista por `GET /sesiones/grupo/{grupoId}`. **No** se fabrica `idTransaccion`, `mensajeUsuario` ni una `ClassSession`.
 
@@ -47,13 +50,13 @@ No se envían `tema`, `topic`, `descripcion`, `aula`, `room`, `tipo`, `status` n
 
 `Sesion.nombre`: 1..50 caracteres (tras `trim`). El frontend lo valida **antes** de enviar (`core/validation/session-name.util.ts`): `maxlength=50` en los dos formularios, botón deshabilitado, mensaje «entre 1 y 50 caracteres», y `SessionService` rechaza localmente sin llamar al backend.
 
-**SESSION UPDATE HTTP METHOD:** `PATCH /api/v1/sesiones/{sesionId}` (LB-001C.2B). `PUT`: solo compatibilidad backend (deprecated); consumidor frontend removido, sin fallback PATCH→PUT. PATCH aquí modifica la subrepresentación mutable de Sesión: los tres atributos siguen siendo obligatorios (sin campos opcionales, merge ni JSON Patch).
+**SESSION UPDATE HTTP METHOD:** `PATCH /api/v2/sesiones/{sesionId}` (LB-001C.2B; migrado a V2 en MAINT-004; antes `/api/v1`). `PUT`: solo compatibilidad backend (deprecated); consumidor frontend removido, sin fallback PATCH→PUT. PATCH aquí modifica la subrepresentación mutable de Sesión: los tres atributos siguen siendo obligatorios (sin campos opcionales, merge ni JSON Patch).
 
 **Guardar lote** — `{ sesionId, registros: [ { estudianteId, estado } ] }`, con `estado ∈ {AN, SJC, EX}`. Sin `causa`, `observacion`, `aula`, `docente` ni `correlationId` en el body.
 
 ## 4. Modelo de sesión (respuesta consumida)
 
-`SesionConsultadaApiDto`: `sesion, grupo, nombre, numero, codigo, numeroSemana, codigoGrupo, nombreGrupo, fechaHoraInicio, fechaHoraFin` → `ClassSession { id, courseId, sessionNumber, title (= nombre), date, startTime, endTime, records }`. `nombre` no se copia a ningún otro campo; la sesión no tiene tipo, aula ni tema en el frontend.
+`SesionV2ApiDto`: `sesion, grupo, nombre, numero, codigo, numeroSemana, codigoGrupo, nombreGrupo, fechaHoraInicio, fechaHoraFin` (ambas nulas si `estadoTemporal=INDETERMINADA`), más `estadoTemporal` y `procedenciaTemporal` → `ClassSession { id, courseId, sessionNumber, title (= nombre), date, startTime, endTime, records, fechaHoraInicio, fechaHoraFin, estadoTemporal, procedenciaTemporal }` (fecha y hora de presentación calculadas en la zona activa). El DTO V1 `SesionConsultadaApiDto` fue retirado del frontend por no tener consumidores. `nombre` no se copia a ningún otro campo; la sesión no tiene tipo, aula ni tema en el frontend.
 
 **Sesion no posee lifecycle/status en frontend.** El backend no expone estado de sesión (backend §C.2), así que el frontend no define ni deriva `PROGRAMADA`, `EN_CURSO`, `CONCLUIDA` ni equivalentes, y tampoco los sustituye por otro estado inventado. No existe el gate `isSessionConcluded` ni los textos «Clase Activa», «Asistencia Consolidada», «Sesión Finalizada y Consolidada» o «Registro Cerrado» (`SESSION_SYNTHETIC_LIFECYCLE_COUNT = 0`). Los controles de asistencia dependen **solo** de `features.sessionsEnabled`, `features.attendanceEnabled`, `isSaving` y de la existencia de grupo/sesión (marcado masivo); ante una operación inválida la autoridad es backend/DB. El botón de guardado se llama «Guardar Asistencia» (sin «consolidar»). Los rótulos «En curso»/«Programada» del widget «Próxima clase» del dashboard se derivan del reloj y del horario semanal, no de la Sesion.
 

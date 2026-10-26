@@ -4,103 +4,117 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { DeanPlanMallaComponent } from './dean-plan-malla.component';
 import { environment } from '../../../../environments/environment';
-import { PlanEstudioItem } from '../../../core/models/role-management.model';
 
-describe('DeanPlanMallaComponent', () => {
+const API = environment.apiUrl;
+
+const estructura = [
+  {
+    id: 'FAC-1',
+    nombre: 'Facultad de Ingeniería',
+    nombreDecano: 'Decano',
+    activa: true,
+    programas: [
+      {
+        id: 'PRG-1',
+        nombre: 'Ingeniería de Sistemas',
+        nombreCoordinador: 'Coord',
+        activo: true,
+        nombreTipoPrograma: 'Pregrado',
+        nombreModalidad: 'Presencial',
+        nombreJornada: 'Diurna',
+        planes: [{ id: 'PLAN-SIS-2024', inp: 20241, activo: true, totalSemestres: 10 }],
+      },
+    ],
+  },
+];
+
+/** Respuesta del backend: forma de AsignaturaDTO (credito, codigoSemestre, nombreArea...). */
+const asignaturasApi = [
+  { id: 'asig-1', codigo: 'SIS-101', nombre: 'Algoritmos I', credito: 4, codigoSemestre: 'S1', nombreArea: 'Software', nombreComponente: 'Obligatoria' },
+  { id: 'asig-2', codigo: 'SIS-201', nombre: 'Estructuras de Datos', credito: 3, codigoSemestre: 'S2', nombreArea: 'Software', nombreComponente: 'Obligatoria' },
+];
+
+describe('DeanPlanMallaComponent (HU108)', () => {
   let fixture: ComponentFixture<DeanPlanMallaComponent>;
   let component: DeanPlanMallaComponent;
   let http: HttpTestingController;
   let routerSpy: jasmine.SpyObj<Router>;
 
-  const mockPlan: PlanEstudioItem = {
-    id: 'PLAN-SIS-2024',
-    codigo: 'PLAN-SIS-2024',
-    nombre: 'Ingeniería de Sistemas',
-    anioVigencia: 2024,
-    programa: 'Ingeniería de Sistemas',
-    facultad: 'Facultad de Ingeniería',
-    totalSemestres: 10,
-    totalCreditos: 160,
-    totalAsignaturas: 2,
-    estado: 'VIGENTE',
-    descripcion: 'Malla curricular',
-  };
-
-  beforeEach(() => {
+  function crear(planId = 'PLAN-SIS-2024'): void {
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
-
     TestBed.configureTestingModule({
       imports: [DeanPlanMallaComponent],
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: Router, useValue: routerSpy },
-        {
-          provide: ActivatedRoute,
-          useValue: { snapshot: { paramMap: convertToParamMap({ planId: 'PLAN-SIS-2024' }) } },
-        },
+        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ planId }) } } },
       ],
     });
-
     http = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(DeanPlanMallaComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  }
 
-    http.match(`${environment.apiUrl}/coordinador/planes-estudio`).forEach((req) =>
-      req.flush({ exitoso: true, datos: [mockPlan] })
-    );
-    http.match(`${environment.apiUrl}/coordinador/periodos-academicos`).forEach((req) =>
-      req.flush({ exitoso: true, datos: [] })
-    );
-    http
-      .match(`${environment.apiUrl}/coordinador/planes-estudio/PLAN-SIS-2024/asignaturas`)
-      .forEach((req) =>
-        req.flush({
-          exitoso: true,
-          datos: [
-            {
-              id: 'asig-1',
-              codigo: 'SIS-101',
-              nombre: 'Algoritmos I',
-              creditos: 4,
-              semestre: 1,
-              area: 'Software',
-              componente: 'Obligatoria',
-              horasSemanales: 4,
-              prerrequisitos: [],
-            },
-            {
-              id: 'asig-2',
-              codigo: 'SIS-201',
-              nombre: 'Estructuras de Datos',
-              creditos: 4,
-              semestre: 2,
-              area: 'Software',
-              componente: 'Obligatoria',
-              horasSemanales: 4,
-              prerrequisitos: ['SIS-101'],
-            },
-          ],
-        })
-      );
+  afterEach(() => http.verify());
+
+  it('carga la ficha desde la estructura y la malla desde el endpoint del decano', () => {
+    crear();
+    http.expectOne(`${API}/decano/estructura`).flush({ exitoso: true, datos: estructura });
+    http.expectOne(`${API}/decano/planes-estudio/PLAN-SIS-2024/asignaturas`).flush({ exitoso: true, datos: asignaturasApi });
+    http.expectNone(`${API}/coordinador/planes-estudio`);
     fixture.detectChanges();
+
+    const plan = component.selectedPlan();
+    expect(plan?.codigo).toBe('INP-20241');
+    expect(plan?.programa).toBe('Ingeniería de Sistemas');
+    expect(plan?.totalCreditos).toBe(7);
+    expect(plan?.totalAsignaturas).toBe(2);
+    expect(component.asignaturas()[0].creditos).toBe(4);
+    expect(component.asignaturas()[0].area).toBe('Software');
+    expect(fixture.nativeElement.textContent).toContain('7 créditos en 10 semestres');
   });
 
-  afterEach(() => {
-    http.verify();
-  });
-
-  it('carga la malla curricular y filtra asignaturas por semestre', () => {
-    expect(component.selectedPlan()?.codigo).toBe('PLAN-SIS-2024');
-    expect(component.asignaturas().length).toBe(2);
+  it('filtra asignaturas por semestre y por texto', () => {
+    crear();
+    http.expectOne(`${API}/decano/estructura`).flush({ exitoso: true, datos: estructura });
+    http.expectOne(`${API}/decano/planes-estudio/PLAN-SIS-2024/asignaturas`).flush({ exitoso: true, datos: asignaturasApi });
 
     component.onSemestreChange(2);
     expect(component.asignaturasFiltradas().length).toBe(1);
     expect(component.asignaturasFiltradas()[0].codigo).toBe('SIS-201');
+
+    component.onSemestreChange(0);
+    component.onFiltroChange('algor');
+    expect(component.asignaturasFiltradas().map((a) => a.codigo)).toEqual(['SIS-101']);
   });
 
-  it('regresa al listado de programas', () => {
+  it('muestra el mensaje del backend si el plan no es de la facultad (403)', () => {
+    crear();
+    http.expectOne(`${API}/decano/estructura`).flush({ exitoso: true, datos: [] });
+    http
+      .expectOne(`${API}/decano/planes-estudio/PLAN-SIS-2024/asignaturas`)
+      .flush({ exitoso: false, mensajeUsuario: 'Plan fuera de su facultad' }, { status: 403, statusText: 'Forbidden' });
+    fixture.detectChanges();
+
+    expect(component.selectedPlan()).toBeNull();
+    expect(component.mensajeError()).not.toBe('');
+  });
+
+  it('error al cargar la estructura muestra el mensaje', () => {
+    crear();
+    http.expectOne(`${API}/decano/estructura`).flush({ exitoso: false }, { status: 500, statusText: 'Error' });
+    http.expectOne(`${API}/decano/planes-estudio/PLAN-SIS-2024/asignaturas`).flush({ exitoso: true, datos: [] });
+    expect(component.mensajeError()).not.toBe('');
+  });
+
+  it('sin plan en la ruta no consulta la malla y regresa al listado', () => {
+    crear('');
+    http.expectOne(`${API}/decano/estructura`).flush({ exitoso: true, datos: estructura });
+    http.expectNone((r) => r.url.includes('/asignaturas'));
+    expect(component.selectedPlan()).toBeNull();
+
     component.volverAProgramas();
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/app/decano/programas']);
   });

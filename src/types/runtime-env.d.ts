@@ -4,7 +4,6 @@ interface RuntimeEnv {
   KEYCLOAK_REALM?: string;
   KEYCLOAK_CLIENT_ID?: string;
   USE_MOCKS?: string;
-  USE_SESSIONS_V2?: string;
 }
 
 declare global {
