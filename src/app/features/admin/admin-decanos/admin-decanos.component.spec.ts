@@ -347,6 +347,35 @@ describe('AdminDecanosComponent', () => {
       expect(component.vistaActual()).toBe('LISTA');
     });
 
+    it('tras registrar un decano consulta y muestra el estado de acceso real (pendiente, sin declarar acceso)', () => {
+      component.formData.tipoIdentificacionId = 'tipo-1';
+      component.formData.numeroIdentificacion = '1020304050';
+      component.formData.primerNombre = 'Carlos';
+      component.formData.primerApellido = 'Zapata';
+      component.formData.correo = 'carlos.zapata@uco.edu.co';
+      component.formData.password = 'ClaveSegura2026#';
+
+      component.guardarDecano();
+      http.expectOne(`${environment.apiUrl}/admin/decanos`).flush({ exitoso: true, mensajeUsuario: 'Decano registrado exitosamente.' });
+      http.expectOne(`${environment.apiUrl}/admin/decanos`).flush({ exitoso: true, datos: mockDecanos });
+      http.expectOne(`${environment.apiUrl}/admin/facultades`).flush({ exitoso: true, datos: mockFacultades });
+
+      fixture.detectChanges();
+      fixture.detectChanges();
+      const consulta = http.expectOne(`${environment.apiUrl}/identidad/cuentas/acceso/consultas`);
+      expect(consulta.request.method).toBe('POST');
+      expect(consulta.request.body).toEqual({ correo: 'carlos.zapata@uco.edu.co' });
+      consulta.flush({
+        exitoso: true,
+        datos: { usuario: 'u-9', estado: 'PENDIENTE_SINCRONIZACION', detalle: 'DECANO: perfil por asignar', roles: [] },
+      });
+      fixture.detectChanges();
+
+      const panel = fixture.nativeElement.querySelector('[data-testid="account-access-status"]') as HTMLElement;
+      expect(panel.textContent).toContain('PENDIENTE DE SINCRONIZACIÓN');
+      expect(panel.textContent).not.toContain('ACTIVA');
+    });
+
     it('muestra error cuando el guardado falla en el backend', () => {
       component.formData.tipoIdentificacionId = 'tipo-1';
       component.formData.numeroIdentificacion = '1020304050';

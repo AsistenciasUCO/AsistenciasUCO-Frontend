@@ -85,4 +85,24 @@ describe('roleGuard', () => {
     expect(runFor('OTRO' as any)).not.toBeTrue();
     expect(router.createUrlTree).toHaveBeenCalledWith(['/app/dashboard']);
   });
+
+  it('permite la ruta si CUALQUIERA de los roles efectivos del usuario está permitido', () => {
+    authService = {
+      currentUser: () => ({ ...user('COORDINADOR'), roles: ['COORDINADOR', 'DOCENTE'] as User['roles'] }),
+    } as unknown as AuthService;
+    TestBed.overrideProvider(AuthService, { useValue: authService });
+    const route = { data: { roles: ['DOCENTE'] } } as unknown as ActivatedRouteSnapshot;
+
+    expect(TestBed.runInInjectionContext(() => roleGuard(route, {} as any))).toBeTrue();
+  });
+
+  it('un rol solo en `roles` pero no efectivo para la ruta no concede acceso', () => {
+    authService = {
+      currentUser: () => ({ ...user('ESTUDIANTE'), roles: ['ESTUDIANTE'] as User['roles'] }),
+    } as unknown as AuthService;
+    TestBed.overrideProvider(AuthService, { useValue: authService });
+    const route = { data: { roles: ['DOCENTE'] } } as unknown as ActivatedRouteSnapshot;
+
+    expect(TestBed.runInInjectionContext(() => roleGuard(route, {} as any))).not.toBeTrue();
+  });
 });

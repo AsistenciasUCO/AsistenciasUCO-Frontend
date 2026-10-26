@@ -3,7 +3,7 @@ import { inject } from '@angular/core';
 import { throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../services/auth.service';
-import { UserRole } from '../models/user.model';
+import { UserRole, effectiveRoles } from '../models/user.model';
 
 /**
  * Espejo de las reglas por prefijo de `SecurityConfig` (backend). Las lecturas (GET) de un prefijo que el rol
@@ -42,9 +42,10 @@ function primerSegmentoApi(url: string): string | null {
   }
 }
 
-export function rolPuedeLeer(role: UserRole, segmento: string): boolean {
+export function rolPuedeLeer(role: UserRole | readonly UserRole[], segmento: string): boolean {
   const regla = ROLE_SCOPE_RULES.find((r) => r.prefix === segmento);
-  return !regla || regla.roles.includes(normalizarRol(role));
+  const roles = (Array.isArray(role) ? role : [role]).map(normalizarRol);
+  return !regla || roles.some((r) => regla.roles.includes(r));
 }
 
 export const roleScopeInterceptor: HttpInterceptorFn = (req, next) => {
@@ -53,7 +54,7 @@ export const roleScopeInterceptor: HttpInterceptorFn = (req, next) => {
   }
   const usuario = inject(AuthService).currentUser();
   const segmento = primerSegmentoApi(req.url);
-  if (!usuario || segmento === null || rolPuedeLeer(usuario.role, segmento)) {
+  if (!usuario || segmento === null || rolPuedeLeer(effectiveRoles(usuario), segmento)) {
     return next(req);
   }
   return throwError(

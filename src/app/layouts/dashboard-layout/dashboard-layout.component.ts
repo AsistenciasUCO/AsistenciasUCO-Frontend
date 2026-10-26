@@ -2,7 +2,7 @@ import { Component, signal, inject, computed, ChangeDetectionStrategy } from '@a
 import { CommonModule } from '@angular/common';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
-import { UserRole } from '../../core/models/user.model';
+import { UserRole, effectiveRoles } from '../../core/models/user.model';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
 import { BadgeComponent } from '../../shared/components/badge/badge.component';
 import { ToastComponent, ToastService } from '../../shared/components/toast/toast.component';
@@ -376,8 +376,9 @@ export class DashboardLayoutComponent {
   ];
 
   filteredNavItems = computed<NavItem[]>(() => {
-    const role = this.currentRole();
-    return this.allNavItems.filter((item) => item.roles.includes(role));
+    const user = this.user();
+    const roles = user ? effectiveRoles(user) : [this.currentRole()];
+    return this.allNavItems.filter((item) => item.roles.some((role) => roles.includes(role)));
   });
 
   toggleCollapsed(): void {

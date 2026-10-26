@@ -8,6 +8,7 @@ import { CoordinatorManagementService } from '../../../core/services/coordinator
 import { CatalogService } from '../../../core/services/catalog.service';
 import { CourseService } from '../../../core/services/course.service';
 import { ToastService } from '../../../shared/components/toast/toast.component';
+import { AccountAccessService } from '../../../core/services/account-access.service';
 import { Course } from '../../../core/models/course.model';
 import { DocentePrograma, DocenteCandidato } from '../../../core/models/docente-programa.model';
 
@@ -29,6 +30,7 @@ describe('CoordinatorDocentesComponent', () => {
   let catalogService: jasmine.SpyObj<CatalogService>;
   let courseService: jasmine.SpyObj<CourseService>;
   let toast: jasmine.SpyObj<ToastService>;
+  let accountAccess: jasmine.SpyObj<AccountAccessService>;
 
   const fila = (id: string, nombre: string, activo = true): DocentePrograma => ({
     idDocentePrograma: `dp-${id}`,
@@ -96,6 +98,10 @@ describe('CoordinatorDocentesComponent', () => {
     courseService = jasmine.createSpyObj<CourseService>('CourseService', ['getCoordinatorCourses']);
     courseService.getCoordinatorCourses.and.returnValue(of({ exitoso: true, datos: [curso] }));
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'warning', 'info']);
+    accountAccess = jasmine.createSpyObj<AccountAccessService>('AccountAccessService', ['consult', 'reconcile']);
+    accountAccess.consult.and.returnValue(
+      of({ exitoso: true, datos: { usuario: 'u-3', estado: 'PENDIENTE_SINCRONIZACION', detalle: 'DOCENTE: perfil por asignar', roles: [] } })
+    );
 
     TestBed.configureTestingModule({
       imports: [CoordinatorDocentesComponent],
@@ -104,6 +110,7 @@ describe('CoordinatorDocentesComponent', () => {
         { provide: CatalogService, useValue: catalogService },
         { provide: CourseService, useValue: courseService },
         { provide: ToastService, useValue: toast },
+        { provide: AccountAccessService, useValue: accountAccess },
       ],
     });
   });
@@ -343,6 +350,36 @@ describe('CoordinatorDocentesComponent', () => {
     expect(toast.success).toHaveBeenCalled();
     expect(component.formularioAbierto()).toBeFalse();
     expect(coordService.getDocentesPrograma).toHaveBeenCalledTimes(1); // recarga del servidor
+  }));
+
+  it('tras vincular un docente nuevo muestra el estado de acceso real de su cuenta y no declara éxito de acceso', fakeAsync(() => {
+    crear();
+    tick(300);
+    expect(fixture.nativeElement.querySelector('[data-testid="account-access-status"]')).toBeNull();
+
+    component.guardarNuevo({
+      idTipoIdentificacion: 'tipo-1', numeroIdentificacion: '1017555444', primerNombre: 'Jorge', primerApellido: 'Henao',
+      correo: 'jorge@uco.edu.co', password: 'Clave1234!', idTipoVinculacion: 'tv-1',
+    });
+    fixture.detectChanges();
+    fixture.detectChanges();
+    tick(300);
+
+    expect(accountAccess.consult).toHaveBeenCalledOnceWith('jorge@uco.edu.co');
+    const panel = fixture.nativeElement.querySelector('[data-testid="account-access-status"]') as HTMLElement;
+    expect(panel.textContent).toContain('PENDIENTE DE SINCRONIZACIÓN');
+    expect(panel.textContent).not.toContain('ACTIVA');
+  }));
+
+  it('vincular un docente existente no consulta el acceso de ninguna cuenta (no se crea cuenta)', fakeAsync(() => {
+    crear();
+    tick(300);
+
+    component.guardarExistente({ idDocente: 'doc-9', idTipoVinculacion: 'tv-1' });
+    fixture.detectChanges();
+    tick(300);
+
+    expect(accountAccess.consult).not.toHaveBeenCalled();
   }));
 
   it('T-FE-04: guardarExistente envía idDocente e idTipoVinculacion', fakeAsync(() => {

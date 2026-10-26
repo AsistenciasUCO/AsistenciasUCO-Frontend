@@ -13,6 +13,7 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
 import { ToastService } from '../../../shared/components/toast/toast.component';
 import { UserPickerModalComponent, UserPickerItem } from '../../../shared/components/user-picker-modal/user-picker-modal.component';
+import { AccountAccessStatusComponent } from '../../../shared/components/account-access-status/account-access-status.component';
 import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
 import {
   parseIdentificationNumber,
@@ -34,6 +35,7 @@ type VistaDecano = 'LISTA' | 'REGISTRO';
     ButtonComponent,
     FormFieldComponent,
     UserPickerModalComponent,
+    AccountAccessStatusComponent,
     DeanCoordinadorEditModalComponent,
     DeanCoordinadorEstadoModalComponent,
   ],
@@ -74,6 +76,9 @@ type VistaDecano = 'LISTA' | 'REGISTRO';
             </app-button>
           </div>
         </div>
+
+        <!-- Estado de acceso de la ultima cuenta registrada (verificado por el backend, nunca por la SPA) -->
+        <app-account-access-status [correo]="ultimaCuentaRegistrada()" />
 
         <!-- Filtros y Búsqueda -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -423,6 +428,8 @@ export class DeanCoordinadoresComponent implements OnInit {
   private toast = inject(ToastService);
 
   isPickerModalOpen = signal<boolean>(false);
+  /** Correo de la ultima cuenta registrada: el panel consulta su estado de acceso real. */
+  ultimaCuentaRegistrada = signal<string | null>(null);
   coordinadorEnEdicion = signal<CoordinadorItem | null>(null);
   coordinadorParaCambioEstado = signal<CoordinadorItem | null>(null);
   vistaActual = signal<VistaDecano>('LISTA');
@@ -686,6 +693,7 @@ export class DeanCoordinadoresComponent implements OnInit {
       next: (res) => {
         if (res.exitoso) {
           this.toast.success(res.mensajeUsuario || 'Coordinador registrado exitosamente.');
+          this.ultimaCuentaRegistrada.set(payload.correo);
           this.cargarCoordinadores();
           this.volverALista();
         }

@@ -1,4 +1,4 @@
-import { Component, signal, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, signal, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
@@ -31,17 +31,40 @@ import { CardComponent } from '../../../shared/components/card/card.component';
           </p>
         </div>
 
-        <!-- Mensaje de Error si las credenciales fallan -->
-        @if (errorMessage()) {
+        <!-- Mensaje de Error si las credenciales fallan, la cuenta no es válida o la configuración es inválida -->
+        @if (visibleError()) {
           <div class="mb-4 p-3 rounded-xl bg-red-50/90 border border-red-200 text-red-700 text-xs flex items-center gap-2.5 animate-fade-in shadow-sm">
             <svg class="w-4 h-4 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span class="font-medium">{{ errorMessage() }}</span>
+            <span class="font-medium">{{ visibleError() }}</span>
           </div>
         }
 
-        <!-- Formulario de Inicio de Sesión Institucional -->
+        @if (configError()) {
+          <p class="text-sm text-warm-700 text-center">
+            El inicio de sesión está deshabilitado hasta que se corrija la configuración de seguridad.
+          </p>
+        } @else if (baselineMode) {
+          <div class="space-y-4 text-center">
+            <p class="text-sm text-warm-700">
+              Serás redirigido al inicio de sesión institucional seguro.
+            </p>
+            <form (ngSubmit)="onSubmit()">
+              <app-button
+                variant="primary"
+                type="submit"
+                [fullWidth]="true"
+                [loading]="isLoading()"
+                [disabled]="!!configError()"
+                size="lg"
+              >
+                Ingresar con cuenta institucional
+              </app-button>
+            </form>
+          </div>
+        } @else {
+        <!-- Formulario legacy: password grant solo permanece en el modo legacy explícito. -->
         <form (ngSubmit)="onSubmit()" class="space-y-4">
             <!-- Campo Correo Institucional -->
             <div class="space-y-1.5 text-left">
@@ -121,19 +144,25 @@ import { CardComponent } from '../../../shared/components/card/card.component';
                 Ingresar al Sistema
               </app-button>
             </div>
-          </form>
+        </form>
+        }
       </app-card>
     </div>
   `,
 })
 export class LoginComponent {
   private authService = inject(AuthService);
+  readonly baselineMode = this.authService.isBaselineMode();
 
   username = '';
   password = '';
   showPassword = signal<boolean>(false);
   isLoading = signal<boolean>(false);
   errorMessage = signal<string>('');
+  readonly configError = this.authService.securityConfigError;
+  readonly visibleError = computed(
+    () => this.configError() || this.errorMessage() || this.authService.authError() || ''
+  );
 
   toggleShowPassword(): void {
     this.showPassword.update((v) => !v);
@@ -141,6 +170,16 @@ export class LoginComponent {
 
   async onSubmit(): Promise<void> {
     this.errorMessage.set('');
+
+    if (this.configError()) {
+      return;
+    }
+
+    if (this.baselineMode) {
+      this.isLoading.set(true);
+      this.authService.startBaselineLogin();
+      return;
+    }
 
     const trimmedUsername = this.username.trim();
     const trimmedPassword = this.password.trim();
