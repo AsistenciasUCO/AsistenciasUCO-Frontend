@@ -80,6 +80,9 @@ describe('AuthService', () => {
   afterEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+    if (window.env) {
+      window.env.SECURITY_PROVIDER = 'legacy';
+    }
   });
 
   function mockTokenResponse(payload: Record<string, unknown>, refreshToken = 'refresh-1') {
@@ -250,6 +253,49 @@ describe('AuthService', () => {
 
       expect(token).toBeTruthy();
       expect(fetchSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('modo baseline BFF', () => {
+    beforeEach(() => {
+      window.env = {
+        ...(window.env || {}),
+        SECURITY_PROVIDER: 'baseline',
+        SECURITY_BASELINE_URL: 'http://baseline.test',
+        SECURITY_BASELINE_APPLICATION_NAME: 'AsistenciasUCO',
+      };
+    });
+
+    it('restaura sesión y asignaciones con credentials include sin guardar tokens', async () => {
+      fetchSpy.and.callFake((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/api/v1/session')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ data: { subject: 'central-sub', name: 'Ana UCO', email: 'ana@uco.edu.co' } }),
+          } as Response);
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            data: {
+              user: { name: 'Ana UCO', email: 'ana@uco.edu.co' },
+              applications: [{ name: 'AsistenciasUCO', applicationRoles: [{ name: 'DOCENTE' }] }],
+            },
+          }),
+        } as Response);
+      });
+
+      const restored = await service.initKeycloak();
+
+      expect(restored).toBeTrue();
+      expect(service.currentUser()?.role).toBe('DOCENTE');
+      expect(service.currentUser()?.id).toBe('');
+      expect(service.token()).toBeNull();
+      expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBeNull();
+      expect(fetchSpy.calls.allArgs().every((args) => (args[1] as RequestInit)?.credentials === 'include')).toBeTrue();
     });
   });
 

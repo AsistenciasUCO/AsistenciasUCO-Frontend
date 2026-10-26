@@ -74,5 +74,20 @@ export const environment = {
     realm: (window as any)['env']?.['KEYCLOAK_REALM'] || 'asistencias-uco',
     clientId: (window as any)['env']?.['KEYCLOAK_CLIENT_ID'] || 'asistencias-uco-frontend',
   },
+  security: {
+    // Runtime-only selector. It is configuration, never an authority claim.
+    get provider(): 'legacy' | 'baseline' {
+      return (String((window as any)['env']?.['SECURITY_PROVIDER'] || 'legacy').toLowerCase() === 'baseline')
+        ? 'baseline'
+        : 'legacy';
+    },
+    get baselineUrl(): string {
+      const explicit = (window as any)['env']?.['SECURITY_BASELINE_URL'];
+      return String(explicit || 'http://localhost:18080').replace(/\/+$/, '');
+    },
+    get baselineApplicationName(): string {
+      return String((window as any)['env']?.['SECURITY_BASELINE_APPLICATION_NAME'] || 'AsistenciasUCO');
+    },
+  },
 };
 

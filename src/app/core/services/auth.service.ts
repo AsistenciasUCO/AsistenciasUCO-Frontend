@@ -10,15 +10,8 @@ import { environment } from '../../../environments/environment';
 // Los tokens JWT NUNCA se persisten en localStorage (AGENTS.md §3.3).
 const MOCK_STORAGE_KEY = 'gestio_asistencia_mock_role';
 
-/**
- * Único dato de sesión persistido: el refresh token, en sessionStorage (por
- * pestaña; sobrevive a F5 y desaparece al cerrar la pestaña). El access token
- * vive SOLO en memoria; jamás se guardan access token, password ni usuario.
- *
- * Compromiso local de SPA (MV001-A01): un XSS podría leer este refresh token.
- * Deuda futura AUTH-PKCE/BFF HARDENING: migrar a OIDC Authorization Code +
- * PKCE o a un BFF con cookie httpOnly si entra al alcance productivo.
- */
+/** Compatibilidad del modo legacy: el refresh token solo existe en memoria y sessionStorage.
+ * El modo baseline no entra por este canal: usa exclusivamente la sesión BFF HttpOnly. */
 const SESSION_REFRESH_TOKEN_KEY = 'gestio_session_refresh_token';
 
 /** Claves residuales de versiones anteriores que pudieran quedar en el navegador del usuario. */
@@ -80,6 +73,34 @@ interface JwtTokenPayload {
   };
 }
 
+interface BaselineSessionResponse {
+  subject?: string;
+  name?: string;
+  email?: string;
+  tenantId?: string;
+}
+
+interface BaselineNamedRole {
+  name?: string;
+}
+
+interface BaselineProfile {
+  name?: string;
+  roles?: BaselineNamedRole[];
+}
+
+interface BaselineApplication {
+  name?: string;
+  tenantRoles?: BaselineNamedRole[];
+  applicationRoles?: BaselineNamedRole[];
+  profiles?: BaselineProfile[];
+}
+
+interface BaselineApplicationsResponse {
+  user?: { name?: string; email?: string };
+  applications?: BaselineApplication[];
+}
+
 function parseJwt(token: string): JwtTokenPayload | null {
   try {
     const base64Url = token.split('.')[1];
@@ -111,7 +132,7 @@ export class AuthService implements OnDestroy {
   // ── Signals públicos ──────────────────────────────────────────────────────
   currentUser = signal<User | null>(null);
   token = signal<string | null>(null);
-  isAuthenticated = computed(() => !!this.token());
+  isAuthenticated = computed(() => !!this.token() || !!this.currentUser());
   private mockModeSignal = signal<boolean>(environment.useMocks);
   isMockMode = computed(() => this.mockModeSignal());
 
@@ -143,6 +164,10 @@ export class AuthService implements OnDestroy {
   constructor(private router: Router) {
     // Limpieza defensiva: eliminar claves residuales de versiones anteriores.
     this.purgeLegacyStorage();
+    if (this.isBaselineMode()) {
+      // Una sesión BFF no admite refresh tokens accesibles desde JavaScript.
+      this.storeRefreshToken(null);
+    }
 
     // Escuchar eventos de otras pestañas (LOGOUT, SESSION_EXPIRED).
     this.authChannel.onmessage = (event: MessageEvent) => {
@@ -159,6 +184,10 @@ export class AuthService implements OnDestroy {
         }
       }
     };
+  }
+
+  isBaselineMode(): boolean {
+    return environment.security.provider === 'baseline';
   }
 
   ngOnDestroy(): void {
@@ -221,6 +250,10 @@ export class AuthService implements OnDestroy {
       return true;
     }
 
+    if (this.isBaselineMode()) {
+      return this.initBaselineSession();
+    }
+
     const currentToken = this.token();
     if (currentToken) {
       const payload = parseJwt(currentToken);
@@ -246,8 +279,117 @@ export class AuthService implements OnDestroy {
     return true;
   }
 
+  /**
+   * Restaura la sesión central sin leer ni copiar la cookie HttpOnly. La respuesta de
+   * `/me/applications` solo se usa para construir el estado de navegación de la SPA; el
+   * backend y el PEP siguen siendo la autoridad para cada operación.
+   */
+  private async initBaselineSession(): Promise<boolean> {
+    this.token.set(null);
+    this.storeRefreshToken(null);
+
+    try {
+      const sessionResponse = await this.baselineGet('/api/v1/session');
+      if (sessionResponse.status === 401) {
+        this.clearSession();
+        return false;
+      }
+      if (!sessionResponse.ok) {
+        this.clearSession();
+        return false;
+      }
+
+      const sessionJson = await sessionResponse.json() as { data?: BaselineSessionResponse };
+      const session = sessionJson.data;
+      const applicationsResponse = await this.baselineGet('/api/v1/me/applications');
+      if (applicationsResponse.status === 401) {
+        this.clearSession();
+        return false;
+      }
+      if (!applicationsResponse.ok) {
+        this.clearSession();
+        return false;
+      }
+
+      const applicationsJson = await applicationsResponse.json() as { data?: BaselineApplicationsResponse };
+      const user = this.mapBaselineUser(session, applicationsJson.data);
+      if (!user) {
+        this.clearSession();
+        return false;
+      }
+      this.currentUser.set(user);
+      return true;
+    } catch (error) {
+      console.error('No se pudo restaurar la sesión OIDC/BFF:', error);
+      this.clearSession();
+      return false;
+    }
+  }
+
+  /** Inicia el Authorization Code del baseline; nunca envía usuario, contraseña ni token. */
+  startBaselineLogin(): void {
+    const returnTo = encodeURIComponent(window.location.href);
+    const loginUrl = `${environment.security.baselineUrl}/oauth2/authorization/keycloak?return_to=${returnTo}`;
+    window.location.assign(loginUrl);
+  }
+
+  private baselineGet(path: string): Promise<Response> {
+    return fetch(`${environment.security.baselineUrl}${path}`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    });
+  }
+
+  private mapBaselineUser(
+    session: BaselineSessionResponse | undefined,
+    response: BaselineApplicationsResponse | undefined
+  ): User | null {
+    if (!session || !response) {
+      return null;
+    }
+    const applicationName = environment.security.baselineApplicationName.trim().toLowerCase();
+    const application = (response.applications || []).find(
+      (candidate) => candidate.name?.trim().toLowerCase() === applicationName
+    );
+    if (!application) {
+      return null;
+    }
+
+    const assignedRoleNames = [
+      ...(application.tenantRoles || []),
+      ...(application.applicationRoles || []),
+      ...(application.profiles || []).flatMap((profile) => profile.roles || []),
+    ]
+      .map((role) => role.name)
+      .filter((role): role is string => typeof role === 'string');
+    const primaryRole = VALID_INSTITUTIONAL_ROLES.find((role) => assignedRoleNames.includes(role));
+    const email = response.user?.email || session.email;
+    const name = response.user?.name || session.name;
+    if (!primaryRole || !email || !name) {
+      return null;
+    }
+
+    return {
+      // El subject central no es un idUsuario institucional y no se usa como tal.
+      id: '',
+      name,
+      email,
+      role: primaryRole,
+      institutionName: 'Universidad Católica de Oriente',
+      department: this.getDepartmentForRole(primaryRole),
+      status: 'active',
+    };
+  }
+
 
   async loginWithCredentials(usernameInput: string, passwordInput: string): Promise<User> {
+    if (this.isBaselineMode()) {
+      // El modo baseline no acepta password grant ni recibe credenciales en la SPA.
+      this.startBaselineLogin();
+      throw new Error('Redirigiendo al inicio de sesión institucional.');
+    }
+
     const username = (usernameInput || '').trim();
     const password = passwordInput || '';
 
@@ -334,6 +476,10 @@ export class AuthService implements OnDestroy {
   }
 
   async refreshAccessToken(refreshTokenStr?: string): Promise<boolean> {
+    if (this.isBaselineMode()) {
+      return false;
+    }
+
     // Prioridad: parámetro explícito > signal en memoria. NUNCA localStorage.
     // (La restauración tras F5 la orquesta initKeycloak pasando el de sessionStorage.)
     const refreshToken = refreshTokenStr || this.refreshTokenInMemory();
@@ -390,7 +536,7 @@ export class AuthService implements OnDestroy {
    * localStorage directamente fuera de este servicio.
    */
   async getValidAccessToken(minValiditySeconds = 30): Promise<string | null> {
-    if (this.mockModeSignal()) {
+    if (this.mockModeSignal() || this.isBaselineMode()) {
       return null;
     }
 
@@ -463,6 +609,12 @@ export class AuthService implements OnDestroy {
   }
 
   async logout(): Promise<void> {
+    if (this.isBaselineMode()) {
+      this.clearSession(true);
+      // El endpoint oficial invalida la sesión BFF y completa el logout OIDC.
+      window.location.assign(`${environment.security.baselineUrl}/api/v1/session/logout`);
+      return;
+    }
     this.clearSession(true);
     void this.router.navigate(['/login']);
   }
@@ -547,11 +699,10 @@ export class AuthService implements OnDestroy {
       const token = this.token();
       fetch(`${environment.apiUrl}/usuarios/perfil`, {
         method: 'PUT',
-        // API Bearer-only: no se adjuntan cookies del navegador.
-        credentials: 'omit',
+        credentials: this.isBaselineMode() ? 'include' : 'omit',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(token && !this.isBaselineMode() ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           primerNombre,
@@ -592,7 +743,7 @@ export class AuthService implements OnDestroy {
   }
 
   async fetchProfileFromBackend(token?: string): Promise<User | null> {
-    if (this.mockModeSignal() || !environment.features.userProfileEndpointEnabled) {
+    if (this.mockModeSignal() || this.isBaselineMode() || !environment.features.userProfileEndpointEnabled) {
       return this.currentUser();
     }
 

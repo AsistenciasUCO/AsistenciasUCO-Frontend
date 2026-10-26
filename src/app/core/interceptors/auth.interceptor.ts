@@ -39,6 +39,19 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     return next(currentToken ? attachToken(req, currentToken) : req);
   }
 
+  if (environment.security.provider === 'baseline') {
+    // Baseline usa exclusivamente la cookie HttpOnly central. Nunca se añade
+    // Authorization ni se consulta un refresh token desde JavaScript.
+    return next(req.clone({ withCredentials: true })).pipe(
+      catchError((err) => {
+        if (err?.status === 401) {
+          authService.notifySessionExpired();
+        }
+        return throwError(() => err);
+      })
+    );
+  }
+
   if (!authService.isAuthenticated()) {
     return next(req);
   }
@@ -105,8 +118,7 @@ function handle401(
 }
 
 /**
- * La API es stateless y Bearer-only: la única credencial es Authorization. Nunca se activa
- * `withCredentials`, para que el navegador no adjunte cookies en peticiones cross-origin.
+ * En legacy la API es stateless y Bearer-only: la única credencial es Authorization.
  */
 function attachToken(req: HttpRequest<unknown>, token: string): HttpRequest<unknown> {
   return req.clone({
