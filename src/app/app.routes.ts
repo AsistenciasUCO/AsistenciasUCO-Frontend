@@ -198,6 +198,27 @@ export const routes: Routes = [
             (m) => m.DeanCoordinadoresComponent
           ),
       },
+      {
+        path: 'decano/estudiantes',
+        canActivate: [roleGuard],
+        data: { roles: ['DECANO'] },
+        loadComponent: () =>
+          import('./features/dean/dean-estudiantes/dean-estudiantes.component').then((m) => m.DeanEstudiantesComponent),
+      },
+      {
+        path: 'decano/estructura',
+        canActivate: [roleGuard],
+        data: { roles: ['DECANO'] },
+        loadComponent: () =>
+          import('./features/dean/dean-estructura/dean-estructura.component').then((m) => m.DeanEstructuraComponent),
+      },
+      {
+        path: 'decano/cronograma',
+        canActivate: [roleGuard],
+        data: { roles: ['DECANO'] },
+        loadComponent: () =>
+          import('./features/dean/dean-cronograma/dean-cronograma.component').then((m) => m.DeanCronogramaComponent),
+      },
       // Rutas Coordinador
       {
         path: 'coordinador/docentes',

@@ -434,6 +434,64 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
     return of(okResponse(asignaturas)).pipe(delay(200));
   }
 
+  // ================= DECANO: ESTUDIANTES, ESTRUCTURA Y CRONOGRAMA (HU104/HU105/HU109/HU119/HU145) =================
+  if (url.endsWith('/decano/estudiantes') && method === 'GET') {
+    const estudiantes = [
+      {
+        idEstudiante: 'EST-MOCK-1', numeroIdentificacion: '1017000111', nombreCompleto: 'Ana Ruiz',
+        correo: 'ana.ruiz@uco.edu.co', activo: true, programas: 'Ingeniería de Sistemas', totalGrupos: 2,
+      },
+      {
+        idEstudiante: 'EST-MOCK-2', numeroIdentificacion: '1017000222', nombreCompleto: 'Luis Gómez',
+        correo: 'luis.gomez@uco.edu.co', activo: false, programas: 'Ingeniería Industrial', totalGrupos: 1,
+      },
+    ];
+    const busqueda = (req.params.get('busqueda') ?? '').toLowerCase();
+    const filtrados = estudiantes.filter(
+      (e) => !busqueda || e.nombreCompleto.toLowerCase().includes(busqueda) || e.numeroIdentificacion.includes(busqueda)
+    );
+    return of(okResponse(filtrados, undefined, filtrados.length)).pipe(delay(200));
+  }
+  if (url.includes('/decano/estudiantes/') && method === 'GET') {
+    const idEstudiante = url.split('/').pop()!;
+    const ficha = {
+      idEstudiante, numeroIdentificacion: '1017000111', nombreCompleto: 'Ana Ruiz', activo: true,
+      matriculas: [
+        {
+          idPrograma: 'PRG-1', nombrePrograma: 'Ingeniería de Sistemas', inpPlanEstudio: 20241, idAsignatura: 'ASG-1',
+          nombreAsignatura: 'Cálculo Diferencial', idGrupo: 'GRP-MOCK-1', nombreGrupo: 'Grupo 1',
+        },
+      ],
+    };
+    return of(okResponse(ficha)).pipe(delay(200));
+  }
+  if (url.endsWith('/decano/estructura') && method === 'GET') {
+    const estructura = [
+      {
+        id: 'FAC-1', nombre: 'Facultad de Ingeniería', nombreDecano: 'Decano de Prueba', activa: true,
+        programas: [
+          {
+            id: 'PRG-1', nombre: 'Ingeniería de Sistemas', nombreCoordinador: 'Coordinador de Prueba', activo: true,
+            nombreTipoPrograma: 'Pregrado', nombreModalidad: 'Presencial', nombreJornada: 'Diurna',
+            planes: [{ id: 'PLAN-1', inp: 20241, activo: true, totalSemestres: 10 }],
+          },
+        ],
+      },
+    ];
+    return of(okResponse(estructura, undefined, estructura.length)).pipe(delay(200));
+  }
+  if (url.endsWith('/decano/sesiones') && method === 'GET') {
+    const sesiones = [
+      {
+        id: 'SES-MOCK-1', nombre: 'Sesión 1', codigo: 'S-01', numeroSemana: 1, fechaHoraInicio: '2026-01-27T07:00:00',
+        fechaHoraFin: '2026-01-27T09:00:00', idGrupo: 'GRP-MOCK-1', codigoGrupo: 1, nombreGrupo: 'Grupo 1',
+        idAsignatura: 'ASG-1', nombreAsignatura: 'Cálculo Diferencial', idPrograma: 'PRG-1',
+        nombrePrograma: 'Ingeniería de Sistemas',
+      },
+    ];
+    return of(okResponse(sesiones, undefined, sesiones.length)).pipe(delay(200));
+  }
+
   // ================= COORDINADOR: GRUPOS, SESIONES Y ASISTENCIAS (HU064/HU060/HU061) =================
   if (url.endsWith('/coordinador/grupos') && method === 'GET') {
     const grupos = [

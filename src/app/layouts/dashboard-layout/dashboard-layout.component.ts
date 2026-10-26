@@ -296,6 +296,24 @@ export class DashboardLayoutComponent {
       icon: 'coordinadores',
     },
     {
+      label: 'Estudiantes de la Facultad',
+      route: '/app/decano/estudiantes',
+      roles: ['DECANO'],
+      icon: 'estudiantes',
+    },
+    {
+      label: 'Estructura de la Facultad',
+      route: '/app/decano/estructura',
+      roles: ['DECANO'],
+      icon: 'facultad',
+    },
+    {
+      label: 'Cronograma de Sesiones',
+      route: '/app/decano/cronograma',
+      roles: ['DECANO'],
+      icon: 'horarios',
+    },
+    {
       label: 'Gestión de Docentes',
       route: '/app/coordinador/docentes',
       roles: ['COORDINADOR'],
