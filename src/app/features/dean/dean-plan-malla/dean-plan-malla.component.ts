@@ -2,10 +2,11 @@ import { Component, OnInit, inject, input, signal, computed, ChangeDetectionStra
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
+import { DeanFacultadService, planesDeLaEstructura } from '../../../core/services/dean-facultad.service';
 import { PlanEstudioItem, AsignaturaPlanItem } from '../../../core/models/role-management.model';
 import { BadgeComponent } from '../../../shared/components/badge/badge.component';
 import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
+import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
 
 @Component({
   selector: 'app-dean-plan-malla',
@@ -60,6 +61,10 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
             </p>
           }
         </div>
+      }
+
+      @if (mensajeError()) {
+        <div class="bg-red-50 border border-red-200 text-red-800 text-sm rounded-2xl p-4">{{ mensajeError() }}</div>
       }
 
       <!-- Filtros de Malla -->
@@ -136,14 +141,15 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
   `,
 })
 export class DeanPlanMallaComponent implements OnInit {
-  private coordService = inject(CoordinatorManagementService);
+  private deanService = inject(DeanFacultadService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
 
   planId = input<string>();
 
-  planes = signal<PlanEstudioItem[]>(this.coordService.planes());
+  planes = signal<PlanEstudioItem[]>([]);
   asignaturas = signal<AsignaturaPlanItem[]>([]);
+  mensajeError = signal('');
 
   filtroTexto = signal('');
   semestreSeleccionado = signal<number>(0);
@@ -157,7 +163,14 @@ export class DeanPlanMallaComponent implements OnInit {
   selectedPlan = computed<PlanEstudioItem | null>(() => {
     const id = this.effectivePlanId();
     if (!id) return null;
-    return this.planes().find((p) => p.id === id) || null;
+    const plan = this.planes().find((p) => p.id === id);
+    if (!plan) return null;
+    const asignaturas = this.asignaturas();
+    return {
+      ...plan,
+      totalCreditos: plan.totalCreditos || asignaturas.reduce((total, a) => total + (Number(a.creditos) || 0), 0),
+      totalAsignaturas: plan.totalAsignaturas || asignaturas.length,
+    };
   });
 
   semestresDisponibles = computed(() => {
@@ -185,14 +198,20 @@ export class DeanPlanMallaComponent implements OnInit {
     return list.slice(start, start + this.pageSize());
   });
 
+  /**
+   * HU108: el decano no puede usar las rutas del coordinador. La ficha del plan sale de la estructura de su facultad
+   * y la malla de /decano/planes-estudio/{id}/asignaturas (ambas limitadas a su facultad).
+   */
   ngOnInit(): void {
     const id = this.effectivePlanId();
-    this.coordService.getPlanesEstudio().subscribe({
-      next: (res) => this.planes.set(res.datos || []),
+    this.deanService.getEstructura().subscribe({
+      next: (res) => this.planes.set(planesDeLaEstructura(res.datos || [])),
+      error: (error: unknown) => this.mensajeError.set(getApiErrorMessage(error)),
     });
     if (id) {
-      this.coordService.getAsignaturasPorPlan(id).subscribe({
+      this.deanService.getAsignaturasPlan(id).subscribe({
         next: (res) => this.asignaturas.set(res.datos || []),
+        error: (error: unknown) => this.mensajeError.set(getApiErrorMessage(error)),
       });
     }
   }

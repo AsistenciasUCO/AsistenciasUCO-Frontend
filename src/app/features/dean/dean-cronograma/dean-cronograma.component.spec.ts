@@ -113,7 +113,12 @@ describe('Mock backend de consultas del decano (HU104/HU105/HU109/HU119/HU145)',
           expect(estructura.datos[0].programas[0].planes[0].inp).toBe(20241);
           service.getSesiones({ pagina: 1, tamano: 10 }).subscribe((sesiones) => {
             expect(sesiones.datos[0].codigo).toBe('S-01');
-            done();
+            service.getAsignaturasPlan('PLAN-1').subscribe((malla) => {
+              expect(malla.datos.length).toBe(2);
+              expect(malla.datos[1].semestre).toBe(2);
+              expect(malla.datos[1].creditos).toBe(3);
+              done();
+            });
           });
         });
       });

@@ -480,6 +480,19 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
     ];
     return of(okResponse(estructura, undefined, estructura.length)).pipe(delay(200));
   }
+  if (url.includes('/decano/planes-estudio/') && url.endsWith('/asignaturas') && method === 'GET') {
+    const asignaturas = [
+      {
+        id: 'ASG-1', codigo: 'SIS-101', nombre: 'Cálculo Diferencial', credito: 4, codigoSemestre: 'S1',
+        nombreArea: 'Ciencias Básicas', nombreComponente: 'Obligatorio',
+      },
+      {
+        id: 'ASG-2', codigo: 'SIS-201', nombre: 'Estructuras de Datos', credito: 3, codigoSemestre: 'S2',
+        nombreArea: 'Software', nombreComponente: 'Obligatorio',
+      },
+    ];
+    return of(okResponse(asignaturas, undefined, asignaturas.length)).pipe(delay(200));
+  }
   if (url.endsWith('/decano/sesiones') && method === 'GET') {
     const sesiones = [
       {
