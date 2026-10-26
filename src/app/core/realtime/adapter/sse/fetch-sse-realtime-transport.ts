@@ -243,27 +243,20 @@ export class FetchSseRealtimeTransport implements RealtimeTransport {
         return;
       }
 
-      if (environment.security.provider === 'baseline' && !this.authService.isAuthenticated()) {
-        this.setState('DISCONNECTED');
-        return;
-      }
-
       let token: string | null = null;
-      if (environment.security.provider !== 'baseline') {
-        try {
-          token = await this.authService.getValidAccessToken(
-            MIN_TOKEN_VALIDITY_SECONDS
-          );
-        } catch {
-          // Fallo al renovar el token (típicamente sin red): tratar como
-          // recuperable, igual que un fallo del stream.
-          token = null;
-        }
+      try {
+        token = await this.authService.getValidAccessToken(
+          MIN_TOKEN_VALIDITY_SECONDS
+        );
+      } catch {
+        // Fallo al renovar el token (típicamente sin red): tratar como
+        // recuperable, igual que un fallo del stream.
+        token = null;
       }
       if (!this.isActive(groupId, generation)) {
         return;
       }
-      if (!token && environment.security.provider !== 'baseline') {
+      if (!token) {
         this.recoveryAttemptPending = false;
         if (!this.authService.token()) {
           // Sin sesión: no hay nada que reconectar.
@@ -292,10 +285,10 @@ export class FetchSseRealtimeTransport implements RealtimeTransport {
           method: 'GET',
           headers: {
             Accept: 'text/event-stream',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            Authorization: `Bearer ${token}`,
             'X-Correlation-Id': crypto.randomUUID(),
           },
-          credentials: environment.security.provider === 'baseline' ? 'include' : 'omit',
+          credentials: 'omit',
           openWhenHidden: true,
           signal: controller.signal,
           onopen: async (response) => {
@@ -356,12 +349,6 @@ export class FetchSseRealtimeTransport implements RealtimeTransport {
         }
 
         if (err instanceof UnauthorizedStreamError) {
-          if (environment.security.provider === 'baseline') {
-            this.authService.notifySessionExpired();
-            this.setState('UNAUTHORIZED');
-            this.running = false;
-            return;
-          }
           const refreshed = await this.authService.refreshAccessToken();
           if (!this.isActive(groupId, generation)) {
             return;

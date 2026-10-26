@@ -1,17 +1,33 @@
-import { Injectable, OnDestroy, signal, computed } from '@angular/core';
+import { Injectable, OnDestroy, inject, signal, computed } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, of } from 'rxjs';
 import { ApiResponse } from '../models/api-response.model';
 import { User, UserRole } from '../models/user.model';
 import { MOCK_USERS_BY_ROLE, MOCK_USERS_LIST } from '../mocks/user.mock';
 import { environment } from '../../../environments/environment';
+import {
+  BaselineOidcConfig,
+  buildAuthorizeUrl,
+  buildInteractiveLoginUrl,
+  buildLogoutUrl,
+  clearPending,
+  exchangeCode,
+  loadPending,
+  parseCallback,
+  pkceChallenge,
+  randomUrlSafe,
+  recentSilentAttempt,
+  safeInternalPath,
+  savePending,
+} from '../security/baseline-oidc';
+import { BrowserNavigator } from '../security/browser-navigator';
 
 // MOCK_STORAGE_KEY: preferencia de rol mock (dato no sensible, se mantiene en localStorage).
 // Los tokens JWT NUNCA se persisten en localStorage (AGENTS.md §3.3).
 const MOCK_STORAGE_KEY = 'gestio_asistencia_mock_role';
 
 /** Compatibilidad del modo legacy: el refresh token solo existe en memoria y sessionStorage.
- * El modo baseline no entra por este canal: usa exclusivamente la sesión BFF HttpOnly. */
+ * El modo baseline no entra por este canal: no existe refresh token accesible desde JavaScript. */
 const SESSION_REFRESH_TOKEN_KEY = 'gestio_session_refresh_token';
 
 /** Claves residuales de versiones anteriores que pudieran quedar en el navegador del usuario. */
@@ -73,34 +89,6 @@ interface JwtTokenPayload {
   };
 }
 
-interface BaselineSessionResponse {
-  subject?: string;
-  name?: string;
-  email?: string;
-  tenantId?: string;
-}
-
-interface BaselineNamedRole {
-  name?: string;
-}
-
-interface BaselineProfile {
-  name?: string;
-  roles?: BaselineNamedRole[];
-}
-
-interface BaselineApplication {
-  name?: string;
-  tenantRoles?: BaselineNamedRole[];
-  applicationRoles?: BaselineNamedRole[];
-  profiles?: BaselineProfile[];
-}
-
-interface BaselineApplicationsResponse {
-  user?: { name?: string; email?: string };
-  applications?: BaselineApplication[];
-}
-
 function parseJwt(token: string): JwtTokenPayload | null {
   try {
     const base64Url = token.split('.')[1];
@@ -132,9 +120,20 @@ export class AuthService implements OnDestroy {
   // ── Signals públicos ──────────────────────────────────────────────────────
   currentUser = signal<User | null>(null);
   token = signal<string | null>(null);
-  isAuthenticated = computed(() => !!this.token() || !!this.currentUser());
+  isAuthenticated = computed(() => !!this.token());
   private mockModeSignal = signal<boolean>(environment.useMocks);
   isMockMode = computed(() => this.mockModeSignal());
+  /** Mensaje de autenticación para la pantalla de login (cuenta sin rol, retorno inválido, etc.). */
+  authError = signal<string | null>(null);
+  /**
+   * Un SECURITY_PROVIDER desconocido NO se convierte en legacy: la aplicación queda sin autenticación y la
+   * pantalla de login lo informa.
+   */
+  securityConfigError = computed(() =>
+    environment.security.provider === 'invalid'
+      ? 'Configuración de seguridad inválida: SECURITY_PROVIDER debe ser "legacy" o "baseline".'
+      : null
+  );
 
   // ── Estado interno de renovación ──────────────────────────────────────────
   /**
@@ -150,6 +149,8 @@ export class AuthService implements OnDestroy {
    * (complementado por la cola BehaviorSubject del AuthInterceptor).
    */
   private refreshInFlight: Promise<boolean> | null = null;
+  private baselineRenewalStarted = false;
+  private readonly navigator = inject(BrowserNavigator);
 
   // ── BroadcastChannel multi-pestaña ────────────────────────────────────────
   private readonly authChannel = new BroadcastChannel(AUTH_BROADCAST_CHANNEL);
@@ -250,6 +251,11 @@ export class AuthService implements OnDestroy {
       return true;
     }
 
+    if (environment.security.provider === 'invalid') {
+      this.clearSession();
+      return false;
+    }
+
     if (this.isBaselineMode()) {
       return this.initBaselineSession();
     }
@@ -280,110 +286,137 @@ export class AuthService implements OnDestroy {
   }
 
   /**
-   * Restaura la sesión central sin leer ni copiar la cookie HttpOnly. La respuesta de
-   * `/me/applications` solo se usa para construir el estado de navegación de la SPA; el
-   * backend y el PEP siguen siendo la autoridad para cada operación.
+   * Restaura la sesión del modo baseline (Authorization Code + PKCE contra el realm central).
+   *  1. Con `?code&state` (retorno del IdP) intercambia el código y deja el access token SOLO en memoria.
+   *  2. Con `?error=login_required` no hay sesión SSO: el usuario ve el login.
+   *  3. Sin parámetros intenta una re-autenticación silenciosa (prompt=none) contra la sesión SSO; la página se
+   *     redirige y esta promesa no se resuelve. Un intento reciente evita bucles de redirección.
+   * No existe refresh token en JavaScript ni se persiste ninguna credencial.
    */
   private async initBaselineSession(): Promise<boolean> {
     this.token.set(null);
+    this.currentUser.set(null);
     this.storeRefreshToken(null);
 
-    try {
-      const sessionResponse = await this.baselineGet('/api/v1/session');
-      if (sessionResponse.status === 401) {
-        this.clearSession();
+    const callback = parseCallback(window.location.search);
+    if (callback.code || callback.error) {
+      const pending = loadPending();
+      clearPending();
+      if (callback.error) {
+        this.replaceBaselineUrl('/login');
+        if (callback.error !== 'login_required' && callback.error !== 'interaction_required') {
+          this.authError.set(this.resolveAuthMessage('AUTH_GENERIC_ERROR'));
+        }
         return false;
       }
-      if (!sessionResponse.ok) {
-        this.clearSession();
+      if (!pending || !callback.code || callback.state !== pending.state) {
+        this.replaceBaselineUrl('/login');
+        this.authError.set(this.resolveAuthMessage('AUTH_INVALID_RESPONSE'));
         return false;
       }
+      try {
+        const { accessToken } = await exchangeCode(this.baselineConfig(), callback.code, pending.verifier);
+        const payload = parseJwt(accessToken);
+        const user = payload ? this.mapPayloadToUser(payload) : null;
+        if (!user) {
+          this.replaceBaselineUrl('/login');
+          this.authError.set(this.resolveAuthMessage('AUTH_NO_ROLE_ASSIGNED'));
+          return false;
+        }
+        this.token.set(accessToken);
+        this.currentUser.set(user);
+        const target = pending.returnUrl === '/' || pending.returnUrl.startsWith('/login')
+          ? this.homePathForRole(user.role)
+          : pending.returnUrl;
+        this.replaceBaselineUrl(target);
+        return true;
+      } catch (error) {
+        console.error('No se pudo completar el inicio de sesión institucional:', error);
+        this.replaceBaselineUrl('/login');
+        this.authError.set(this.resolveAuthMessage('AUTH_NETWORK_ERROR'));
+        return false;
+      }
+    }
 
-      const sessionJson = await sessionResponse.json() as { data?: BaselineSessionResponse };
-      const session = sessionJson.data;
-      const applicationsResponse = await this.baselineGet('/api/v1/me/applications');
-      if (applicationsResponse.status === 401) {
-        this.clearSession();
-        return false;
-      }
-      if (!applicationsResponse.ok) {
-        this.clearSession();
-        return false;
-      }
-
-      const applicationsJson = await applicationsResponse.json() as { data?: BaselineApplicationsResponse };
-      const user = this.mapBaselineUser(session, applicationsJson.data);
-      if (!user) {
-        this.clearSession();
-        return false;
-      }
-      this.currentUser.set(user);
-      return true;
-    } catch (error) {
-      console.error('No se pudo restaurar la sesión OIDC/BFF:', error);
-      this.clearSession();
+    if (recentSilentAttempt()) {
+      clearPending();
       return false;
     }
+    await this.redirectToBaselineAuthorize(true, this.currentReturnPath());
+    return new Promise<boolean>(() => undefined);
   }
 
-  /** Inicia el Authorization Code del baseline; nunca envía usuario, contraseña ni token. */
-  startBaselineLogin(): void {
-    const returnTo = encodeURIComponent(window.location.href);
-    const loginUrl = `${environment.security.baselineUrl}/oauth2/authorization/keycloak?return_to=${returnTo}`;
-    window.location.assign(loginUrl);
+  /**
+   * Login interactivo: lo realiza el BFF del PDP (aprovisiona la identidad del usuario en el catálogo de seguridad
+   * y establece la sesión SSO central) y vuelve a la SPA, que obtiene entonces su access token por PKCE.
+   * La SPA nunca recibe ni envía contraseñas.
+   */
+  startBaselineLogin(returnUrl?: string): void {
+    if (this.securityConfigError()) {
+      return;
+    }
+    const target = safeInternalPath(returnUrl ?? this.currentReturnPath());
+    const returnTo = `${window.location.origin}/login?returnUrl=${encodeURIComponent(target)}`;
+    this.navigator.assign(buildInteractiveLoginUrl(this.baselineConfig(), returnTo));
   }
 
-  private baselineGet(path: string): Promise<Response> {
-    return fetch(`${environment.security.baselineUrl}${path}`, {
-      method: 'GET',
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-    });
-  }
-
-  private mapBaselineUser(
-    session: BaselineSessionResponse | undefined,
-    response: BaselineApplicationsResponse | undefined
-  ): User | null {
-    if (!session || !response) {
-      return null;
-    }
-    const applicationName = environment.security.baselineApplicationName.trim().toLowerCase();
-    const application = (response.applications || []).find(
-      (candidate) => candidate.name?.trim().toLowerCase() === applicationName
-    );
-    if (!application) {
-      return null;
-    }
-
-    const assignedRoleNames = [
-      ...(application.tenantRoles || []),
-      ...(application.applicationRoles || []),
-      ...(application.profiles || []).flatMap((profile) => profile.roles || []),
-    ]
-      .map((role) => role.name)
-      .filter((role): role is string => typeof role === 'string');
-    const primaryRole = VALID_INSTITUTIONAL_ROLES.find((role) => assignedRoleNames.includes(role));
-    const email = response.user?.email || session.email;
-    const name = response.user?.name || session.name;
-    if (!primaryRole || !email || !name) {
-      return null;
-    }
-
+  private baselineConfig(): BaselineOidcConfig {
     return {
-      // El subject central no es un idUsuario institucional y no se usa como tal.
-      id: '',
-      name,
-      email,
-      role: primaryRole,
-      institutionName: 'Universidad Católica de Oriente',
-      department: this.getDepartmentForRole(primaryRole),
-      status: 'active',
+      issuerUrl: environment.security.baselineIssuerUrl,
+      clientId: environment.security.baselineClientId,
+      redirectUri: `${window.location.origin}/login`,
+      pdpUrl: environment.security.baselineUrl,
     };
   }
 
+  private async redirectToBaselineAuthorize(silent: boolean, returnUrl: string): Promise<void> {
+    const state = randomUrlSafe(16);
+    const verifier = randomUrlSafe(48);
+    const challenge = await pkceChallenge(verifier);
+    savePending({ state, verifier, returnUrl: safeInternalPath(returnUrl), silent, createdAt: Date.now() });
+    this.navigator.assign(buildAuthorizeUrl(this.baselineConfig(), { state, challenge, silent }));
+  }
+
+  /** Ruta interna actual de la SPA; en /login conserva el `returnUrl` solicitado. */
+  private currentReturnPath(): string {
+    const path = window.location.pathname || '/';
+    if (path.startsWith('/login')) {
+      return safeInternalPath(new URLSearchParams(window.location.search).get('returnUrl'));
+    }
+    return safeInternalPath(`${path}${window.location.search}`);
+  }
+
+  private replaceBaselineUrl(path: string): void {
+    try {
+      window.history.replaceState({}, '', safeInternalPath(path));
+    } catch {
+      // Sin History API la navegación del router corrige la URL.
+    }
+  }
+
+  private homePathForRole(role: UserRole): string {
+    switch (role) {
+      case 'ADMINISTRADOR':
+      case 'ADMIN':
+        return '/app/admin/decanos';
+      case 'DECANO':
+        return '/app/decano/coordinadores';
+      case 'COORDINADOR':
+        return '/app/coordinador/docentes';
+      case 'DOCENTE':
+        return '/app/docente/grupos';
+      case 'ESTUDIANTE':
+        return '/app/estudiante/horarios';
+      default:
+        return '/app/dashboard';
+    }
+  }
 
   async loginWithCredentials(usernameInput: string, passwordInput: string): Promise<User> {
+    if (environment.security.provider === 'invalid') {
+      throw new Error(this.securityConfigError() ?? 'Configuración de seguridad inválida.');
+    }
+
     if (this.isBaselineMode()) {
       // El modo baseline no acepta password grant ni recibe credenciales en la SPA.
       this.startBaselineLogin();
@@ -536,7 +569,7 @@ export class AuthService implements OnDestroy {
    * localStorage directamente fuera de este servicio.
    */
   async getValidAccessToken(minValiditySeconds = 30): Promise<string | null> {
-    if (this.mockModeSignal() || this.isBaselineMode()) {
+    if (this.mockModeSignal()) {
       return null;
     }
 
@@ -550,6 +583,17 @@ export class AuthService implements OnDestroy {
 
     if (payload?.exp && payload.exp > nowSeconds + minValiditySeconds) {
       return currentToken;
+    }
+
+    if (this.isBaselineMode()) {
+      // Sin refresh token en JavaScript: el access token por expirar se renueva con una re-autenticación silenciosa
+      // contra la sesión SSO (la página se redirige y vuelve a la misma ruta). Si la sesión SSO ya no existe, el
+      // retorno `login_required` deja al usuario en el login.
+      if (!this.baselineRenewalStarted) {
+        this.baselineRenewalStarted = true;
+        void this.redirectToBaselineAuthorize(true, this.currentReturnPath());
+      }
+      return null;
     }
 
     if (!this.refreshInFlight) {
@@ -611,8 +655,9 @@ export class AuthService implements OnDestroy {
   async logout(): Promise<void> {
     if (this.isBaselineMode()) {
       this.clearSession(true);
-      // El endpoint oficial invalida la sesión BFF y completa el logout OIDC.
-      window.location.assign(`${environment.security.baselineUrl}/api/v1/session/logout`);
+      clearPending();
+      // El endpoint oficial invalida la sesión BFF del PDP y la sesión SSO central, y vuelve a la SPA.
+      this.navigator.assign(buildLogoutUrl(this.baselineConfig()));
       return;
     }
     this.clearSession(true);
@@ -699,10 +744,11 @@ export class AuthService implements OnDestroy {
       const token = this.token();
       fetch(`${environment.apiUrl}/usuarios/perfil`, {
         method: 'PUT',
-        credentials: this.isBaselineMode() ? 'include' : 'omit',
+        // API Bearer-only: no se adjuntan cookies del navegador.
+        credentials: 'omit',
         headers: {
           'Content-Type': 'application/json',
-          ...(token && !this.isBaselineMode() ? { Authorization: `Bearer ${token}` } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           primerNombre,
@@ -743,7 +789,7 @@ export class AuthService implements OnDestroy {
   }
 
   async fetchProfileFromBackend(token?: string): Promise<User | null> {
-    if (this.mockModeSignal() || this.isBaselineMode() || !environment.features.userProfileEndpointEnabled) {
+    if (this.mockModeSignal() || !environment.features.userProfileEndpointEnabled) {
       return this.currentUser();
     }
 

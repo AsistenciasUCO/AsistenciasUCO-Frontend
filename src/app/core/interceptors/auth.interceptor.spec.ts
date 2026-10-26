@@ -21,11 +21,8 @@ describe('authInterceptor 401 recovery', () => {
   let tokenValue: string | null;
   let authenticated: boolean;
   let mockMode: boolean;
-  let previousSecurityProvider: string | undefined;
 
   beforeEach(() => {
-    previousSecurityProvider = window.env?.SECURITY_PROVIDER;
-    window.env = { ...(window.env || {}), SECURITY_PROVIDER: 'legacy' };
     tokenValue = 'old-token';
     authenticated = true;
     mockMode = false;
@@ -64,12 +61,7 @@ describe('authInterceptor 401 recovery', () => {
     http = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => {
-    http.verify();
-    if (window.env) {
-      window.env.SECURITY_PROVIDER = previousSecurityProvider;
-    }
-  });
+  afterEach(() => http.verify());
 
   it('401 con refresh exitoso reintenta y conserva la sesión', fakeAsync(() => {
     authService.refreshAccessToken.and.callFake(async () => {
@@ -101,19 +93,6 @@ describe('authInterceptor 401 recovery', () => {
   }));
 
   describe('política Bearer-only (sin cookies ni withCredentials)', () => {
-    it('modo baseline usa cookie HttpOnly y nunca añade Authorization', fakeAsync(() => {
-      window.env!.SECURITY_PROVIDER = 'baseline';
-
-      client.get(`${environment.apiUrl}/probe`).subscribe();
-      tick();
-
-      const pending = http.expectOne(`${environment.apiUrl}/probe`);
-      expect(pending.request.headers.has('Authorization')).toBeFalse();
-      expect(pending.request.withCredentials).toBeTrue();
-      expect(authService.getValidAccessToken).not.toHaveBeenCalled();
-      pending.flush({});
-    }));
-
     it('petición autenticada adjunta solo Authorization: Bearer y no usa withCredentials', fakeAsync(() => {
       client.post(`${environment.apiUrl}/probe`, {}).subscribe();
       tick();

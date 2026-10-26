@@ -2,6 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { AuthService } from './auth.service';
 import { environment } from '../../../environments/environment';
+import { BrowserNavigator } from '../security/browser-navigator';
+import { loadPending, savePending } from '../security/baseline-oidc';
 
 function base64UrlEncode(json: object): string {
   // UTF-8 safe base64 (parseJwt reverses this exact encoding via atob + decodeURIComponent).
@@ -61,15 +63,20 @@ function basePayload(overrides: Record<string, unknown> = {}) {
 describe('AuthService', () => {
   let service: AuthService;
   let routerSpy: jasmine.SpyObj<Router>;
+  let navigatorSpy: jasmine.SpyObj<BrowserNavigator>;
   let fetchSpy: jasmine.Spy;
 
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
     routerSpy = jasmine.createSpyObj<Router>('Router', ['navigate']);
+    navigatorSpy = jasmine.createSpyObj<BrowserNavigator>('BrowserNavigator', ['assign']);
 
     TestBed.configureTestingModule({
-      providers: [{ provide: Router, useValue: routerSpy }],
+      providers: [
+        { provide: Router, useValue: routerSpy },
+        { provide: BrowserNavigator, useValue: navigatorSpy },
+      ],
     });
 
     service = TestBed.inject(AuthService);
@@ -256,46 +263,225 @@ describe('AuthService', () => {
     });
   });
 
-  describe('modo baseline BFF', () => {
+  describe('modo baseline (Authorization Code + PKCE, sin refresh token en JavaScript)', () => {
+    const PDP = 'http://baseline.test';
+    const ISSUER = 'http://idp.test/realms/security-baseline';
+
     beforeEach(() => {
       window.env = {
         ...(window.env || {}),
         SECURITY_PROVIDER: 'baseline',
-        SECURITY_BASELINE_URL: 'http://baseline.test',
-        SECURITY_BASELINE_APPLICATION_NAME: 'AsistenciasUCO',
+        SECURITY_BASELINE_URL: PDP,
+        SECURITY_BASELINE_ISSUER_URL: ISSUER,
+        SECURITY_BASELINE_CLIENT_ID: 'asistencias-uco-spa',
       };
+      window.history.replaceState({}, '', '/');
     });
 
-    it('restaura sesión y asignaciones con credentials include sin guardar tokens', async () => {
-      fetchSpy.and.callFake((input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.endsWith('/api/v1/session')) {
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: () => Promise.resolve({ data: { subject: 'central-sub', name: 'Ana UCO', email: 'ana@uco.edu.co' } }),
-          } as Response);
-        }
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve({
-            data: {
-              user: { name: 'Ana UCO', email: 'ana@uco.edu.co' },
-              applications: [{ name: 'AsistenciasUCO', applicationRoles: [{ name: 'DOCENTE' }] }],
-            },
+    afterEach(() => {
+      window.history.replaceState({}, '', '/');
+    });
+
+    function pendingLogin(returnUrl = '/app/docente/grupos'): string {
+      const state = 'state-123';
+      savePending({ state, verifier: 'verifier-abc', returnUrl, silent: true, createdAt: Date.now() });
+      return state;
+    }
+
+    function tokenEndpointResponse(payload: Record<string, unknown>) {
+      fetchSpy.and.resolveTo({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            access_token: makeJwt(payload),
+            token_type: 'Bearer',
+            // El IdP podría devolverlos: la SPA debe descartarlos.
+            refresh_token: 'refresh-que-no-debe-guardarse',
+            id_token: 'id-token-que-no-debe-guardarse',
           }),
-        } as Response);
-      });
+      } as Response);
+    }
+
+    it('callback válido: intercambia el código con PKCE y deja el access token solo en memoria', async () => {
+      const state = pendingLogin();
+      window.history.replaceState({}, '', `/login?code=code-1&state=${state}`);
+      tokenEndpointResponse(basePayload());
 
       const restored = await service.initKeycloak();
 
       expect(restored).toBeTrue();
       expect(service.currentUser()?.role).toBe('DOCENTE');
-      expect(service.currentUser()?.id).toBe('');
-      expect(service.token()).toBeNull();
+      expect(service.currentUser()?.id).toBe(VALID_UUID);
+      expect(service.isAuthenticated()).toBeTrue();
+      const [url, init] = fetchSpy.calls.mostRecent().args as [string, RequestInit];
+      expect(url).toBe(`${ISSUER}/protocol/openid-connect/token`);
+      expect(init.credentials).toBe('omit');
+      const body = new URLSearchParams(String(init.body));
+      expect(body.get('grant_type')).toBe('authorization_code');
+      expect(body.get('code_verifier')).toBe('verifier-abc');
+      expect(body.has('client_secret')).toBeFalse();
+      expect(body.has('password')).toBeFalse();
+      const persisted = dumpStorage(localStorage) + dumpStorage(sessionStorage);
+      expect(persisted).not.toContain('refresh-que-no-debe-guardarse');
+      expect(persisted).not.toContain('id-token-que-no-debe-guardarse');
+      expect(persisted).not.toContain(service.token()!);
       expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBeNull();
-      expect(fetchSpy.calls.allArgs().every((args) => (args[1] as RequestInit)?.credentials === 'include')).toBeTrue();
+      expect(window.location.search).toBe('');
+      expect(window.location.pathname).toBe('/app/docente/grupos');
+    });
+
+    it('state que no coincide: rechaza sin intercambiar el código', async () => {
+      pendingLogin();
+      window.history.replaceState({}, '', '/login?code=code-1&state=otro-state');
+
+      expect(await service.initKeycloak()).toBeFalse();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(service.token()).toBeNull();
+      expect(service.authError()).toBeTruthy();
+    });
+
+    it('callback sin estado PKCE pendiente (p. ej. enlace forjado) no autentica', async () => {
+      window.history.replaceState({}, '', '/login?code=code-1&state=cualquiera');
+
+      expect(await service.initKeycloak()).toBeFalse();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(service.isAuthenticated()).toBeFalse();
+    });
+
+    it('login_required: no hay sesión SSO, el usuario ve el login sin error', async () => {
+      pendingLogin();
+      window.history.replaceState({}, '', '/login?error=login_required&state=state-123');
+
+      expect(await service.initKeycloak()).toBeFalse();
+      expect(service.authError()).toBeNull();
+      expect(service.isAuthenticated()).toBeFalse();
+      expect(window.location.search).toBe('');
+    });
+
+    it('token sin rol institucional o sin idUsuario UUID no inicia sesión', async () => {
+      for (const override of [
+        { resource_access: { 'asistencias-api': { roles: [] } } },
+        { idUsuario: 'no-es-uuid' },
+      ]) {
+        const state = pendingLogin();
+        window.history.replaceState({}, '', `/login?code=code-1&state=${state}`);
+        tokenEndpointResponse(basePayload(override));
+
+        expect(await service.initKeycloak()).toBeFalse();
+        expect(service.token()).toBeNull();
+        expect(service.currentUser()).toBeNull();
+        expect(service.authError()).toBeTruthy();
+      }
+    });
+
+    it('sin callback intenta una re-autenticación silenciosa (prompt=none, S256) y no se resuelve', async () => {
+      window.history.replaceState({}, '', '/app/docente/grupos');
+      let settled = false;
+      void service.initKeycloak().then(() => (settled = true));
+
+      await waitUntil(() => navigatorSpy.assign.calls.count() === 1);
+      const target = new URL(navigatorSpy.assign.calls.mostRecent().args[0]);
+      expect(target.origin + target.pathname).toBe(`${ISSUER.replace('/realms/security-baseline', '')}/realms/security-baseline/protocol/openid-connect/auth`);
+      expect(target.searchParams.get('prompt')).toBe('none');
+      expect(target.searchParams.get('code_challenge_method')).toBe('S256');
+      expect(target.searchParams.get('response_type')).toBe('code');
+      expect(target.searchParams.get('client_id')).toBe('asistencias-uco-spa');
+      expect(target.searchParams.has('client_secret')).toBeFalse();
+      const pending = loadPending();
+      expect(pending?.returnUrl).toBe('/app/docente/grupos');
+      expect(pending?.state).toBe(target.searchParams.get('state') ?? undefined);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(settled).toBeFalse();
+    });
+
+    it('un intento silencioso reciente no vuelve a redirigir (evita bucles)', async () => {
+      pendingLogin();
+
+      expect(await service.initKeycloak()).toBeFalse();
+      expect(navigatorSpy.assign).not.toHaveBeenCalled();
+      expect(service.isAuthenticated()).toBeFalse();
+    });
+
+    it('un currentUser obsoleto no mantiene la sesión: solo un access token en memoria autentica', () => {
+      service.currentUser.set({ id: VALID_UUID, name: 'Ana', email: 'ana@uco.edu.co', role: 'DOCENTE' } as never);
+      service.token.set(null);
+
+      expect(service.isAuthenticated()).toBeFalse();
+    });
+
+    it('access token por expirar: re-autenticación silenciosa y devuelve null (nunca refresh token)', async () => {
+      service.token.set(makeJwt(basePayload({ exp: Math.floor(Date.now() / 1000) + 5 })));
+      window.history.replaceState({}, '', '/app/docente/grupos');
+
+      expect(await service.getValidAccessToken(30)).toBeNull();
+      await waitUntil(() => navigatorSpy.assign.calls.count() === 1);
+      expect(new URL(navigatorSpy.assign.calls.mostRecent().args[0]).searchParams.get('prompt')).toBe('none');
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(await service.refreshAccessToken('cualquiera')).toBeFalse();
+    });
+
+    it('login interactivo: delega en el BFF del PDP con return_to a la SPA y sin credenciales', () => {
+      service.startBaselineLogin('/app/docente/grupos');
+
+      const target = new URL(navigatorSpy.assign.calls.mostRecent().args[0]);
+      expect(target.origin).toBe(PDP);
+      expect(target.pathname).toBe('/oauth2/authorization/keycloak');
+      const returnTo = new URL(target.searchParams.get('return_to')!);
+      expect(returnTo.origin).toBe(window.location.origin);
+      expect(returnTo.pathname).toBe('/login');
+      expect(returnTo.searchParams.get('returnUrl')).toBe('/app/docente/grupos');
+      expect(target.search).not.toContain('password');
+    });
+
+    it('returnUrl externo o con esquema se descarta (sin redirecciones abiertas)', () => {
+      for (const malicious of ['https://evil.example/x', '//evil.example', '/\\evil.example']) {
+        service.startBaselineLogin(malicious);
+        const target = new URL(navigatorSpy.assign.calls.mostRecent().args[0]);
+        const returnTo = new URL(target.searchParams.get('return_to')!);
+        expect(returnTo.searchParams.get('returnUrl')).toBe('/');
+      }
+    });
+
+    it('loginWithCredentials nunca usa password grant en baseline', async () => {
+      await expectAsync(service.loginWithCredentials('a@uco.edu.co', 'secreto')).toBeRejected();
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(navigatorSpy.assign).toHaveBeenCalledTimes(1);
+    });
+
+    it('logout cierra la sesión BFF del PDP y limpia la memoria', async () => {
+      service.token.set(makeJwt(basePayload()));
+      service.currentUser.set({ id: VALID_UUID, name: 'Ana', email: 'ana@uco.edu.co', role: 'DOCENTE' } as never);
+
+      await service.logout();
+
+      expect(service.token()).toBeNull();
+      expect(service.currentUser()).toBeNull();
+      expect(service.isAuthenticated()).toBeFalse();
+      expect(navigatorSpy.assign).toHaveBeenCalledWith(`${PDP}/api/v1/session/logout`);
+    });
+  });
+
+  describe('SECURITY_PROVIDER inválido (fail-closed, nunca legacy silencioso)', () => {
+    it('queda sin autenticación y rechaza el login', async () => {
+      window.env = { ...(window.env || {}), SECURITY_PROVIDER: 'baselin' };
+
+      expect(service.securityConfigError()).toContain('SECURITY_PROVIDER');
+      expect(await service.initKeycloak()).toBeFalse();
+      await expectAsync(service.loginWithCredentials('a@uco.edu.co', 'secreto')).toBeRejected();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(service.isAuthenticated()).toBeFalse();
+    });
+
+    it('un valor ausente o vacío equivale al legacy explícito por defecto', () => {
+      window.env = { ...(window.env || {}), SECURITY_PROVIDER: '' };
+      expect(environment.security.provider).toBe('legacy');
+    });
+
+    it('el proveedor no se puede elegir desde localStorage', () => {
+      window.env = { ...(window.env || {}), SECURITY_PROVIDER: 'legacy' };
+      localStorage.setItem('SECURITY_PROVIDER', 'baseline');
+      expect(environment.security.provider).toBe('legacy');
     });
   });
 

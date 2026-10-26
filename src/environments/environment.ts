@@ -75,18 +75,32 @@ export const environment = {
     clientId: (window as any)['env']?.['KEYCLOAK_CLIENT_ID'] || 'asistencias-uco-frontend',
   },
   security: {
-    // Runtime-only selector. It is configuration, never an authority claim.
-    get provider(): 'legacy' | 'baseline' {
-      return (String((window as any)['env']?.['SECURITY_PROVIDER'] || 'legacy').toLowerCase() === 'baseline')
-        ? 'baseline'
-        : 'legacy';
+    /**
+     * Selector de proveedor de seguridad: solo configuración de runtime (env.js), NUNCA estado del navegador
+     * (localStorage/sessionStorage) ni una afirmación de autoridad. Un valor desconocido NO se convierte en
+     * legacy: devuelve 'invalid' y la aplicación queda sin autenticación (fail-closed).
+     */
+    get provider(): 'legacy' | 'baseline' | 'invalid' {
+      const raw = (window as any)['env']?.['SECURITY_PROVIDER'];
+      if (raw === undefined || raw === null || String(raw).trim() === '') {
+        return 'legacy';
+      }
+      const normalized = String(raw).trim().toLowerCase();
+      return normalized === 'legacy' || normalized === 'baseline' ? normalized : 'invalid';
     },
+    /** Origen del PDP: solo para el login/logout BFF (navegación). El navegador no le envía datos de negocio. */
     get baselineUrl(): string {
       const explicit = (window as any)['env']?.['SECURITY_BASELINE_URL'];
       return String(explicit || 'http://localhost:18080').replace(/\/+$/, '');
     },
-    get baselineApplicationName(): string {
-      return String((window as any)['env']?.['SECURITY_BASELINE_APPLICATION_NAME'] || 'AsistenciasUCO');
+    /** Emisor OIDC central (realm security-baseline). */
+    get baselineIssuerUrl(): string {
+      const explicit = (window as any)['env']?.['SECURITY_BASELINE_ISSUER_URL'];
+      return String(explicit || 'http://keycloak.localhost:19090/realms/security-baseline').replace(/\/+$/, '');
+    },
+    /** Cliente público (Authorization Code + PKCE) de la SPA en el realm central. */
+    get baselineClientId(): string {
+      return String((window as any)['env']?.['SECURITY_BASELINE_CLIENT_ID'] || 'asistencias-uco-spa');
     },
   },
 };

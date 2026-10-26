@@ -1,4 +1,4 @@
-﻿(function (window) {
+(function (window) {
   window.env = window.env || {};
   var host = window.location.hostname || 'localhost';
   window.env['API_URL'] = 'http://' + host + ':8080/api/v1';
@@ -8,5 +8,6 @@
   window.env['USE_MOCKS'] = 'false';
   window.env['SECURITY_PROVIDER'] = 'legacy';
   window.env['SECURITY_BASELINE_URL'] = 'http://' + host + ':18080';
-  window.env['SECURITY_BASELINE_APPLICATION_NAME'] = 'AsistenciasUCO';
+  window.env['SECURITY_BASELINE_ISSUER_URL'] = 'http://keycloak.localhost:19090/realms/security-baseline';
+  window.env['SECURITY_BASELINE_CLIENT_ID'] = 'asistencias-uco-spa';
 })(this);
