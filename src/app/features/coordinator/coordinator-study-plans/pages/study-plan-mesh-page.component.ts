@@ -7,6 +7,9 @@ import { ToastService } from '../../../../shared/components/toast/toast.componen
 import { getApiErrorMessage } from '../../../../core/api/errors/api-error.util';
 import { StudyPlanMeshComponent } from '../components/study-plan-mesh.component';
 
+/** Catálogo dbo.Semestre (1 a 10); la DB responde PLA_003 si se intenta superar. */
+const MAX_SEMESTRES = 10;
+
 @Component({
   selector: 'app-coordinator-study-plan-mesh-page',
   standalone: true,
@@ -15,6 +18,15 @@ import { StudyPlanMeshComponent } from '../components/study-plan-mesh.component'
   imports: [CommonModule, StudyPlanMeshComponent],
   template: `
     <div class="space-y-6 animate-fade-in">
+      @if (aviso(); as mensaje) {
+        <div
+          role="alert"
+          class="flex items-start justify-between gap-3 p-4 rounded-2xl border border-red-200 bg-red-50 text-sm text-red-800"
+        >
+          <span>{{ mensaje }}</span>
+          <button type="button" (click)="aviso.set(null)" class="text-xs font-bold text-red-700 hover:text-red-900">✕</button>
+        </div>
+      }
       @if (selectedPlan(); as plan) {
         <app-study-plan-mesh
           [plan]="plan"
@@ -62,17 +74,35 @@ export class CoordinatorStudyPlanMeshPageComponent implements OnInit {
     return this.planes().find((p) => p.id === id) || null;
   });
 
+  /** HU082/HU083: aviso visible en la malla (además del toast) cuando no se puede agregar o quitar un semestre. */
+  aviso = signal<string | null>(null);
+
   ngOnInit(): void {
     const id = this.effectivePlanId();
-    if (!this.selectedPlan()) {
-      this.coordService.getPlanesEstudio().subscribe({
-        next: (res) => this.planes.set(res.datos || []),
-        error: (err) => this.toast.error(getApiErrorMessage(err)),
-      });
-    }
+    // Siempre se recarga del servidor: la copia en memoria puede tener un total de semestres desactualizado.
+    this.recargarPlanes();
     if (id) {
       this.cargarAsignaturas(id);
     }
+  }
+
+  recargarPlanes(): void {
+    this.coordService.getPlanesEstudio().subscribe({
+      next: (res) => this.planes.set(res.datos || []),
+      error: (err) => this.toast.error(getApiErrorMessage(err)),
+    });
+  }
+
+  private mostrarRechazo(mensaje: string): void {
+    this.aviso.set(mensaje);
+    this.toast.error(mensaje);
+  }
+
+  /** El backend expone el semestre como `codigoSemestre` (p. ej. "S8"); el mock usa `semestre` numérico. */
+  private numeroSemestre(asignatura: AsignaturaPlanItem): number {
+    const raw = asignatura.semestre ?? (asignatura as unknown as { codigoSemestre?: string }).codigoSemestre;
+    const numero = Number(String(raw ?? '').replace(/\D/g, ''));
+    return Number.isFinite(numero) ? numero : 0;
   }
 
   cargarAsignaturas(id: string): void {
@@ -85,8 +115,13 @@ export class CoordinatorStudyPlanMeshPageComponent implements OnInit {
   agregarSemestre(): void {
     const plan = this.selectedPlan();
     if (!plan) return;
+    this.aviso.set(null);
+    if (plan.totalSemestres >= MAX_SEMESTRES) {
+      this.mostrarRechazo(`El plan ya tiene el máximo de ${MAX_SEMESTRES} semestres; no se puede agregar otro.`);
+      return;
+    }
     const nuevoTotal = plan.totalSemestres + 1;
-    this.coordService.actualizarPlanEstudio(plan.id, { totalSemestres: nuevoTotal }).subscribe({
+    this.coordService.agregarSemestrePlan(plan.id).subscribe({
       next: (res) => {
         if (res.exitoso) {
           this.toast.success(`Semestre ${nuevoTotal} agregado al plan.`);
@@ -95,23 +130,33 @@ export class CoordinatorStudyPlanMeshPageComponent implements OnInit {
           );
         }
       },
-      error: (err) => this.toast.error(getApiErrorMessage(err)),
+      error: (err) => {
+        this.mostrarRechazo(getApiErrorMessage(err));
+        this.recargarPlanes();
+      },
     });
   }
 
   eliminarSemestreVacio(): void {
     const plan = this.selectedPlan();
-    if (!plan || plan.totalSemestres <= 1) return;
+    if (!plan) return;
+    this.aviso.set(null);
+    if (plan.totalSemestres <= 1) {
+      this.mostrarRechazo('El plan debe conservar al menos un semestre.');
+      return;
+    }
     const ultimoSem = plan.totalSemestres;
-    const tieneAsignaturas = this.asignaturas().some((a) => a.semestre === ultimoSem);
+    const tieneAsignaturas = this.asignaturas().some((a) => this.numeroSemestre(a) === ultimoSem);
 
     if (tieneAsignaturas) {
-      this.toast.error(`El semestre ${ultimoSem} tiene asignaturas asignadas. Reubícalas o elimínalas primero.`);
+      this.mostrarRechazo(
+        `El semestre ${ultimoSem} tiene asignaturas asignadas, por eso no se puede quitar. Reubícalas o elimínalas primero.`
+      );
       return;
     }
 
     const nuevoTotal = ultimoSem - 1;
-    this.coordService.actualizarPlanEstudio(plan.id, { totalSemestres: nuevoTotal }).subscribe({
+    this.coordService.eliminarSemestrePlan(plan.id, ultimoSem).subscribe({
       next: (res) => {
         if (res.exitoso) {
           this.toast.success(`Semestre ${ultimoSem} vacío eliminado.`);
@@ -120,7 +165,10 @@ export class CoordinatorStudyPlanMeshPageComponent implements OnInit {
           );
         }
       },
-      error: (err) => this.toast.error(getApiErrorMessage(err)),
+      error: (err) => {
+        this.mostrarRechazo(getApiErrorMessage(err));
+        this.recargarPlanes();
+      },
     });
   }
 

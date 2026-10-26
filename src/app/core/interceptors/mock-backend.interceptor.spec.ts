@@ -306,9 +306,46 @@ describe('mockBackendInterceptor', () => {
     expect(putPlanRes?.exitoso).toBeTrue();
 
     let patchPlanRes: any;
-    httpClient.patch(`${environment.apiUrl}/coordinador/planes-estudio/${planId}/toggle`, {}).subscribe((r) => (patchPlanRes = r));
+    httpClient.patch(`${environment.apiUrl}/coordinador/planes-estudio/${planId}/toggle-estado`, {}).subscribe((r) => (patchPlanRes = r));
     tick(250);
     expect(patchPlanRes?.exitoso).toBeTrue();
+
+    const semestresIniciales = mockStore.planesEstudio[0].totalSemestres;
+    let postSemRes: any;
+    httpClient.post(`${environment.apiUrl}/coordinador/planes-estudio/${planId}/semestres`, {}).subscribe((r) => (postSemRes = r));
+    tick(250);
+    expect(postSemRes?.exitoso).toBeTrue();
+    expect(mockStore.planesEstudio[0].totalSemestres).toBe(semestresIniciales + 1);
+
+    let delSemRes: any;
+    httpClient.delete(`${environment.apiUrl}/coordinador/planes-estudio/${planId}/semestres/${semestresIniciales + 1}`).subscribe((r) => (delSemRes = r));
+    tick(250);
+    expect(delSemRes?.exitoso).toBeTrue();
+    expect(mockStore.planesEstudio[0].totalSemestres).toBe(semestresIniciales);
+  }));
+
+  it('HU096-HU098: el administrador crea, modifica y elimina períodos en el mock', fakeAsync(() => {
+    auth.setMockMode(true);
+    const total = mockStore.periodosAcademicos.length;
+    let creado: any;
+    httpClient
+      .post(`${environment.apiUrl}/admin/periodos-academicos`, { nombre: 'QA-2099-1', fechaInicio: '2099-02-01', fechaFin: '2099-06-30' })
+      .subscribe((r) => (creado = r));
+    tick(300);
+    expect(creado?.exitoso).toBeTrue();
+    expect(mockStore.periodosAcademicos.length).toBe(total + 1);
+
+    const id = mockStore.periodosAcademicos[0].id;
+    let editado: any;
+    httpClient.put(`${environment.apiUrl}/admin/periodos-academicos/${id}`, { nombre: 'QA-2099-2' }).subscribe((r) => (editado = r));
+    tick(300);
+    expect(editado?.exitoso).toBeTrue();
+
+    let eliminado: any;
+    httpClient.delete(`${environment.apiUrl}/admin/periodos-academicos/${id}`).subscribe((r) => (eliminado = r));
+    tick(300);
+    expect(eliminado?.exitoso).toBeTrue();
+    expect(mockStore.periodosAcademicos.length).toBe(total);
   }));
 });
 

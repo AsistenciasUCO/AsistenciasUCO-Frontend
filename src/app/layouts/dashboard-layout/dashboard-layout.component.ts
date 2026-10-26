@@ -248,6 +248,12 @@ export class DashboardLayoutComponent {
       icon: 'materias',
     },
     {
+      label: 'Períodos Académicos',
+      route: '/app/admin/periodos',
+      roles: ['ADMINISTRADOR', 'ADMIN'],
+      icon: 'horarios',
+    },
+    {
       label: 'Sistema & Auditoría',
       route: '/app/admin/sistema',
       roles: ['ADMINISTRADOR', 'ADMIN'],
@@ -290,6 +296,24 @@ export class DashboardLayoutComponent {
       icon: 'coordinadores',
     },
     {
+      label: 'Estudiantes de la Facultad',
+      route: '/app/decano/estudiantes',
+      roles: ['DECANO'],
+      icon: 'estudiantes',
+    },
+    {
+      label: 'Estructura de la Facultad',
+      route: '/app/decano/estructura',
+      roles: ['DECANO'],
+      icon: 'facultad',
+    },
+    {
+      label: 'Cronograma de Sesiones',
+      route: '/app/decano/cronograma',
+      roles: ['DECANO'],
+      icon: 'horarios',
+    },
+    {
       label: 'Gestión de Docentes',
       route: '/app/coordinador/docentes',
       roles: ['COORDINADOR'],
@@ -318,6 +342,12 @@ export class DashboardLayoutComponent {
       route: '/app/coordinador/materias',
       roles: ['COORDINADOR'],
       icon: 'materias',
+    },
+    {
+      label: 'Asistencias del Programa',
+      route: '/app/coordinador/asistencias',
+      roles: ['COORDINADOR'],
+      icon: 'grupos',
     },
     {
       label: 'Mis Grupos',

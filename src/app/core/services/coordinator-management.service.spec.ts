@@ -1,7 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { CoordinatorManagementService } from './coordinator-management.service';
+import {
+  CoordinatorManagementService,
+  normalizarAsignaturaPlan,
+  normalizarPeriodoAcademico,
+  normalizarPlanEstudio,
+} from './coordinator-management.service';
 import { environment } from '../../../environments/environment';
 import {
   ActualizarDocentePayload,
@@ -332,11 +337,82 @@ describe('CoordinatorManagementService', () => {
         expect(res.exitoso).toBeTrue();
       });
 
-      const req = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/plan-1/toggle`);
+      const req = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio/plan-1/toggle-estado`);
       expect(req.request.method).toBe('PATCH');
       req.flush({ exitoso: true, datos: { ...mockPlanes[0], estado: 'INACTIVO' } });
 
       expect(service.planes().find((p) => p.id === 'plan-1')?.estado).toBe('INACTIVO');
+    });
+
+    it('normalizarAsignaturaPlan adapta codigoSemestre, créditos, área y componente del backend', () => {
+      const asig = normalizarAsignaturaPlan({
+        id: 'a-1', codigo: 'ARQ-402', nombre: 'Arquitectura', credito: 3, nombreArea: 'Software',
+        nombreComponente: 'Profesional', codigoSemestre: 'S8', idPlanEstudio: 'p-1',
+      });
+      expect(asig.semestre).toBe(8);
+      expect(asig.creditos).toBe(3);
+      expect(asig.area).toBe('Software');
+      expect(asig.componente as string).toBe('Profesional');
+      expect(asig.planEstudioId).toBe('p-1');
+      expect(normalizarAsignaturaPlan({ id: 'm', semestre: 2, creditos: 4 }).semestre).toBe(2);
+    });
+
+    it('getPeriodosAcademicos adapta la respuesta del backend (HU096-HU098) y calcula el estado por fechas', () => {
+      service.getPeriodosAcademicos().subscribe();
+
+      http.expectOne(`${environment.apiUrl}/coordinador/periodos-academicos`).flush({
+        exitoso: true,
+        datos: [
+          { id: 'per-1', idInstitucion: 'inst-1', nombreInstitucion: 'UCO', nombre: '2026-2', codigo: '20262',
+            fechaInicio: '2026-08-01', fechaFin: '2026-12-15', anio: 2026 },
+        ],
+      });
+
+      const periodo = service.periodos()[0];
+      expect(periodo.codigo).toBe('2026-2');
+      expect(periodo.nombre).toBe('Período 2026-2');
+    });
+
+    it('normalizarPeriodoAcademico calcula planeación, activo y cerrado con las fechas', () => {
+      const dto = { id: 'p', idInstitucion: 'i', nombre: '2030-1', fechaInicio: '2030-02-01', fechaFin: '2030-06-30' };
+      expect(normalizarPeriodoAcademico(dto, new Date('2030-01-15T12:00:00Z')).estado).toBe('PLANEACION');
+      expect(normalizarPeriodoAcademico(dto, new Date('2030-03-15T12:00:00Z')).estado).toBe('ACTIVO');
+      expect(normalizarPeriodoAcademico(dto, new Date('2030-03-15T12:00:00Z')).esActual).toBeTrue();
+      expect(normalizarPeriodoAcademico(dto, new Date('2030-07-15T12:00:00Z')).estado).toBe('CERRADO');
+      expect(normalizarPeriodoAcademico({ id: 'm', codigo: '2027-1', nombre: 'Mock', estado: 'INACTIVO' }).codigo).toBe('2027-1');
+    });
+
+    it('eliminarPeriodoAcademico usa DELETE y quita el período de la señal', () => {
+      service.eliminarPeriodoAcademico('per-1').subscribe();
+      const req = http.expectOne(`${environment.apiUrl}/admin/periodos-academicos/per-1`);
+      expect(req.request.method).toBe('DELETE');
+      req.flush({ exitoso: true, datos: null });
+    });
+
+    it('getPlanesEstudio adapta la respuesta del backend (HU081-HU083) a PlanEstudioItem', () => {
+      service.getPlanesEstudio().subscribe();
+
+      const req = http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio`);
+      req.flush({
+        exitoso: true,
+        datos: [
+          { id: 'p-1', idPrograma: 'pr-1', nombrePrograma: 'Ingeniería de Sistemas', inp: '2026', estaActivoPlanEstudio: false,
+            estaActivoTextoPlanEstudio: 'NO', justificacionEstado: 'Plan Estudio inactivado por el coordinador del programa.', totalSemestres: 8 },
+        ],
+      });
+
+      const plan = service.planes()[0];
+      expect(plan.estado).toBe('INACTIVO');
+      expect(plan.totalSemestres).toBe(8);
+      expect(plan.programa).toBe('Ingeniería de Sistemas');
+      expect(plan.codigo).toBe('INP-2026');
+    });
+
+    it('normalizarPlanEstudio conserva los campos que ya vienen con la forma de la pantalla', () => {
+      const plan = normalizarPlanEstudio({ ...mockPlanes[0] });
+      expect(plan).toEqual(mockPlanes[0]);
+      expect(normalizarPlanEstudio({ id: 'p-2', inp: 7, estaActivoPlanEstudio: true }).estado).toBe('VIGENTE');
+      expect(normalizarPlanEstudio({ id: 'p-3' }).totalSemestres).toBe(0);
     });
 
     it('getAsignaturasPorPlan actualiza las asignaturas del plan', () => {

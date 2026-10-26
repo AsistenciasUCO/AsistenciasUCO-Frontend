@@ -402,7 +402,7 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
     const actualizado = mockStore.planesEstudio.find((p) => p.id === id);
     return of(okResponse(actualizado, 'Plan de estudio modificado con éxito.')).pipe(delay(250));
   }
-  if (url.includes('/coordinador/planes-estudio/') && url.endsWith('/toggle') && method === 'PATCH') {
+  if (url.includes('/coordinador/planes-estudio/') && url.endsWith('/toggle-estado') && method === 'PATCH') {
     const segments = url.split('/');
     const id = segments[segments.length - 2];
     mockStore.planesEstudio = mockStore.planesEstudio.map((p) =>
@@ -411,6 +411,22 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
     const plan = mockStore.planesEstudio.find((p) => p.id === id);
     return of(okResponse(plan, `Estado del plan actualizado a ${plan?.estado}.`)).pipe(delay(200));
   }
+  if (url.includes('/coordinador/planes-estudio/') && url.endsWith('/semestres') && method === 'POST') {
+    const segments = url.split('/');
+    const id = segments[segments.length - 2];
+    mockStore.planesEstudio = mockStore.planesEstudio.map((p) =>
+      p.id === id ? { ...p, totalSemestres: p.totalSemestres + 1 } : p
+    );
+    return of(okResponse(null, 'Semestre del plan de estudio registrado(a) exitosamente.')).pipe(delay(200));
+  }
+  if (url.includes('/coordinador/planes-estudio/') && url.includes('/semestres/') && method === 'DELETE') {
+    const segments = url.split('/');
+    const id = segments[segments.length - 3];
+    mockStore.planesEstudio = mockStore.planesEstudio.map((p) =>
+      p.id === id ? { ...p, totalSemestres: Math.max(0, p.totalSemestres - 1) } : p
+    );
+    return of(okResponse(null, 'Plan de estudio actualizado(a) exitosamente.')).pipe(delay(200));
+  }
   if (url.includes('/coordinador/planes-estudio/') && url.endsWith('/asignaturas') && method === 'GET') {
     const segments = url.split('/');
     const planId = segments[segments.length - 2];
@@ -418,22 +434,126 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
     return of(okResponse(asignaturas)).pipe(delay(200));
   }
 
+  // ================= DECANO: ESTUDIANTES, ESTRUCTURA Y CRONOGRAMA (HU104/HU105/HU109/HU119/HU145) =================
+  if (url.endsWith('/decano/estudiantes') && method === 'GET') {
+    const estudiantes = [
+      {
+        idEstudiante: 'EST-MOCK-1', numeroIdentificacion: '1017000111', nombreCompleto: 'Ana Ruiz',
+        correo: 'ana.ruiz@uco.edu.co', activo: true, programas: 'Ingeniería de Sistemas', totalGrupos: 2,
+      },
+      {
+        idEstudiante: 'EST-MOCK-2', numeroIdentificacion: '1017000222', nombreCompleto: 'Luis Gómez',
+        correo: 'luis.gomez@uco.edu.co', activo: false, programas: 'Ingeniería Industrial', totalGrupos: 1,
+      },
+    ];
+    const busqueda = (req.params.get('busqueda') ?? '').toLowerCase();
+    const filtrados = estudiantes.filter(
+      (e) => !busqueda || e.nombreCompleto.toLowerCase().includes(busqueda) || e.numeroIdentificacion.includes(busqueda)
+    );
+    return of(okResponse(filtrados, undefined, filtrados.length)).pipe(delay(200));
+  }
+  if (url.includes('/decano/estudiantes/') && method === 'GET') {
+    const idEstudiante = url.split('/').pop()!;
+    const ficha = {
+      idEstudiante, numeroIdentificacion: '1017000111', nombreCompleto: 'Ana Ruiz', activo: true,
+      matriculas: [
+        {
+          idPrograma: 'PRG-1', nombrePrograma: 'Ingeniería de Sistemas', inpPlanEstudio: 20241, idAsignatura: 'ASG-1',
+          nombreAsignatura: 'Cálculo Diferencial', idGrupo: 'GRP-MOCK-1', nombreGrupo: 'Grupo 1',
+        },
+      ],
+    };
+    return of(okResponse(ficha)).pipe(delay(200));
+  }
+  if (url.endsWith('/decano/estructura') && method === 'GET') {
+    const estructura = [
+      {
+        id: 'FAC-1', nombre: 'Facultad de Ingeniería', nombreDecano: 'Decano de Prueba', activa: true,
+        programas: [
+          {
+            id: 'PRG-1', nombre: 'Ingeniería de Sistemas', nombreCoordinador: 'Coordinador de Prueba', activo: true,
+            nombreTipoPrograma: 'Pregrado', nombreModalidad: 'Presencial', nombreJornada: 'Diurna',
+            planes: [{ id: 'PLAN-1', inp: 20241, activo: true, totalSemestres: 10 }],
+          },
+        ],
+      },
+    ];
+    return of(okResponse(estructura, undefined, estructura.length)).pipe(delay(200));
+  }
+  if (url.endsWith('/decano/sesiones') && method === 'GET') {
+    const sesiones = [
+      {
+        id: 'SES-MOCK-1', nombre: 'Sesión 1', codigo: 'S-01', numeroSemana: 1, fechaHoraInicio: '2026-01-27T07:00:00',
+        fechaHoraFin: '2026-01-27T09:00:00', idGrupo: 'GRP-MOCK-1', codigoGrupo: 1, nombreGrupo: 'Grupo 1',
+        idAsignatura: 'ASG-1', nombreAsignatura: 'Cálculo Diferencial', idPrograma: 'PRG-1',
+        nombrePrograma: 'Ingeniería de Sistemas',
+      },
+    ];
+    return of(okResponse(sesiones, undefined, sesiones.length)).pipe(delay(200));
+  }
+
+  // ================= COORDINADOR: GRUPOS, SESIONES Y ASISTENCIAS (HU064/HU060/HU061) =================
+  if (url.endsWith('/coordinador/grupos') && method === 'GET') {
+    const grupos = [
+      {
+        id: 'GRP-MOCK-1', codigo: 1, nombre: 'Grupo 1', idAsignatura: 'ASG-1', nombreAsignatura: 'Cálculo Diferencial',
+        idDocente: 'DOC-1', capacidadMaxima: 30, estudiantesActivos: 2, cuposDisponibles: 28, habilitado: true,
+        inicioPeriodo: '2026-01-20', finPeriodo: '2026-06-05',
+      },
+    ];
+    return of(okResponse(grupos, undefined, grupos.length)).pipe(delay(200));
+  }
+  if (url.includes('/coordinador/grupos/') && url.endsWith('/sesiones') && method === 'GET') {
+    const idGrupo = url.split('/').slice(-2)[0];
+    const sesiones = [
+      {
+        id: 'SES-MOCK-1', idGrupo, codigoGrupo: 1, nombreGrupo: 'Grupo 1', nombre: 'Sesión 1', numero: 1, codigo: 'S-01',
+        numeroSemana: 1, fechaHoraInicio: '2026-01-27T07:00:00', fechaHoraFin: '2026-01-27T09:00:00',
+      },
+    ];
+    return of(okResponse(sesiones, undefined, sesiones.length)).pipe(delay(200));
+  }
+  if (url.includes('/coordinador/sesiones/') && url.endsWith('/asistencias') && method === 'GET') {
+    const idSesion = url.split('/').slice(-2)[0];
+    const asistencias = [
+      {
+        idDetalleAsistencia: 'DET-MOCK-1', idSesion, nombreSesion: 'Sesión 1', idEstudiante: 'EST-1',
+        numeroIdentificacion: '1017000111', nombreCompleto: 'Ana Ruiz', asistio: true, codigoRazonCausa: null,
+        nombreRazonCausa: null, fechaHoraInicio: '2026-01-27T07:00:00', fechaHoraFin: '2026-01-27T09:00:00',
+      },
+      {
+        idDetalleAsistencia: 'DET-MOCK-2', idSesion, nombreSesion: 'Sesión 1', idEstudiante: 'EST-2',
+        numeroIdentificacion: '1017000222', nombreCompleto: 'Luis Gómez', asistio: false, codigoRazonCausa: 'INJ',
+        nombreRazonCausa: 'Inasistencia injustificada', fechaHoraInicio: '2026-01-27T07:00:00',
+        fechaHoraFin: '2026-01-27T09:00:00',
+      },
+    ];
+    const asistio = req.params.get('asistio');
+    const filtradas = asistio === null ? asistencias : asistencias.filter((a) => String(a.asistio) === asistio);
+    return of(okResponse(filtradas, undefined, filtradas.length)).pipe(delay(200));
+  }
+
   // ================= COORDINADOR: PERÍODOS ACADÉMICOS =================
   if (url.endsWith('/coordinador/periodos-academicos') && method === 'GET') {
     return of(okResponse(mockStore.periodosAcademicos)).pipe(delay(200));
   }
-  if (url.endsWith('/coordinador/periodos-academicos') && method === 'POST') {
+  if (url.endsWith('/admin/periodos-academicos') && method === 'POST') {
     const body = req.body as any;
     const nuevo = { ...body, id: `PER-${mockStore.periodosAcademicos.length + 1}` };
     mockStore.periodosAcademicos = [nuevo, ...mockStore.periodosAcademicos];
     return of(okResponse(nuevo, `Período académico ${nuevo.codigo} creado exitosamente.`)).pipe(delay(250));
   }
-  if (url.includes('/coordinador/periodos-academicos/') && method === 'PUT') {
+  if (url.includes('/admin/periodos-academicos/') && method === 'PUT') {
     const id = url.split('/').pop()!;
     const body = req.body as any;
     mockStore.periodosAcademicos = mockStore.periodosAcademicos.map((p) => (p.id === id ? { ...p, ...body } : p));
     const actualizado = mockStore.periodosAcademicos.find((p) => p.id === id);
     return of(okResponse(actualizado, 'Parámetros del período académico actualizados.')).pipe(delay(250));
+  }
+  if (url.includes('/admin/periodos-academicos/') && method === 'DELETE') {
+    const id = url.split('/').pop()!;
+    mockStore.periodosAcademicos = mockStore.periodosAcademicos.filter((p) => p.id !== id);
+    return of(okResponse(null, 'Período académico eliminado exitosamente.')).pipe(delay(200));
   }
 
   // ================= RECLAMOS Y JUSTIFICACIONES =================

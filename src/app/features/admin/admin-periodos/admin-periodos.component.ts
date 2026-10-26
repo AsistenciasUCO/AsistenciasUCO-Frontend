@@ -1,0 +1,97 @@
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
+import { PeriodoAcademicoItem } from '../../../core/models/role-management.model';
+import { ToastService } from '../../../shared/components/toast/toast.component';
+import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
+import { AcademicPeriodsTabComponent } from '../../coordinator/coordinator-study-plans/components/academic-periods-tab.component';
+
+/**
+ * HU096/HU097/HU098: el período académico es único para toda la institución, por eso solo el administrador lo
+ * crea, modifica y elimina. Decano y coordinador lo consultan en sus portales.
+ */
+@Component({
+  selector: 'app-admin-periodos',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { class: 'block w-full' },
+  imports: [CommonModule, AcademicPeriodsTabComponent],
+  template: `
+    <div class="space-y-6 animate-fade-in">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-2xl border border-warm-200/80 shadow-warm-sm">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary-100 text-primary-900 border border-primary-200">
+              Administración Institucional
+            </span>
+            <span class="text-xs text-warm-400">•</span>
+            <span class="text-xs font-medium text-warm-500">Calendario Académico</span>
+          </div>
+          <h1 class="font-serif font-bold text-2xl sm:text-3xl text-warm-900 tracking-tight">
+            Períodos Académicos
+          </h1>
+          <p class="text-sm text-warm-600 mt-1">
+            El período es único para toda la institución. Un período solo puede eliminarse si no tiene grupos ni sesiones.
+          </p>
+        </div>
+        <span class="px-3.5 py-2 rounded-xl bg-warm-100 text-xs font-bold text-warm-800 border border-warm-200 self-start sm:self-auto">
+          {{ periodos().length }} Períodos
+        </span>
+      </div>
+
+      <app-academic-periods-tab
+        [periodos]="periodos()"
+        (savePeriodo)="guardarPeriodo($event)"
+        (deletePeriodo)="eliminarPeriodo($event)"
+      />
+    </div>
+  `,
+})
+export class AdminPeriodosComponent implements OnInit {
+  private coordService = inject(CoordinatorManagementService);
+  private toast = inject(ToastService);
+
+  periodos = signal<PeriodoAcademicoItem[]>(this.coordService.periodos());
+
+  ngOnInit(): void {
+    this.cargarPeriodos();
+  }
+
+  cargarPeriodos(): void {
+    this.coordService.getPeriodosAcademicos().subscribe({
+      next: (res) => this.periodos.set(res.datos || []),
+      error: (err) => this.toast.error(getApiErrorMessage(err)),
+    });
+  }
+
+  guardarPeriodo(event: { modo: 'CREAR' | 'EDITAR'; id?: string; datos: Partial<PeriodoAcademicoItem> }): void {
+    const peticion =
+      event.modo === 'CREAR'
+        ? this.coordService.crearPeriodoAcademico(event.datos)
+        : this.coordService.actualizarPeriodoAcademico(event.id ?? '', event.datos);
+    peticion.subscribe({
+      next: (res) => {
+        if (res.exitoso) {
+          this.toast.success(res.mensajeUsuario || 'Período académico guardado.');
+          this.cargarPeriodos();
+        }
+      },
+      error: (err) => this.toast.error(getApiErrorMessage(err)),
+    });
+  }
+
+  eliminarPeriodo(periodo: PeriodoAcademicoItem): void {
+    if (!confirm(`¿Eliminar el período ${periodo.codigo}? Solo es posible si no tiene grupos ni sesiones.`)) {
+      return;
+    }
+    this.coordService.eliminarPeriodoAcademico(periodo.id).subscribe({
+      next: (res) => {
+        if (res.exitoso) {
+          this.toast.success(res.mensajeUsuario || `Período ${periodo.codigo} eliminado.`);
+          this.cargarPeriodos();
+        }
+      },
+      error: (err) => this.toast.error(getApiErrorMessage(err)),
+    });
+  }
+}
