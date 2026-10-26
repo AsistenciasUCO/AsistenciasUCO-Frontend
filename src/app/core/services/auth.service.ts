@@ -109,6 +109,17 @@ function parseJwt(token: string): JwtTokenPayload | null {
   }
 }
 
+/** Identidad institucional resuelta por el backend (`GET /api/v1/auth/me`). */
+interface InstitutionalIdentity {
+  idUsuario: string;
+  roles: UserRole[];
+}
+
+type IdentityResolution =
+  | { status: 'resolved'; identity: InstitutionalIdentity }
+  | { status: 'rejected' }
+  | { status: 'unavailable' };
+
 function isValidUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_PATTERN.test(value);
 }
@@ -317,7 +328,16 @@ export class AuthService implements OnDestroy {
       try {
         const { accessToken } = await exchangeCode(this.baselineConfig(), callback.code, pending.verifier);
         const payload = parseJwt(accessToken);
-        const user = payload ? this.mapPayloadToUser(payload) : null;
+        const resolution = payload
+          ? await this.fetchInstitutionalIdentity(accessToken)
+          : ({ status: 'rejected' } as IdentityResolution);
+        if (resolution.status === 'unavailable') {
+          this.replaceBaselineUrl('/login');
+          this.authError.set(this.resolveAuthMessage('AUTH_NETWORK_ERROR'));
+          return false;
+        }
+        const user =
+          payload && resolution.status === 'resolved' ? this.mapIdentityToUser(payload, resolution.identity) : null;
         if (!user) {
           this.replaceBaselineUrl('/login');
           this.authError.set(this.resolveAuthMessage('AUTH_NO_ROLE_ASSIGNED'));
@@ -838,6 +858,56 @@ export class AuthService implements OnDestroy {
   }
 
   /**
+   * Consulta al backend la identidad institucional del Bearer. El backend es quien vincula (la primera vez, por
+   * correo verificado) `issuer + subject → Usuario.id` y devuelve el UUID y los roles efectivos: la SPA no exige
+   * `idUsuario` en el token ni envía UUID o correo alguno. Un 401/403 o una respuesta inválida es un rechazo; un
+   * fallo de red o un 5xx indica que el servicio no está disponible (no se concede sesión en ningún caso).
+   */
+  private async fetchInstitutionalIdentity(accessToken: string): Promise<IdentityResolution> {
+    let response: Response;
+    try {
+      response = await fetch(`${environment.apiUrl}/auth/me`, {
+        // API Bearer-only: no se adjuntan cookies del navegador.
+        credentials: 'omit',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+    } catch {
+      return { status: 'unavailable' };
+    }
+    if (response.status >= 500) {
+      return { status: 'unavailable' };
+    }
+    if (!response.ok) {
+      return { status: 'rejected' };
+    }
+    try {
+      const datos = (await response.json())?.datos;
+      const roles = Array.isArray(datos?.roles)
+        ? VALID_INSTITUTIONAL_ROLES.filter((role) => datos.roles.includes(role))
+        : [];
+      if (!isValidUuid(datos?.idUsuario) || roles.length === 0) {
+        return { status: 'rejected' };
+      }
+      return { status: 'resolved', identity: { idUsuario: datos.idUsuario, roles } };
+    } catch {
+      return { status: 'rejected' };
+    }
+  }
+
+  /**
+   * Construye el `User` con la identidad institucional del backend. Del JWT solo se leen datos de presentación
+   * (nombre, correo): ni el UUID ni los roles salen del token. El rol principal es el de mayor jerarquía según
+   * `VALID_INSTITUTIONAL_ROLES` y `roles` conserva todos los efectivos.
+   */
+  private mapIdentityToUser(payload: JwtTokenPayload, identity: InstitutionalIdentity): User | null {
+    const primaryRole = VALID_INSTITUTIONAL_ROLES.find((r) => identity.roles.includes(r));
+    if (!primaryRole) {
+      return null;
+    }
+    return { ...this.buildUser(payload, identity.idUsuario, primaryRole), roles: [...identity.roles] };
+  }
+
+  /**
    * Mapea el JWT institucional a un `User`. Únicamente
    * `resource_access["asistencias-api"].roles` es fuente válida de rol RBAC
    * (contrato del backend); `realm_access` y el client del frontend
@@ -857,13 +927,17 @@ export class AuthService implements OnDestroy {
       return null;
     }
 
+    return this.buildUser(payload, payload.idUsuario, primaryRole);
+  }
+
+  private buildUser(payload: JwtTokenPayload, id: string, primaryRole: UserRole): User {
     const fullName = [payload.given_name, payload.family_name].filter(Boolean).join(' ') ||
       payload.name ||
       payload.preferred_username ||
       'Usuario Institucional';
 
     return {
-      id: payload.idUsuario,
+      id,
       primerNombre: payload.given_name || fullName.split(' ')[0] || '',
       primerApellido: payload.family_name || fullName.split(' ')[1] || '',
       name: fullName,

@@ -7,7 +7,7 @@ import {
   input,
 } from '@angular/core';
 import { AuthService } from '../../core/services/auth.service';
-import { UserRole } from '../../core/models/user.model';
+import { UserRole, hasAnyRole } from '../../core/models/user.model';
 
 /**
  * Directiva estructural de control de visibilidad por rol (RBAC decorativo).
@@ -43,7 +43,7 @@ export class HasRoleDirective {
       const requiredRoles: UserRole[] = Array.isArray(required) ? required : [required];
 
       const hasAccess =
-        !!user && (requiredRoles.length === 0 || requiredRoles.includes(user.role));
+        !!user && (requiredRoles.length === 0 || hasAnyRole(user, requiredRoles));
 
       if (hasAccess && !this.hasView) {
         this.viewContainer.createEmbeddedView(this.templateRef);

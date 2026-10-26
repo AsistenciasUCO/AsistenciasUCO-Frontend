@@ -288,18 +288,44 @@ describe('AuthService', () => {
       return state;
     }
 
-    function tokenEndpointResponse(payload: Record<string, unknown>) {
-      fetchSpy.and.resolveTo({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            access_token: makeJwt(payload),
-            token_type: 'Bearer',
-            // El IdP podría devolverlos: la SPA debe descartarlos.
-            refresh_token: 'refresh-que-no-debe-guardarse',
-            id_token: 'id-token-que-no-debe-guardarse',
-          }),
-      } as Response);
+    type IdentityReply = { status: number; datos?: unknown; invalidJson?: boolean } | 'network-error';
+
+    const IDENTITY_OK: IdentityReply = { status: 200, datos: { idUsuario: VALID_UUID, roles: ['DOCENTE'] } };
+
+    /** Token endpoint del IdP y `GET /auth/me` del backend, resueltos por URL. */
+    function tokenEndpointResponse(payload: Record<string, unknown>, identity: IdentityReply = IDENTITY_OK) {
+      fetchSpy.and.callFake((url: string) => {
+        if (url.endsWith('/auth/me')) {
+          if (identity === 'network-error') {
+            return Promise.reject(new TypeError('Failed to fetch'));
+          }
+          return Promise.resolve({
+            ok: identity.status >= 200 && identity.status < 300,
+            status: identity.status,
+            json: () =>
+              identity.invalidJson
+                ? Promise.reject(new SyntaxError('Unexpected token'))
+                : Promise.resolve({ exitoso: true, datos: identity.datos }),
+          } as Response);
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              access_token: makeJwt(payload),
+              token_type: 'Bearer',
+              // El IdP podría devolverlos: la SPA debe descartarlos.
+              refresh_token: 'refresh-que-no-debe-guardarse',
+              id_token: 'id-token-que-no-debe-guardarse',
+            }),
+        } as Response);
+      });
+    }
+
+    async function completeCallback(): Promise<boolean> {
+      const state = pendingLogin();
+      window.history.replaceState({}, '', `/login?code=code-1&state=${state}`);
+      return service.initKeycloak();
     }
 
     it('callback válido: intercambia el código con PKCE y deja el access token solo en memoria', async () => {
@@ -313,7 +339,7 @@ describe('AuthService', () => {
       expect(service.currentUser()?.role).toBe('DOCENTE');
       expect(service.currentUser()?.id).toBe(VALID_UUID);
       expect(service.isAuthenticated()).toBeTrue();
-      const [url, init] = fetchSpy.calls.mostRecent().args as [string, RequestInit];
+      const [url, init] = fetchSpy.calls.first().args as [string, RequestInit];
       expect(url).toBe(`${ISSUER}/protocol/openid-connect/token`);
       expect(init.credentials).toBe('omit');
       const body = new URLSearchParams(String(init.body));
@@ -358,20 +384,137 @@ describe('AuthService', () => {
       expect(window.location.search).toBe('');
     });
 
-    it('token sin rol institucional o sin idUsuario UUID no inicia sesión', async () => {
-      for (const override of [
-        { resource_access: { 'asistencias-api': { roles: [] } } },
-        { idUsuario: 'no-es-uuid' },
-      ]) {
-        const state = pendingLogin();
-        window.history.replaceState({}, '', `/login?code=code-1&state=${state}`);
-        tokenEndpointResponse(basePayload(override));
+    it('primera vinculación: sin claim idUsuario en el JWT el UUID institucional lo entrega el backend', async () => {
+      const payload = basePayload();
+      delete (payload as Record<string, unknown>)['idUsuario'];
+      tokenEndpointResponse(payload);
 
-        expect(await service.initKeycloak()).toBeFalse();
+      expect(await completeCallback()).toBeTrue();
+
+      expect(service.currentUser()?.id).toBe(VALID_UUID);
+      expect(service.currentUser()?.role).toBe('DOCENTE');
+      const identityCall = fetchSpy.calls.mostRecent().args as [string, RequestInit];
+      expect(identityCall[0]).toBe(`${environment.apiUrl}/auth/me`);
+      expect(identityCall[1].credentials).toBe('omit');
+      expect((identityCall[1].headers as Record<string, string>)['Authorization']).toBe(`Bearer ${service.token()}`);
+      expect(identityCall[1].method).toBeUndefined();
+      expect(identityCall[1].body).toBeUndefined();
+      expect(identityCall[0]).not.toContain(VALID_UUID);
+      expect(identityCall[0]).not.toContain('docente@uco.edu.co');
+    });
+
+    it('un claim idUsuario del token nunca sustituye al UUID que resuelve el backend', async () => {
+      const otroUuid = 'ffffffff-e5f6-4789-9abc-1234567890ab';
+      tokenEndpointResponse(basePayload({ idUsuario: otroUuid }));
+
+      expect(await completeCallback()).toBeTrue();
+
+      expect(service.currentUser()?.id).toBe(VALID_UUID);
+    });
+
+    it('rol efectivo y UUID salen del backend aunque el token traiga otros roles', async () => {
+      tokenEndpointResponse(
+        basePayload({ resource_access: { 'asistencias-api': { roles: ['ADMINISTRADOR'] } } }),
+        { status: 200, datos: { idUsuario: VALID_UUID, roles: ['ESTUDIANTE'] } }
+      );
+
+      expect(await completeCallback()).toBeTrue();
+
+      expect(service.currentUser()?.role).toBe('ESTUDIANTE');
+      expect(service.currentUser()?.roles).toEqual(['ESTUDIANTE']);
+    });
+
+    it('varios roles efectivos: rol principal por jerarquía y todos conservados', async () => {
+      tokenEndpointResponse(basePayload(), {
+        status: 200,
+        datos: { idUsuario: VALID_UUID, roles: ['ESTUDIANTE', 'COORDINADOR', 'DOCENTE', 'ROL_AJENO'] },
+      });
+
+      expect(await completeCallback()).toBeTrue();
+
+      expect(service.currentUser()?.role).toBe('COORDINADOR');
+      expect(service.currentUser()?.roles).toEqual(['COORDINADOR', 'DOCENTE', 'ESTUDIANTE']);
+    });
+
+    it('el backend rechaza la identidad (401/403): no hay sesión y se informa cuenta sin acceso', async () => {
+      for (const status of [401, 403]) {
+        tokenEndpointResponse(basePayload(), { status });
+
+        expect(await completeCallback()).toBeFalse();
         expect(service.token()).toBeNull();
         expect(service.currentUser()).toBeNull();
-        expect(service.authError()).toBeTruthy();
+        expect(service.authError()).toContain('rol o identidad');
+        expect(dumpStorage(localStorage) + dumpStorage(sessionStorage)).not.toContain('eyJ');
       }
+    });
+
+    it('respuesta de identidad sin roles, con UUID inválido o malformada no inicia sesión', async () => {
+      const respuestas: IdentityReply[] = [
+        { status: 200, datos: { idUsuario: VALID_UUID, roles: [] } },
+        { status: 200, datos: { idUsuario: VALID_UUID, roles: ['ROL_AJENO'] } },
+        { status: 200, datos: { idUsuario: 'no-es-uuid', roles: ['DOCENTE'] } },
+        { status: 200, datos: { roles: ['DOCENTE'] } },
+        { status: 200, datos: { idUsuario: VALID_UUID, roles: 'DOCENTE' } },
+        { status: 200 },
+        { status: 200, invalidJson: true },
+      ];
+      for (const respuesta of respuestas) {
+        tokenEndpointResponse(basePayload(), respuesta);
+
+        expect(await completeCallback()).toBeFalse();
+        expect(service.token()).toBeNull();
+        expect(service.currentUser()).toBeNull();
+        expect(service.authError()).toContain('rol o identidad');
+      }
+    });
+
+    it('backend o red no disponibles (5xx / error de red): sin sesión y mensaje de conectividad', async () => {
+      for (const reply of [{ status: 503 }, 'network-error'] as IdentityReply[]) {
+        tokenEndpointResponse(basePayload(), reply);
+
+        expect(await completeCallback()).toBeFalse();
+        expect(service.token()).toBeNull();
+        expect(service.currentUser()).toBeNull();
+        expect(service.authError()).toContain('conexión');
+      }
+    });
+
+    it('restauración tras F5: el callback silencioso reconstruye usuario y roles desde el backend', async () => {
+      const payload = basePayload();
+      delete (payload as Record<string, unknown>)['idUsuario'];
+      tokenEndpointResponse(payload, {
+        status: 200,
+        datos: { idUsuario: VALID_UUID, roles: ['DOCENTE', 'ESTUDIANTE'] },
+      });
+      savePending({
+        state: 'state-f5',
+        verifier: 'verifier-f5',
+        returnUrl: '/app/docente/grupos',
+        silent: true,
+        createdAt: Date.now(),
+      });
+      window.history.replaceState({}, '', '/app/docente/grupos?code=code-f5&state=state-f5');
+
+      expect(await service.initKeycloak()).toBeTrue();
+
+      expect(service.currentUser()?.id).toBe(VALID_UUID);
+      expect(service.currentUser()?.roles).toEqual(['DOCENTE', 'ESTUDIANTE']);
+      expect(window.location.pathname).toBe('/app/docente/grupos');
+      expect(sessionStorage.getItem(SESSION_REFRESH_KEY)).toBeNull();
+    });
+
+    it('token con payload ilegible no consulta al backend', async () => {
+      fetchSpy.and.callFake(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ access_token: 'no-es-un-jwt', refresh_token: 'x' }),
+        } as Response)
+      );
+
+      expect(await completeCallback()).toBeFalse();
+
+      expect(fetchSpy.calls.allArgs().some(([url]) => String(url).endsWith('/auth/me'))).toBeFalse();
+      expect(service.isAuthenticated()).toBeFalse();
     });
 
     it('sin callback intenta una re-autenticación silenciosa (prompt=none, S256) y no se resuelve', async () => {

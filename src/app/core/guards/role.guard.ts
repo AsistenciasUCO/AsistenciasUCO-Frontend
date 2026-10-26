@@ -1,7 +1,7 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router, ActivatedRouteSnapshot } from '@angular/router';
 import { AuthService } from '../services/auth.service';
-import { UserRole } from '../models/user.model';
+import { UserRole, hasAnyRole } from '../models/user.model';
 
 export const roleGuard: CanActivateFn = (route: ActivatedRouteSnapshot) => {
   const authService = inject(AuthService);
@@ -17,7 +17,7 @@ export const roleGuard: CanActivateFn = (route: ActivatedRouteSnapshot) => {
   // Normalizar rol
   const userRole = currentUser.role === 'ADMIN' ? 'ADMINISTRADOR' : currentUser.role;
 
-  if (allowedRoles.length === 0 || allowedRoles.includes(userRole)) {
+  if (allowedRoles.length === 0 || hasAnyRole(currentUser, allowedRoles)) {
     return true;
   }
 

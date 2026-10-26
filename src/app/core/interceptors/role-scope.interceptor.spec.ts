@@ -101,4 +101,10 @@ describe('roleScopeInterceptor', () => {
       expect(rolPuedeLeer('ADMIN', 'admin')).toBeTrue();
     });
   });
+
+  it('rolPuedeLeer con varios roles permite el prefijo si alguno lo puede usar', () => {
+    expect(rolPuedeLeer(['ESTUDIANTE', 'DOCENTE'], 'docente')).toBeTrue();
+    expect(rolPuedeLeer(['ESTUDIANTE', 'DOCENTE'], 'admin')).toBeFalse();
+    expect(rolPuedeLeer(['ESTUDIANTE'], 'auth')).toBeTrue();
+  });
 });
