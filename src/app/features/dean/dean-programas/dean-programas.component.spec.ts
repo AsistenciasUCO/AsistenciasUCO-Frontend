@@ -45,12 +45,34 @@ describe('DeanProgramasComponent', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
 
-    http.match(`${environment.apiUrl}/coordinador/planes-estudio`).forEach((req) =>
-      req.flush({ exitoso: true, datos: mockPlanes })
-    );
-    http.match(`${environment.apiUrl}/coordinador/periodos-academicos`).forEach((req) =>
-      req.flush({ exitoso: true, datos: [] })
-    );
+    // HU108: los planes salen de la estructura de la facultad del decano (no de la ruta del coordinador).
+    http.expectOne(`${environment.apiUrl}/decano/estructura`).flush({
+      exitoso: true,
+      datos: [
+        {
+          id: 'FAC-1',
+          nombre: 'Facultad de Ingeniería',
+          nombreDecano: 'Decano',
+          activa: true,
+          programas: [
+            {
+              id: 'PRG-1',
+              nombre: 'Ingeniería de Sistemas',
+              nombreCoordinador: null,
+              activo: true,
+              nombreTipoPrograma: null,
+              nombreModalidad: null,
+              nombreJornada: null,
+              planes: [
+                { id: 'PLAN-SIS-2024', inp: 20241, activo: true, totalSemestres: 10 },
+                { id: 'PLAN-SIS-2019', inp: 20191, activo: false, totalSemestres: 9 },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    http.expectNone(`${environment.apiUrl}/coordinador/planes-estudio`);
     http.match((r) => r.url === `${environment.apiUrl}/decano/programas`).forEach((req) =>
       req.flush({ exitoso: true, datos: [], total: 0 })
     );
@@ -66,10 +88,30 @@ describe('DeanProgramasComponent', () => {
   });
 
   it('debe cargar los planes de estudio y navegar a la malla por ruta', () => {
-    expect(component.planes().length).toBe(1);
+    expect(component.planes().length).toBe(2);
     expect(component.planesVigentes()).toBe(1);
+    expect(component.planes()[0].codigo).toBe('INP-20241');
+    expect(component.planes()[0].programa).toBe('Ingeniería de Sistemas');
+    expect(component.planes()[1].estado).toBe('INACTIVO');
 
     component.verPlanEstudio(mockPlanes[0]);
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/app/decano/programas', 'PLAN-SIS-2024']);
+  });
+});
+
+describe('DeanProgramasComponent sin estructura', () => {
+  it('deja la lista de planes vacía si la estructura falla', () => {
+    TestBed.configureTestingModule({
+      imports: [DeanProgramasComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting(), { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate']) }],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const fixture = TestBed.createComponent(DeanProgramasComponent);
+    fixture.detectChanges();
+    http
+      .expectOne(`${environment.apiUrl}/decano/estructura`)
+      .flush({ exitoso: false }, { status: 403, statusText: 'Forbidden' });
+    expect(fixture.componentInstance.planes()).toEqual([]);
+    http.match(() => true).forEach((req) => req.flush({ exitoso: true, datos: [] }));
   });
 });

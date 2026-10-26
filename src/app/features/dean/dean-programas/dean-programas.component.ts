@@ -2,7 +2,7 @@ import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } 
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
+import { DeanFacultadService, planesDeLaEstructura } from '../../../core/services/dean-facultad.service';
 import { PlanEstudioItem } from '../../../core/models/role-management.model';
 import { BadgeComponent } from '../../../shared/components/badge/badge.component';
 import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
@@ -170,10 +170,10 @@ import { DeanProgramasGestionComponent } from './components/dean-programas-gesti
   `,
 })
 export class DeanProgramasComponent implements OnInit {
-  private coordService = inject(CoordinatorManagementService);
+  private deanService = inject(DeanFacultadService);
   private router = inject(Router);
 
-  planes = signal<PlanEstudioItem[]>(this.coordService.planes());
+  planes = signal<PlanEstudioItem[]>([]);
   filtroTexto = signal('');
   currentPage = signal(1);
   pageSize = signal(6);
@@ -203,9 +203,11 @@ export class DeanProgramasComponent implements OnInit {
     return list.slice(start, start + this.pageSize());
   });
 
+  /** HU108: los planes salen de la estructura de la facultad del decano (la ruta del coordinador no admite DECANO). */
   ngOnInit(): void {
-    this.coordService.getPlanesEstudio().subscribe({
-      next: (res) => this.planes.set(res.datos || []),
+    this.deanService.getEstructura().subscribe({
+      next: (res) => this.planes.set(planesDeLaEstructura(res.datos || [])),
+      error: () => this.planes.set([]),
     });
   }
 

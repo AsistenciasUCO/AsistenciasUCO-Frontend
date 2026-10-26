@@ -1,8 +1,10 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
+import { AsignaturaPlanItem, PlanEstudioItem } from '../models/role-management.model';
+import { normalizarAsignaturaPlan } from './coordinator-management.service';
 import {
   EstudianteFacultadItem,
   FacultadNodo,
@@ -13,7 +15,7 @@ import {
 type Filtro = Record<string, string | number | boolean | null | undefined>;
 
 /**
- * HU104/HU105/HU109/HU119/HU145: consultas de solo lectura del decano sobre su facultad. El backend limita los
+ * HU104/HU105/HU108/HU109/HU119/HU145: consultas de solo lectura del decano sobre su facultad. El backend limita los
  * datos a la facultad del decano autenticado; los errores se propagan para que la UI muestre el mensaje.
  */
 @Injectable({ providedIn: 'root' })
@@ -41,6 +43,13 @@ export class DeanFacultadService {
     return this.http.get<ApiResponse<FacultadNodo[]>>(`${this.base}/estructura`);
   }
 
+  /** HU108: malla (asignaturas) de un plan de un programa de la facultad del decano. */
+  getAsignaturasPlan(idPlan: string): Observable<ApiResponse<AsignaturaPlanItem[]>> {
+    return this.http
+      .get<ApiResponse<AsignaturaPlanItem[]>>(`${this.base}/planes-estudio/${idPlan}/asignaturas`)
+      .pipe(map((res) => (res.datos ? { ...res, datos: res.datos.map(normalizarAsignaturaPlan) } : res)));
+  }
+
   getSesiones(filtro: {
     desde?: string | null;
     hasta?: string | null;
@@ -50,6 +59,32 @@ export class DeanFacultadService {
   }): Observable<ApiResponse<SesionFacultadItem[]>> {
     return this.http.get<ApiResponse<SesionFacultadItem[]>>(`${this.base}/sesiones`, { params: parametros(filtro) });
   }
+}
+
+/**
+ * HU108: los planes de los programas de la facultad (desde la estructura del decano) con la forma que usan las
+ * pantallas de planes. Créditos y asignaturas no vienen en la estructura: la malla los calcula.
+ */
+export function planesDeLaEstructura(facultades: FacultadNodo[]): PlanEstudioItem[] {
+  return facultades.flatMap((f) =>
+    f.programas.flatMap((p) =>
+      p.planes.map(
+        (pl): PlanEstudioItem => ({
+          id: pl.id,
+          codigo: pl.inp != null ? `INP-${pl.inp}` : '',
+          nombre: pl.inp != null ? `Plan ${pl.inp}` : 'Plan de estudio',
+          anioVigencia: Number(String(pl.inp ?? '').slice(0, 4)) || 0,
+          programa: p.nombre,
+          facultad: f.nombre,
+          totalCreditos: 0,
+          totalSemestres: pl.totalSemestres ?? 0,
+          totalAsignaturas: 0,
+          estado: pl.activo ? 'VIGENTE' : 'INACTIVO',
+          descripcion: '',
+        })
+      )
+    )
+  );
 }
 
 /** Omite los filtros vacios para que el backend aplique sus valores por defecto. */
