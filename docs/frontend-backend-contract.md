@@ -68,7 +68,7 @@ No se envían `grupoId`, `studentId`, `status`, `notes` ni `observaciones`. El f
 
 El stream es `GET /api/v1/realtime/stream?grupoId={UUID}` y publica `ASISTENCIAS_SESION_ACTUALIZADAS`. El detalle de lifecycle, scope y reconexión está en `docs/frontend-realtime.md`.
 
-## Coordinación, decanatura y estudiante — HU081-HU083, HU096-HU098, HU060-HU064, HU104-HU145, HU108 y HU010/HU011 (2026-10-26)
+## Coordinación, decanatura, estudiante y docente — HU081-HU083, HU096-HU098, HU060-HU064, HU104-HU145, HU108, HU010/HU011 y HU051 (2026-10-26/27)
 
 Contrato completo de cada vertical en el `CONTRACT.md` del work item homónimo del backend; aquí solo el consumo del frontend. Todas las listas usan `ApiResponse<T[]>` con `total`; los errores se muestran con `getApiErrorMessage`.
 
@@ -80,6 +80,7 @@ Contrato completo de cada vertical en el `CONTRACT.md` del work item homónimo d
 | `decano/estudiantes`, `decano/estructura`, `decano/cronograma` (HU104, HU105, HU109, HU119, HU145) | `GET /api/v1/decano/estudiantes`, `/estudiantes/{id}`, `/estructura`, `/sesiones` | Servicio propio `DeanFacultadService`; la estructura llega como árbol Facultad → Programa → Plan. |
 | `decano/programas` y `decano/programas/:planId` (HU108) | `GET /api/v1/decano/estructura` (planes) y `GET /api/v1/decano/planes-estudio/{id}/asignaturas` (malla) | No se usan rutas `/coordinador/**` desde pantallas del decano: `SecurityConfig` no admite DECANO allí. (Rama `feature/HU108-malla-plan-decano`.) |
 | `estudiante/reclamos` (HU010/HU011, consulta) | `GET /api/v1/estudiante/reclamos` (`estado`, `pagina`, `tamano`) y `GET /api/v1/archivos/{fileId}` (soporte) | `AttendanceClaimService.getReclamosEstudiante` + `ClaimMapper.fromReclamoEstudiante` (mismo mapeo que la bandeja docente, sin datos del estudiante; instantes UTC en la zona IANA del usuario). Sin toast global: la vista muestra el error (403 si el usuario no es estudiante). Eliminar espera TD-059. |
+| Hub del grupo del docente → padrón → "Retirar" (HU051) | `POST /api/v1/docente/grupos/{grupoId}/estudiantes/{estudianteId}/retiro` `{motivo}` | `GroupService.retirarEstudiante` sin toast global; `TeacherRetiroEstudianteModalComponent` exige motivo (1..500) y muestra el error del backend (403/404/409); tras el retiro se recarga el padrón (`GET /grupos/{id}/estudiantes`). |
 
 ## Configuración
 

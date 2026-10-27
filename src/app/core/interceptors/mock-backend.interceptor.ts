@@ -610,6 +610,10 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
     mockStore.solicitudesRevision = mockStore.solicitudesRevision.filter((r) => r.id !== id);
     return of(okResponse(true, 'Solicitud de revisión eliminada.')).pipe(delay(200));
   }
+  if (url.includes('/docente/grupos/') && url.endsWith('/retiro') && method === 'POST') {
+    // HU051: el retiro devuelve ApiDataResponse<Void>; el padrón se recarga desde su propio endpoint.
+    return of(okResponse(null, 'El estudiante fue retirado del grupo.')).pipe(delay(250));
+  }
   if (url.includes('/docente/reclamos/') && method === 'PATCH') {
     const id = url.split('/').pop()!;
     const body = req.body as any;
