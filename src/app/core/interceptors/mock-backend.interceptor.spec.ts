@@ -347,5 +347,15 @@ describe('mockBackendInterceptor', () => {
     expect(eliminado?.exitoso).toBeTrue();
     expect(mockStore.periodosAcademicos.length).toBe(total);
   }));
+
+  it('HU051 RT-09 simula el retiro de un estudiante por el docente', fakeAsync(() => {
+    auth.setMockMode(true);
+    let res: any;
+    httpClient
+      .post(`${environment.apiUrl}/docente/grupos/grp-1/estudiantes/est-1/retiro`, { motivo: 'Motivo QA' })
+      .subscribe((r) => (res = r));
+    tick(300);
+    expect(res?.exitoso).toBeTrue();
+  }));
 });
 

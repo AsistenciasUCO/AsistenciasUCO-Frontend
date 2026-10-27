@@ -447,4 +447,30 @@ describe('TeacherGruposComponent', () => {
 
     expect(courseService.actualizarGrupo).toHaveBeenCalled();
   });
+
+  it('HU051 RT-11 abre el modal de retiro con el estudiante y, tras retirarlo, recarga el padrón', () => {
+    component.selectedCourse.set(course);
+    component.abrirModalRetiro({ idEstudiante: 'est-1', nombreCompleto: 'Ana Gómez' });
+    expect(component.estudianteARetirar()).toEqual({ idEstudiante: 'est-1', nombreCompleto: 'Ana Gómez' });
+
+    studentService.getStudentsByGroup.calls.reset();
+    component.onEstudianteRetirado();
+
+    expect(component.estudianteARetirar()).toBeNull();
+    expect(studentService.getStudentsByGroup).toHaveBeenCalledWith('crs-1');
+  });
+
+  it('HU051 RT-12 acepta la forma heredada (studentId) y no abre el modal sin identificador', () => {
+    component.abrirModalRetiro({ studentId: 'est-2', studentName: 'Luis' });
+    expect(component.estudianteARetirar()).toEqual({ idEstudiante: 'est-2', nombreCompleto: 'Luis' });
+
+    component.estudianteARetirar.set(null);
+    component.abrirModalRetiro({ nombreCompleto: 'Sin id' });
+    expect(component.estudianteARetirar()).toBeNull();
+
+    component.selectedCourse.set(null);
+    studentService.getStudentsByGroup.calls.reset();
+    component.onEstudianteRetirado();
+    expect(studentService.getStudentsByGroup).not.toHaveBeenCalled();
+  });
 });

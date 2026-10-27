@@ -90,4 +90,27 @@ describe('TeacherRetiroEstudianteModalComponent (HU051)', () => {
     expect(closed).toHaveBeenCalled();
     expect(component.motivo()).toBe('');
   });
+
+  it('RT-13 sin grupo o mientras envía no llama al backend', () => {
+    fixture.componentRef.setInput('grupoId', null);
+    component.motivo.set('Motivo');
+    component.confirmar();
+    http.expectNone(URL_RETIRO);
+
+    fixture.componentRef.setInput('grupoId', 'grp-1');
+    component.enviando.set(true);
+    component.confirmar();
+    http.expectNone(URL_RETIRO);
+  });
+
+  it('RT-14 sin nombre usa un texto genérico en el aviso', () => {
+    fixture.componentRef.setInput('estudiante', { idEstudiante: 'est-1' });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Estudiante');
+    component.motivo.set('Motivo');
+    component.confirmar();
+    http.expectOne(URL_RETIRO).flush({ exitoso: true, datos: null });
+    expect(toastSpy.success).toHaveBeenCalledWith('El estudiante fue retirado del grupo.');
+  });
+
 });

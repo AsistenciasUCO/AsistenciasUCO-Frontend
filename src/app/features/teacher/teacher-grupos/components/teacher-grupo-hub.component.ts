@@ -201,6 +201,7 @@ import { TeacherGrupoSabanaComponent } from './teacher-grupo-sabana.component';
             [estudiantes]="estudiantes()"
             [cargando]="cargandoEstudiantes()"
             [curso]="selectedCourse()"
+            (retirar)="retirarEstudiante.emit($event)"
           />
         }
 

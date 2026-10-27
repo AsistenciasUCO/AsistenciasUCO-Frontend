@@ -71,7 +71,7 @@ describe('TeacherGrupoEstudiantesComponent', () => {
     expect(texto).toContain('1017001');
     expect(texto).toContain('inactivo');
     const botones = fixture.nativeElement.querySelectorAll('button[data-accion="retirar"]');
-    expect(botones.length).toBe(1);
+    expect(botones).toHaveSize(1);
     botones[0].click();
     expect(retirar).toHaveBeenCalledWith(jasmine.objectContaining({ idEstudiante: 'est-1' }));
   });
