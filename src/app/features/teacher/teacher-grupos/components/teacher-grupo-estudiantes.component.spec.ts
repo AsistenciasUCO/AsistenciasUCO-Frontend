@@ -57,6 +57,25 @@ describe('TeacherGrupoEstudiantesComponent', () => {
     expect(text).toContain('2 de 30 Cupos');
   });
 
+  it('HU051 RT-07 muestra la forma del backend y solo los activos tienen "Retirar"', () => {
+    const retirar = jasmine.createSpy('retirar');
+    component.retirar.subscribe(retirar);
+    fixture.componentRef.setInput('estudiantes', [
+      { id: 'm-1', idEstudiante: 'est-1', nombreCompleto: 'Ana Gómez', documento: '1017001', codigoEstado: 'A', nombreEstado: 'activo' },
+      { id: 'm-2', idEstudiante: 'est-2', nombreCompleto: 'Luis Ruiz', documento: '1017003', codigoEstado: 'I', nombreEstado: 'inactivo' },
+    ]);
+    fixture.detectChanges();
+
+    const texto = fixture.nativeElement.textContent as string;
+    expect(texto).toContain('Ana Gómez');
+    expect(texto).toContain('1017001');
+    expect(texto).toContain('inactivo');
+    const botones = fixture.nativeElement.querySelectorAll('button[data-accion="retirar"]');
+    expect(botones.length).toBe(1);
+    botones[0].click();
+    expect(retirar).toHaveBeenCalledWith(jasmine.objectContaining({ idEstudiante: 'est-1' }));
+  });
+
   it('muestra estado cargando cuando cargando es true', () => {
     fixture.componentRef.setInput('cargando', true);
     fixture.detectChanges();
