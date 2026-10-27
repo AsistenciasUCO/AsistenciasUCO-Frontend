@@ -185,7 +185,9 @@ describe('OverviewComponent', () => {
     adminIndicatorsSpy.consultarKpis.and.returnValue(of({ exitoso: true, datos: { totalProgramas: 4 } as any }));
 
     deanIndicatorsSpy = jasmine.createSpyObj('DeanIndicatorsService', ['consultarKpis']);
-    deanIndicatorsSpy.consultarKpis.and.returnValue(of({ exitoso: true, datos: { porcentajeAsistencia: 82.86 } as any }));
+    deanIndicatorsSpy.consultarKpis.and.returnValue(
+      of({ exitoso: true, datos: { porcentajeAsistencia: 82.86, gruposActivos: 5, nombrePeriodoAcademico: '2026-2' } as any })
+    );
 
     coordinatorServiceSpy = jasmine.createSpyObj('CoordinatorManagementService', [
       'getPlanesEstudio',
@@ -317,7 +319,11 @@ describe('OverviewComponent', () => {
     expect(deanServiceSpy.getCoordinadores).toHaveBeenCalled();
     expect(component.coordinadores().length).toBe(1);
     expect(component.totalDocentesFacultad()).toBe(10);
-    expect(component.totalGruposFacultad()).toBe(15);
+    // DASH-13: los grupos en curso son los activos del período vigente de la facultad, no la suma por coordinador.
+    expect(component.gruposActivosFacultad()).toBe(5);
+    expect(component.periodoFacultad()).toBe('2026-2');
+    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(texto).not.toContain('Semestre 2026-II');
     expect(component.isLoading()).toBeFalse();
   });
 
@@ -341,8 +347,10 @@ describe('OverviewComponent', () => {
     deanIndicatorsSpy.consultarKpis.and.returnValue(throwError(() => ({ status: 403 })));
     createComponentWithRole('DECANO');
     expect(component.porcentajeAsistenciaFacultad()).toBeNull();
+    expect(component.gruposActivosFacultad()).toBeNull();
     expect(component.coordinadores().length).toBe(1);
     expect(component.isLoading()).toBeFalse();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Sin período vigente');
   });
 
   it('debe manejar error al cargar coordinadores para rol DECANO', () => {
