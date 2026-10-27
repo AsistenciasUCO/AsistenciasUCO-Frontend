@@ -53,6 +53,7 @@ Control centralizado de sesiones y registro de asistencia en aula.
   - **Componente:** [`TeacherGruposComponent`](file:///c:/Proyectos/GestioAsistencia/GestioAsistenciaFrontend/src/app/features/teacher/teacher-grupos/teacher-grupos.component.ts)
   - **Función:** Lista todos los cursos del docente; al hacer clic en un grupo navega de inmediato a `/app/asistencia?courseId=<id>` (Vista Bento Grid).
   - **Padrón del grupo (HU051):** en el hub del grupo, `TeacherGrupoEstudiantesComponent` muestra el estado de cada matrícula y el botón "Retirar" (solo activas), que abre `TeacherRetiroEstudianteModalComponent` (motivo obligatorio; `POST /api/v1/docente/grupos/{grupoId}/estudiantes/{estudianteId}/retiro`).
+  - **Solicitudes de ingreso (HU053-HU055):** pestaña del hub con `TeacherGrupoSolicitudesComponent` (cupo disponible, orden de llegada, lista de espera, Aceptar / Rechazar con motivo). El enlace de auto-matrícula de `TeacherMatriculaModalComponent` apunta a `/app/estudiante/solicitudes?grupo={id}`.
 - **Horarios del Docente:**
   - **Ruta:** `/app/docente/horarios`
   - **Componente:** `TeacherScheduleComponent`
@@ -81,6 +82,9 @@ Control centralizado de sesiones y registro de asistencia en aula.
 - **Mis Reclamos (HU010/HU011, consulta):**
   - **Ruta:** `/app/estudiante/reclamos` (menú ESTUDIANTE "Mis Reclamos")
   - **Componente:** `StudentClaimsComponent` (`features/student/student-claims`): solicitudes propias con estado, respuesta del docente y soporte; filtro por estado y paginación del servidor; descarga del soporte por `GET /archivos/{fileId}`.
+- **Solicitudes de Ingreso (HU053/HU055):**
+  - **Ruta:** `/app/estudiante/solicitudes` (menú ESTUDIANTE "Solicitudes de Ingreso"; acepta `?grupo={id}`)
+  - **Componente:** `StudentEnrollmentRequestsComponent` (`features/student/student-enrollment-requests`): solicitar el ingreso, ver estado y motivo de rechazo, retirar solicitudes abiertas.
 
 ---
 

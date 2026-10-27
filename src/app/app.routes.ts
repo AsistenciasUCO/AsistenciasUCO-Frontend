@@ -402,6 +402,15 @@ export const routes: Routes = [
             (m) => m.StudentClaimsComponent
           ),
       },
+      {
+        path: 'estudiante/solicitudes',
+        canActivate: [roleGuard],
+        data: { roles: ['ESTUDIANTE'] },
+        loadComponent: () =>
+          import('./features/student/student-enrollment-requests/student-enrollment-requests.component').then(
+            (m) => m.StudentEnrollmentRequestsComponent
+          ),
+      },
     ],
   },
   {
