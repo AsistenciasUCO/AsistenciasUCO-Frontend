@@ -13,6 +13,28 @@ import { SolicitudMatriculaItem, PlanEstudioItem } from '../models/role-manageme
 import { AuthService } from '../services/auth.service';
 import { environment } from '../../../environments/environment';
 
+/** HU053-HU055: solicitudes de ingreso a grupo creadas durante la sesion mock (forma del backend). */
+interface SolicitudIngresoMock {
+  id: string;
+  grupoId: string;
+  grupoCodigo: number;
+  grupoNombre: string;
+  asignaturaId: string;
+  asignaturaNombre: string;
+  docenteNombre: string;
+  estudianteId: string;
+  estudianteNombre: string;
+  numeroIdentificacion: number;
+  estado: string;
+  fechaSolicitudUtc: string;
+  fechaResolucionUtc: string | null;
+  motivoRechazo: string | null;
+  posicionEspera: number | null;
+  capacidadGrupo: number;
+  cuposDisponibles: number;
+}
+const solicitudesIngresoMock: SolicitudIngresoMock[] = [];
+
 function okResponse<T>(datos: T, mensajeUsuario?: string, total?: number): HttpResponse<ApiResponse<T>> {
   return new HttpResponse<ApiResponse<T>>({
     status: 200,
@@ -609,6 +631,53 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
     const id = url.split('/').pop()!;
     mockStore.solicitudesRevision = mockStore.solicitudesRevision.filter((r) => r.id !== id);
     return of(okResponse(true, 'Solicitud de revisión eliminada.')).pipe(delay(200));
+  }
+  // HU053-HU055: solicitudes de ingreso a grupo (misma forma que el backend; estado en memoria de la sesión mock).
+  if (url.endsWith('/estudiante/solicitudes-matricula') && method === 'POST') {
+    const grupoId = (req.body as { grupoId?: string } | null)?.grupoId ?? '';
+    const solicitud = {
+      id: `00000000-0000-4000-9000-${String(Date.now()).slice(-12).padStart(12, '0')}`,
+      grupoId,
+      grupoCodigo: 1,
+      grupoNombre: 'Grupo Mock',
+      asignaturaId: 'asg-mock',
+      asignaturaNombre: 'Asignatura Mock',
+      docenteNombre: 'Docente Mock',
+      estudianteId: 'est-mock',
+      estudianteNombre: 'Estudiante Mock',
+      numeroIdentificacion: 1000000,
+      estado: 'PENDIENTE',
+      fechaSolicitudUtc: new Date().toISOString(),
+      fechaResolucionUtc: null as string | null,
+      motivoRechazo: null as string | null,
+      posicionEspera: null as number | null,
+      capacidadGrupo: 30,
+      cuposDisponibles: 1,
+    };
+    solicitudesIngresoMock.unshift(solicitud);
+    return of(okResponse({ id: solicitud.id }, 'La solicitud de ingreso al grupo fue registrada.')).pipe(delay(250));
+  }
+  if (url.endsWith('/estudiante/solicitudes-matricula') && method === 'GET') {
+    return of(okResponse(solicitudesIngresoMock, undefined, solicitudesIngresoMock.length)).pipe(delay(250));
+  }
+  if (url.includes('/estudiante/solicitudes-matricula/') && url.endsWith('/retiro') && method === 'POST') {
+    const id = url.split('/').slice(-2)[0];
+    solicitudesIngresoMock.filter((s) => s.id === id).forEach((s) => (s.estado = 'RETIRADA'));
+    return of(okResponse(null, 'La solicitud fue retirada.')).pipe(delay(200));
+  }
+  if (url.includes('/docente/grupos/') && url.endsWith('/solicitudes-ingreso') && method === 'GET') {
+    return of(okResponse(solicitudesIngresoMock, undefined, solicitudesIngresoMock.length)).pipe(delay(250));
+  }
+  if (url.includes('/docente/solicitudes-ingreso/') && method === 'PATCH') {
+    const id = url.split('/').pop()!;
+    const body = (req.body ?? {}) as { accion?: string; motivo?: string };
+    const estadoResultante = body.accion === 'RECHAZAR' ? 'RECHAZADA' : 'ACEPTADA';
+    solicitudesIngresoMock.filter((s) => s.id === id).forEach((s) => {
+      s.estado = estadoResultante;
+      s.motivoRechazo = body.accion === 'RECHAZAR' ? body.motivo ?? null : null;
+      s.fechaResolucionUtc = new Date().toISOString();
+    });
+    return of(okResponse({ id, estadoResultante })).pipe(delay(250));
   }
   if (url.includes('/docente/grupos/') && url.endsWith('/retiro') && method === 'POST') {
     // HU051: el retiro devuelve ApiDataResponse<Void>; el padrón se recarga desde su propio endpoint.

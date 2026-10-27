@@ -92,7 +92,7 @@ import { Course } from '../../../../../core/models/course.model';
               <div class="truncate text-xs text-warm-600">
                 <span class="font-bold text-warm-800">Enlace de auto-matrícula:</span>
                 <div class="font-mono text-[11px] truncate text-warm-500">
-                  /app/estudiante/materias?matricularGrupo={{ curso()?.id }}
+                  /app/estudiante/solicitudes?grupo={{ curso()?.id }}
                 </div>
               </div>
               <button
@@ -124,7 +124,7 @@ export class TeacherMatriculaModalComponent {
 
   qrUrl = computed(() => {
     const id = this.curso()?.id || 'demo';
-    const payload = `${window.location.origin}/app/estudiante/materias?matricularGrupo=${encodeURIComponent(id)}`;
+    const payload = `${window.location.origin}/app/estudiante/solicitudes?grupo=${encodeURIComponent(id)}`;
     return `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(payload)}`;
   });
 
@@ -139,7 +139,7 @@ export class TeacherMatriculaModalComponent {
   copiarEnlace(): void {
     const id = this.curso()?.id;
     if (id) {
-      const url = `${window.location.origin}/app/estudiante/materias?matricularGrupo=${encodeURIComponent(id)}`;
+      const url = `${window.location.origin}/app/estudiante/solicitudes?grupo=${encodeURIComponent(id)}`;
       void navigator.clipboard?.writeText(url);
       this.toast.success('Enlace de matrícula copiado al portapapeles.');
     }

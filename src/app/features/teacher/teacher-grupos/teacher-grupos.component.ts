@@ -175,7 +175,7 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
   isLoading = signal<boolean>(true);
 
   // Hub del Grupo
-  subPestanaHub = signal<'SESIONES' | 'HORARIOS' | 'ESTUDIANTES' | 'RECLAMOS' | 'SABANA'>('SESIONES');
+  subPestanaHub = signal<'SESIONES' | 'HORARIOS' | 'ESTUDIANTES' | 'SOLICITUDES' | 'RECLAMOS' | 'SABANA'>('SESIONES');
   estudiantesGrupo = signal<any[]>([]);
   cargandoEstudiantes = signal<boolean>(false);
   reclamosGrupo = signal<SolicitudRevisionItem[]>([]);
