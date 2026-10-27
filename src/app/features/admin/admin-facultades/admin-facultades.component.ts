@@ -505,7 +505,10 @@ type FiltroEstadoFacultad = 'TODOS' | 'ACTIVO' | 'INACTIVO';
                   Planes de Estudio Vigentes
                 </h4>
                 @if (planes().length === 0) {
-                  <p class="text-xs text-warm-500 italic">No hay planes de estudio registrados para esta facultad.</p>
+                  <p class="text-xs text-warm-500 italic">
+                    La consulta de planes por facultad no está disponible para el administrador; use la vista de la
+                    decanatura o de coordinación.
+                  </p>
                 } @else {
                   <div class="space-y-4">
                     @for (plan of planes(); track plan.id) {
@@ -639,7 +642,6 @@ export class AdminFacultadesComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    this.coordService.cargarDatosAcademicosBase();
     this.adminService.cargarFacultades().subscribe();
     this.adminService.getDecanos().subscribe();
     this.adminService.getInstituciones().subscribe();
