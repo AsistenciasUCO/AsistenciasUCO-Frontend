@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { DeanFacultadService, planesDeLaEstructura } from '../../../core/services/dean-facultad.service';
+import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
 import { PlanEstudioItem } from '../../../core/models/role-management.model';
 import { BadgeComponent } from '../../../shared/components/badge/badge.component';
 import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
@@ -80,7 +81,7 @@ import { DeanProgramasGestionComponent } from './components/dean-programas-gesti
         <div class="p-4 rounded-2xl bg-white border border-warm-200 shadow-warm-sm flex items-center justify-between">
           <div>
             <span class="text-xs text-warm-500 font-medium">Total Asignaturas</span>
-            <p class="text-2xl font-serif font-bold text-primary-800">{{ totalAsignaturas() }}</p>
+            <p class="text-2xl font-serif font-bold text-primary-800">{{ totalAsignaturasTexto() }}</p>
           </div>
           <div class="w-11 h-11 rounded-xl bg-accent-100 text-accent-800 flex items-center justify-center shrink-0">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -105,7 +106,12 @@ import { DeanProgramasGestionComponent } from './components/dean-programas-gesti
       </div>
 
       <!-- Grid de Programas y Planes -->
-      @if (pagedPlanes().length === 0) {
+      @if (errorEstructura()) {
+        <div class="bg-white rounded-2xl border border-red-200 p-12 text-center shadow-warm-sm" role="alert">
+          <p class="text-sm font-semibold text-red-700">No fue posible cargar los planes de estudio de la facultad.</p>
+          <p class="text-xs text-red-700 mt-1">{{ errorEstructura() }}</p>
+        </div>
+      } @else if (pagedPlanes().length === 0) {
         <div class="bg-white rounded-2xl border border-warm-200 p-12 text-center shadow-warm-sm">
           <p class="text-sm text-warm-500">No se encontraron planes de estudio registrados.</p>
         </div>
@@ -129,7 +135,7 @@ import { DeanProgramasGestionComponent } from './components/dean-programas-gesti
               <div class="grid grid-cols-3 gap-2 py-2.5 border-y border-warm-100 text-xs text-warm-700 bg-warm-50/60 rounded-xl px-3 text-center">
                 <div>
                   <span class="text-[10px] text-warm-400 font-bold uppercase block">Créditos</span>
-                  <span class="font-bold text-warm-900">{{ plan.totalCreditos }}</span>
+                  <span class="font-bold text-warm-900">{{ mallaCargada(plan.id) ? plan.totalCreditos : '—' }}</span>
                 </div>
                 <div>
                   <span class="text-[10px] text-warm-400 font-bold uppercase block">Semestres</span>
@@ -137,7 +143,7 @@ import { DeanProgramasGestionComponent } from './components/dean-programas-gesti
                 </div>
                 <div>
                   <span class="text-[10px] text-warm-400 font-bold uppercase block">Asignaturas</span>
-                  <span class="font-bold text-warm-900">{{ plan.totalAsignaturas }}</span>
+                  <span class="font-bold text-warm-900">{{ mallaCargada(plan.id) ? plan.totalAsignaturas : '—' }}</span>
                 </div>
               </div>
 
@@ -174,6 +180,9 @@ export class DeanProgramasComponent implements OnInit {
   private router = inject(Router);
 
   planes = signal<PlanEstudioItem[]>([]);
+  errorEstructura = signal<string | null>(null);
+  /** Estado de la carga de la malla de cada plan; créditos y asignaturas solo se muestran cuando vienen de la malla real. */
+  private mallas = signal<Record<string, 'ok' | 'error'>>({});
   filtroTexto = signal('');
   currentPage = signal(1);
   pageSize = signal(6);
@@ -185,6 +194,16 @@ export class DeanProgramasComponent implements OnInit {
   totalAsignaturas = computed(() =>
     this.planes().reduce((sum, p) => sum + (p.totalAsignaturas || 0), 0)
   );
+
+  /** «—» mientras alguna malla no se haya cargado: un total parcial no es el total de la facultad. */
+  totalAsignaturasTexto = computed(() => {
+    const planes = this.planes();
+    return planes.length > 0 && planes.every((p) => this.mallaCargada(p.id)) ? String(this.totalAsignaturas()) : '—';
+  });
+
+  mallaCargada(idPlan: string): boolean {
+    return this.mallas()[idPlan] === 'ok';
+  }
 
   planesFiltrados = computed(() => {
     const q = this.filtroTexto().toLowerCase().trim();
@@ -206,8 +225,40 @@ export class DeanProgramasComponent implements OnInit {
   /** HU108: los planes salen de la estructura de la facultad del decano (la ruta del coordinador no admite DECANO). */
   ngOnInit(): void {
     this.deanService.getEstructura().subscribe({
-      next: (res) => this.planes.set(planesDeLaEstructura(res.datos || [])),
-      error: () => this.planes.set([]),
+      next: (res) => {
+        const planes = planesDeLaEstructura(res.datos || []);
+        this.planes.set(planes);
+        planes.forEach((plan) => this.cargarMalla(plan.id));
+      },
+      error: (error: unknown) => {
+        this.planes.set([]);
+        this.errorEstructura.set(getApiErrorMessage(error));
+      },
+    });
+  }
+
+  /**
+   * La estructura no trae créditos ni asignaturas (DAT-06): se calculan desde la malla real del plan
+   * (GET /decano/planes-estudio/{id}/asignaturas), nunca con ceros fijos.
+   */
+  private cargarMalla(idPlan: string): void {
+    this.deanService.getAsignaturasPlan(idPlan).subscribe({
+      next: (res) => {
+        const asignaturas = res.datos || [];
+        this.planes.update((planes) =>
+          planes.map((p) =>
+            p.id === idPlan
+              ? {
+                  ...p,
+                  totalAsignaturas: asignaturas.length,
+                  totalCreditos: asignaturas.reduce((total, a) => total + (Number(a.creditos) || 0), 0),
+                }
+              : p
+          )
+        );
+        this.mallas.update((estado) => ({ ...estado, [idPlan]: 'ok' }));
+      },
+      error: () => this.mallas.update((estado) => ({ ...estado, [idPlan]: 'error' })),
     });
   }
 
