@@ -82,6 +82,9 @@ Control centralizado de sesiones y registro de asistencia en aula.
 - **Mis Reclamos (HU010/HU011, consulta):**
   - **Ruta:** `/app/estudiante/reclamos` (menú ESTUDIANTE "Mis Reclamos")
   - **Componente:** `StudentClaimsComponent` (`features/student/student-claims`): solicitudes propias con estado, respuesta del docente y soporte; filtro por estado y paginación del servidor; descarga del soporte por `GET /archivos/{fileId}`.
+- **Oferta de Grupos (HU008):**
+  - **Ruta:** `/app/estudiante/oferta` (menú ESTUDIANTE "Oferta de Grupos")
+  - **Componente:** `StudentGroupOfferComponent` (`features/student/student-group-offer`): grupos de su programa y transversales con cupos, horario y "Solicitar ingreso".
 - **Solicitudes de Ingreso (HU053/HU055):**
   - **Ruta:** `/app/estudiante/solicitudes` (menú ESTUDIANTE "Solicitudes de Ingreso"; acepta `?grupo={id}`)
   - **Componente:** `StudentEnrollmentRequestsComponent` (`features/student/student-enrollment-requests`): solicitar el ingreso, ver estado y motivo de rechazo, retirar solicitudes abiertas.
