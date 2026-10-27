@@ -2,10 +2,17 @@ import { Component, OnInit, inject, input, signal, computed, ChangeDetectionStra
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CourseService } from '../../../core/services/course.service';
-import { SessionService } from '../../../core/services/session.service';
+import { DeanFacultadService } from '../../../core/services/dean-facultad.service';
 import { SessionTimeZoneService } from '../../../core/services/session-timezone.service';
 import { Course } from '../../../core/models/course.model';
-import { ClassSession } from '../../../core/models/attendance.model';
+import { SesionFacultadItem } from '../../../core/models/facultad-decano.model';
+import { ToastService } from '../../../shared/components/toast/toast.component';
+import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
+
+/** Tamaño máximo de página que acepta GET /decano/sesiones. */
+const TAMANO_PAGINA_SESIONES = 100;
+/** Tope defensivo de páginas a recorrer para filtrar las sesiones de un grupo. */
+const MAX_PAGINAS_SESIONES = 50;
 
 @Component({
   selector: 'app-dean-grupo-detalle',
@@ -53,7 +60,7 @@ import { ClassSession } from '../../../core/models/attendance.model';
               </div>
               <div>
                 <span class="text-warm-400 block text-[11px]">Aula Asignada</span>
-                <strong class="text-warm-800">{{ curso.room || 'Aula Central' }}</strong>
+                <strong class="text-warm-800">{{ curso.room || 'Por definir' }}</strong>
               </div>
             </div>
           </div>
@@ -62,7 +69,7 @@ import { ClassSession } from '../../../core/models/attendance.model';
             <div>
               <span class="text-xs text-warm-500 font-medium">Aforo Ocupado</span>
               <p class="text-3xl font-serif font-bold text-primary-800 my-1">
-                {{ curso.enrolledStudentsCount }} / {{ curso.cupoMaximo || 30 }}
+                {{ curso.enrolledStudentsCount }} / {{ curso.cupoMaximo ?? '—' }}
               </p>
             </div>
             <div class="text-[11px] text-warm-500 pt-2 border-t border-warm-200/80">
@@ -84,7 +91,17 @@ import { ClassSession } from '../../../core/models/attendance.model';
           </span>
         </div>
 
-        @if (sessions().length === 0) {
+        @if (cargandoSesiones()) {
+          <div class="p-10 text-center text-sm text-warm-500" role="status">Cargando sesiones…</div>
+        } @else if (errorSesiones() !== null) {
+          <div class="p-10 text-center text-sm text-red-700" role="alert">
+            <p class="font-semibold">No fue posible cargar las sesiones del grupo.</p>
+            <p class="text-xs mt-1">{{ errorSesiones() }}</p>
+            <button type="button" (click)="cargarSesiones()" class="mt-3 text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-200 hover:bg-red-50">
+              Reintentar
+            </button>
+          </div>
+        } @else if (sessions().length === 0) {
           <div class="p-10 text-center text-sm text-warm-500">
             No hay sesiones registradas para este grupo.
           </div>
@@ -94,24 +111,24 @@ import { ClassSession } from '../../../core/models/attendance.model';
               <div class="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-warm-50/50 transition-colors">
                 <div class="space-y-1 flex-1 min-w-0">
                   <div class="flex flex-wrap items-center gap-2">
-                    <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded-md bg-warm-100 text-warm-800">#{{ s.sessionNumber }}</span>
-                    @if (s.estadoTemporal === 'INDETERMINADA') {
-                      <span class="text-xs font-semibold text-amber-800">Horario no confirmado</span>
-                    } @else {
-                      <span class="text-xs font-medium text-warm-600">
-                        {{ timeZone.displaySessionDate(s) }}{{ timeZone.displaySessionEndDate(s) !== timeZone.displaySessionDate(s) ? ' – ' + timeZone.displaySessionEndDate(s) : '' }}
-                      </span>
+                    @if (s.numeroSemana !== null) {
+                      <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded-md bg-warm-100 text-warm-800">Semana {{ s.numeroSemana }}</span>
+                    }
+                    @if (s.fechaHoraInicio && s.fechaHoraFin) {
+                      <span class="text-xs font-medium text-warm-600">{{ fecha(s.fechaHoraInicio).date }}</span>
                       <span class="text-warm-300">•</span>
                       <span class="text-xs font-mono font-bold text-warm-800">
-                        {{ timeZone.displaySessionStartTime(s) }} - {{ timeZone.displaySessionEndTime(s) }}
+                        {{ fecha(s.fechaHoraInicio).time }} - {{ fecha(s.fechaHoraFin).time }}
                       </span>
+                    } @else {
+                      <span class="text-xs font-semibold text-amber-800">Horario no confirmado</span>
                     }
                     <span class="text-warm-300">•</span>
                     <span class="text-xs text-warm-600 bg-warm-100/60 px-2 py-0.5 rounded-md">
                       Aula: {{ selectedCourse()?.room || 'Por definir' }}
                     </span>
                   </div>
-                  <h3 class="font-bold text-sm text-warm-900">{{ s.title }}</h3>
+                  <h3 class="font-bold text-sm text-warm-900">{{ s.nombre }}</h3>
                 </div>
               </div>
             }
@@ -123,7 +140,8 @@ import { ClassSession } from '../../../core/models/attendance.model';
 })
 export class DeanGrupoDetalleComponent implements OnInit {
   private courseService = inject(CourseService);
-  private sessionService = inject(SessionService);
+  private deanService = inject(DeanFacultadService);
+  private toast = inject(ToastService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   readonly timeZone = inject(SessionTimeZoneService);
@@ -131,7 +149,10 @@ export class DeanGrupoDetalleComponent implements OnInit {
   grupoId = input<string>();
 
   courses = signal<Course[]>([]);
-  sessions = signal<ClassSession[]>([]);
+  sessions = signal<SesionFacultadItem[]>([]);
+  cargandoSesiones = signal(false);
+  /** Mensaje del último error al cargar sesiones; `null` si la última carga terminó bien (aunque sea vacía). */
+  errorSesiones = signal<string | null>(null);
 
   effectiveGrupoId = computed(() => {
     return this.grupoId() || this.route.snapshot.paramMap.get('grupoId') || '';
@@ -144,15 +165,51 @@ export class DeanGrupoDetalleComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    const id = this.effectiveGrupoId();
     this.courseService.getDeanCourses().subscribe({
       next: (res) => this.courses.set(res.datos || []),
     });
-    if (id) {
-      this.sessionService.getSessionsByGroup(id).subscribe({
-        next: (res) => this.sessions.set(res.datos || []),
-      });
+    this.cargarSesiones();
+  }
+
+  fecha(instante: string): { date: string; time: string } {
+    return this.timeZone.displayInstant(instante);
+  }
+
+  /**
+   * Las sesiones del grupo salen del cronograma de la facultad (GET /decano/sesiones, ámbito forzado en backend):
+   * GET /sesiones/grupo/{id} es del docente titular y le responde 403 al decano.
+   */
+  cargarSesiones(): void {
+    const id = this.effectiveGrupoId();
+    if (!id) {
+      return;
     }
+    this.cargandoSesiones.set(true);
+    this.errorSesiones.set(null);
+    this.cargarPagina(id, 1, []);
+  }
+
+  private cargarPagina(idGrupo: string, pagina: number, acumuladas: SesionFacultadItem[]): void {
+    this.deanService.getSesiones({ pagina, tamano: TAMANO_PAGINA_SESIONES }).subscribe({
+      next: (res) => {
+        const datos = res.datos ?? [];
+        const delGrupo = [...acumuladas, ...datos.filter((s) => s.idGrupo === idGrupo)];
+        const total = Number(res.total ?? datos.length);
+        if (datos.length > 0 && pagina * TAMANO_PAGINA_SESIONES < total && pagina < MAX_PAGINAS_SESIONES) {
+          this.cargarPagina(idGrupo, pagina + 1, delGrupo);
+          return;
+        }
+        this.sessions.set(delGrupo);
+        this.cargandoSesiones.set(false);
+      },
+      error: (error: unknown) => {
+        const mensaje = getApiErrorMessage(error);
+        this.sessions.set([]);
+        this.errorSesiones.set(mensaje);
+        this.cargandoSesiones.set(false);
+        this.toast.error(mensaje);
+      },
+    });
   }
 
   volverAGrupos(): void {
