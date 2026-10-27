@@ -6,7 +6,7 @@
 | Cobertura de líneas en código nuevo (lcov × diff contra `df925f2`, incluye archivos nuevos) | 145/154 = 94.2 % (SonarCloud exige ≥ 80 %) |
 | `npm run coverage:realtime:check` | `PASSED` |
 | `npx ng build --configuration=production` | exit 0 |
-| GitHub Actions / SonarCloud | pendiente (sin push hasta confirmación de John) |
+| GitHub Actions / SonarCloud | en el PR hacia `develop` |
 
 Hallazgo durante la implementación: el mock usaba `Record<string, any>` y el modo estricto (`noPropertyAccessFromIndexSignature`) lo rechaza; se tipó con una interfaz propia.
 
