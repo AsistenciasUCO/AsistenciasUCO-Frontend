@@ -2,7 +2,12 @@ import { TestBed } from '@angular/core/testing';
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
-import { ROLE_SCOPE_RULES, rolPuedeLeer, roleScopeInterceptor } from './role-scope.interceptor';
+import {
+  ROLE_SCOPE_RULES,
+  rolPuedeLeer,
+  rolPuedeLeerRuta,
+  roleScopeInterceptor,
+} from './role-scope.interceptor';
 import { AuthService } from '../services/auth.service';
 import { User, UserRole } from '../models/user.model';
 import { environment } from '../../../environments/environment';
@@ -35,10 +40,58 @@ describe('roleScopeInterceptor', () => {
     return new Promise((resolve) => http.get(url).subscribe({ next: () => resolve(200), error: (e) => resolve(e.status) }));
   }
 
-  it('un Decano no hace GET a /admin, /coordinador, /docente ni /docentes: recibe 403 local sin tocar la red', async () => {
+  it('un Decano no hace GET a recursos exclusivos de /admin, /coordinador, /docente ni /docentes: 403 local sin tocar la red', async () => {
     como('DECANO');
-    for (const ruta of ['admin/areas', 'coordinador/planes-estudio', 'coordinador/periodos-academicos', 'docente/horarios', 'docentes']) {
+    for (const ruta of [
+      'admin/facultades',
+      'admin/espacios-fisicos',
+      'admin/parametros',
+      'admin/auditoria',
+      'coordinador/estudiantes',
+      'docente/horarios',
+      'docentes',
+    ]) {
       expect(await estado(`${environment.apiUrl}/${ruta}`)).toBe(403);
+    }
+    ctrl.expectNone(() => true);
+  });
+
+  // AUTH-03/AUTH-04/INT-05: SecurityConfig y access-catalog.json conceden estas LECTURAS al DECANO (y al COORDINADOR en
+  // los catalogos). El interceptor las cortaba con un 403 local que parecia del servidor y nunca llegaba al backend.
+  it('un Decano SI envia al backend las lecturas que SecurityConfig le concede (sedes, areas, planes, periodos, asignaturas)', () => {
+    como('DECANO');
+    const rutas = [
+      'admin/sedes',
+      'admin/areas',
+      'admin/areas/abc',
+      'coordinador/planes-estudio',
+      'coordinador/planes-estudio/abc/asignaturas',
+      'coordinador/periodos-academicos',
+      'coordinador/asignaturas',
+    ];
+    for (const ruta of rutas) {
+      http.get(`${environment.apiUrl}/${ruta}`).subscribe();
+    }
+    for (const ruta of rutas) {
+      ctrl.expectOne(`${environment.apiUrl}/${ruta}`).flush({});
+    }
+  });
+
+  it('un Coordinador SI envia admin/sedes y admin/areas, pero no admin/facultades', async () => {
+    como('COORDINADOR');
+    http.get(`${environment.apiUrl}/admin/sedes`).subscribe();
+    http.get(`${environment.apiUrl}/admin/areas`).subscribe();
+    ctrl.expectOne(`${environment.apiUrl}/admin/sedes`).flush({});
+    ctrl.expectOne(`${environment.apiUrl}/admin/areas`).flush({});
+    expect(await estado(`${environment.apiUrl}/admin/facultades`)).toBe(403);
+    ctrl.expectNone(() => true);
+  });
+
+  it('un Docente y un Estudiante siguen cortados en admin/areas y coordinador/periodos-academicos', async () => {
+    for (const rol of ['DOCENTE', 'ESTUDIANTE'] as UserRole[]) {
+      como(rol);
+      expect(await estado(`${environment.apiUrl}/admin/areas`)).toBe(403);
+      expect(await estado(`${environment.apiUrl}/coordinador/periodos-academicos`)).toBe(403);
     }
     ctrl.expectNone(() => true);
   });
@@ -99,6 +152,28 @@ describe('roleScopeInterceptor', () => {
 
     it('ADMIN (alias legado) se trata como ADMINISTRADOR', () => {
       expect(rolPuedeLeer('ADMIN', 'admin')).toBeTrue();
+    });
+  });
+
+  describe('excepciones de lectura (espejo de SecurityConfig)', () => {
+    const decano: UserRole = 'DECANO';
+    it('rolPuedeLeerRuta concede solo las subrutas de la excepcion', () => {
+      expect(rolPuedeLeerRuta(decano, 'admin', 'sedes')).toBeTrue();
+      expect(rolPuedeLeerRuta(decano, 'admin', 'areas')).toBeTrue();
+      expect(rolPuedeLeerRuta(decano, 'admin', 'facultades')).toBeFalse();
+      expect(rolPuedeLeerRuta(decano, 'admin', null)).toBeFalse();
+      expect(rolPuedeLeerRuta(decano, 'coordinador', 'periodos-academicos')).toBeTrue();
+      expect(rolPuedeLeerRuta(decano, 'coordinador', 'planes-estudio')).toBeTrue();
+      expect(rolPuedeLeerRuta(decano, 'coordinador', 'asignaturas')).toBeTrue();
+      expect(rolPuedeLeerRuta(decano, 'coordinador', 'docentes')).toBeFalse();
+    });
+
+    it('DOCENTE y ESTUDIANTE no reciben ninguna excepcion; ADMINISTRADOR conserva su acceso', () => {
+      for (const rol of ['DOCENTE', 'ESTUDIANTE'] as UserRole[]) {
+        expect(rolPuedeLeerRuta(rol, 'admin', 'sedes')).toBeFalse();
+        expect(rolPuedeLeerRuta(rol, 'coordinador', 'planes-estudio')).toBeFalse();
+      }
+      expect(rolPuedeLeerRuta('ADMINISTRADOR', 'admin', 'facultades')).toBeTrue();
     });
   });
 
