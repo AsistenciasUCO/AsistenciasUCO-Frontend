@@ -393,6 +393,15 @@ export const routes: Routes = [
             (m) => m.StudentCoursesComponent
           ),
       },
+      {
+        path: 'estudiante/reclamos',
+        canActivate: [roleGuard],
+        data: { roles: ['ESTUDIANTE'] },
+        loadComponent: () =>
+          import('./features/student/student-claims/student-claims.component').then(
+            (m) => m.StudentClaimsComponent
+          ),
+      },
     ],
   },
   {

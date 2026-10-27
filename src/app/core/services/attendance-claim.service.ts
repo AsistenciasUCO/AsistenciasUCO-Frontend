@@ -4,7 +4,7 @@ import { Observable, map, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 import { ApiDataResponse } from '../api/models/api-data-response.model';
-import { ClaimMapper, DetalleReclamoDocenteApi, ReclamoDocenteApi } from '../mappers/claim.mapper';
+import { ClaimMapper, DetalleReclamoDocenteApi, ReclamoDocenteApi, ReclamoEstudianteApi } from '../mappers/claim.mapper';
 import { StudentPortalMapper } from '../mappers/student-portal.mapper';
 import { ApiListResponse } from '../api/models/api-list-response.model';
 import { SesionMateriaEstudianteApiDto } from '../api/models/estudiante-portal-api-dto.model';
@@ -13,6 +13,7 @@ import { isUuid } from '../utils/uuid.util';
 import { SessionTimeZoneService } from './session-timezone.service';
 import {
   DetalleReclamoDocenteItem,
+  EstadoSolicitudRevision,
   SesionMateriaDetalle,
   SolicitudRevisionItem,
   HorarioDocenteItem,
@@ -21,6 +22,13 @@ import {
 /** Filtro de la bandeja del docente: `estado` P/A/R opcional; `pagina` base 1; `tamano` máximo 100 (límite del backend). */
 export interface FiltroReclamosDocente {
   estado?: 'P' | 'A' | 'R';
+  pagina: number;
+  tamano: number;
+}
+
+/** Filtro de "Mis Reclamos" del estudiante (HU010/HU011): mismo contrato de paginación que el docente. */
+export interface FiltroReclamosEstudiante {
+  estado?: EstadoSolicitudRevision;
   pagina: number;
   tamano: number;
 }
@@ -87,6 +95,30 @@ export class AttendanceClaimService {
         return { ...res, datos, total: res.total ?? datos.length };
       })
     );
+  }
+
+  /**
+   * Solicitudes de revisión del estudiante autenticado (HU010/HU011). El backend filtra por propietario; la
+   * paginación y el estado se resuelven en el servidor. El error HTTP se propaga sin toast global: la vista lo presenta.
+   */
+  getReclamosEstudiante(filtro: FiltroReclamosEstudiante): Observable<ApiListResponse<SolicitudRevisionItem>> {
+    let params = new HttpParams().set('pagina', filtro.pagina).set('tamano', filtro.tamano);
+    if (filtro.estado) {
+      params = params.set('estado', filtro.estado);
+    }
+    return this.http
+      .get<ApiListResponse<ReclamoEstudianteApi>>(`${environment.apiUrl}/estudiante/reclamos`, {
+        params,
+        context: new HttpContext().set(BYPASS_GLOBAL_ERROR_TOAST, true),
+      })
+      .pipe(
+        map((res): ApiListResponse<SolicitudRevisionItem> => {
+          const datos = (res.datos ?? []).map((item) =>
+            ClaimMapper.fromReclamoEstudiante(item, (instant) => this.sessionTimeZone.displayInstant(instant).date)
+          );
+          return { ...res, datos, total: res.total ?? datos.length };
+        })
+      );
   }
 
   /**
