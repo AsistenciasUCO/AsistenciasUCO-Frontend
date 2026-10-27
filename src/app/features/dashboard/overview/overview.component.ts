@@ -14,6 +14,8 @@ import { AuthService } from '../../../core/services/auth.service';
 import { CourseService } from '../../../core/services/course.service';
 import { AdminManagementService } from '../../../core/services/admin-management.service';
 import { DeanManagementService } from '../../../core/services/dean-management.service';
+import { DeanIndicatorsService } from '../../../core/services/dean-indicators.service';
+import { AdminIndicatorsService } from '../../../core/services/admin-indicators.service';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
 import { StudentManagementService } from '../../../core/services/student-management.service';
 import { AttendanceClaimService } from '../../../core/services/attendance-claim.service';
@@ -74,12 +76,14 @@ import { OverviewStudentComponent } from './components/overview-student.componen
           <app-overview-admin
             [decanos]="decanos()"
             [totalFacultades]="totalFacultadesAdmin()"
+            [totalProgramas]="totalProgramasAdmin()"
           />
         }
         @case ('ADMIN') {
           <app-overview-admin
             [decanos]="decanos()"
             [totalFacultades]="totalFacultadesAdmin()"
+            [totalProgramas]="totalProgramasAdmin()"
           />
         }
         @case ('DECANO') {
@@ -87,6 +91,7 @@ import { OverviewStudentComponent } from './components/overview-student.componen
             [coordinadores]="coordinadores()"
             [totalDocentes]="totalDocentesFacultad()"
             [totalGrupos]="totalGruposFacultad()"
+            [porcentajeAsistencia]="porcentajeAsistenciaFacultad()"
           />
         }
         @case ('COORDINADOR') {
@@ -123,6 +128,8 @@ export class OverviewComponent implements OnInit {
   private courseService = inject(CourseService);
   private adminService = inject(AdminManagementService);
   private deanService = inject(DeanManagementService);
+  private deanIndicators = inject(DeanIndicatorsService);
+  private adminIndicators = inject(AdminIndicatorsService);
   private coordinatorService = inject(CoordinatorManagementService);
   private studentService = inject(StudentManagementService);
   private claimService = inject(AttendanceClaimService);
@@ -153,6 +160,8 @@ export class OverviewComponent implements OnInit {
 
   // Datos Decano
   coordinadores = signal<CoordinadorItem[]>([]);
+  porcentajeAsistenciaFacultad = signal<number | null>(null);
+  totalProgramasAdmin = signal<number | null>(null);
   totalDocentesFacultad = computed<number>(() => {
     return this.coordinadores().reduce((acc, c) => acc + (c.totalDocentes || 0), 0);
   });
@@ -186,6 +195,10 @@ export class OverviewComponent implements OnInit {
     switch (role) {
       case 'ADMINISTRADOR':
       case 'ADMIN':
+        this.adminIndicators.consultarKpis().subscribe({
+          next: (res) => this.totalProgramasAdmin.set(res.datos?.totalProgramas ?? null),
+          error: () => this.totalProgramasAdmin.set(null),
+        });
         this.adminService.getDecanos().subscribe({
           next: (res) => {
             if (res.exitoso && res.datos) {
@@ -198,6 +211,10 @@ export class OverviewComponent implements OnInit {
         break;
 
       case 'DECANO':
+        this.deanIndicators.consultarKpis().subscribe({
+          next: (res) => this.porcentajeAsistenciaFacultad.set(res.datos?.porcentajeAsistencia ?? null),
+          error: () => this.porcentajeAsistenciaFacultad.set(null),
+        });
         this.deanService.getCoordinadores().subscribe({
           next: (res) => {
             if (res.exitoso && res.datos) {

@@ -1,0 +1,57 @@
+export interface KpisDecano {
+  idFacultad: string;
+  nombreFacultad: string;
+  idPeriodoAcademico: string | null;
+  nombrePeriodoAcademico: string | null;
+  totalProgramas: number;
+  totalEstudiantes: number;
+  estudiantesRegulares: number;
+  estudiantesRiesgo: number;
+  estudiantesPerdida: number;
+  tasaRetencion: number | null;
+  sesionesEjecutadas: number;
+  faltasSinJustaCausa: number;
+  porcentajeAusentismo: number | null;
+  porcentajeAsistencia: number | null;
+  gruposActivos: number;
+  cupoTotal: number;
+  matriculadosActivos: number;
+  tasaAforo: number | null;
+  umbralAdvertencia: number;
+  umbralPerdida: number;
+}
+
+export interface ComparativaPrograma {
+  idPrograma: string;
+  nombrePrograma: string;
+  estaActivoPrograma: boolean;
+  totalEstudiantes: number;
+  estudiantesRiesgo: number;
+  estudiantesPerdida: number;
+  tasaRetencion: number | null;
+  sesionesEjecutadas: number;
+  faltasSinJustaCausa: number;
+  porcentajeAusentismo: number | null;
+}
+
+export interface AforoGrupo {
+  idGrupo: string;
+  codigoGrupo: number;
+  idAsignatura: string;
+  nombreAsignatura: string;
+  idPrograma: string;
+  nombrePrograma: string;
+  cupoMaximo: number;
+  matriculadosActivos: number;
+  cuposDisponibles: number;
+  tasaAforo: number | null;
+  grupoEstaHabilitado: boolean;
+}
+
+export interface AforoFiltro {
+  pagina: number;
+  tamano: number;
+  idPrograma?: string;
+  idPeriodoAcademico?: string;
+  soloHabilitados?: boolean;
+}

@@ -379,11 +379,7 @@ export interface AreaConocimientoItem {
   id: string;
   codigo: string;
   nombre: string;
-  facultadId: string;
-  facultadNombre?: string;
-  coordinadorArea?: string;
-  estado: 'ACTIVO' | 'INACTIVO';
-  totalAsignaturas?: number;
+  activa: boolean;
 }
 
 // ================= FASE 6: PARÁMETROS, AUDITORÍA Y CIERRE MASIVO =================

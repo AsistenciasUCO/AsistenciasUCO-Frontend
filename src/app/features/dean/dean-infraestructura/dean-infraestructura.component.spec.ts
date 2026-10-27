@@ -35,9 +35,7 @@ describe('DeanInfraestructuraComponent', () => {
           id: 'area-1',
           codigo: 'AREA-SOFT',
           nombre: 'Ingeniería de Software',
-          facultadId: 'fac-1',
-          facultadNombre: 'Facultad de Ingeniería',
-          estado: 'ACTIVO',
+          activa: true,
         },
       ],
     });
