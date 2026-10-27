@@ -47,5 +47,14 @@ describe('GroupService', () => {
     expect(req.request.responseType).toBe('blob');
     req.flush(new Blob(['excel'], { type: 'application/vnd.ms-excel' }));
   });
+
+  it('HU051 RT-08 retira al estudiante con POST y el motivo en el cuerpo', () => {
+    service.retirarEstudiante('grupo-1', 'est-1', 'Inasistencia reiterada').subscribe((res) => expect(res.exitoso).toBeTrue());
+
+    const req = http.expectOne(`${environment.apiUrl}/docente/grupos/grupo-1/estudiantes/est-1/retiro`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ motivo: 'Inasistencia reiterada' });
+    req.flush({ exitoso: true, datos: null });
+  });
 });
 

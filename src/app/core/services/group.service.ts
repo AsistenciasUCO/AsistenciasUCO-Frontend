@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, delay, of } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -6,12 +6,25 @@ import { ApiListResponse } from '../api/models/api-list-response.model';
 import { EstudianteGrupoApiDto } from '../api/models/estudiante-grupo-api-dto.model';
 import { GrupoApiDto } from '../api/models/grupo-api-dto.model';
 import { MOCK_ESTUDIANTES_DIRECTORIO } from '../mocks/role-management.mock';
+import { BYPASS_GLOBAL_ERROR_TOAST } from '../interceptors/error.interceptor';
 
 @Injectable({
   providedIn: 'root',
 })
 export class GroupService {
   constructor(private http: HttpClient) {}
+
+  /**
+   * HU051: el docente titular retira a un estudiante de su grupo (la matrícula pasa a inactiva y se libera el cupo).
+   * El motivo es obligatorio; el error HTTP (403/404/409/400) se propaga sin toast global: el modal lo presenta.
+   */
+  retirarEstudiante(grupoId: string, estudianteId: string, motivo: string): Observable<{ exitoso: boolean }> {
+    return this.http.post<{ exitoso: boolean }>(
+      `${environment.apiUrl}/docente/grupos/${encodeURIComponent(grupoId)}/estudiantes/${encodeURIComponent(estudianteId)}/retiro`,
+      { motivo },
+      { context: new HttpContext().set(BYPASS_GLOBAL_ERROR_TOAST, true) }
+    );
+  }
 
   getAllGroups(): Observable<ApiListResponse<GrupoApiDto>> {
     return this.http.get<ApiListResponse<GrupoApiDto>>(`${environment.apiUrl}/grupos`);

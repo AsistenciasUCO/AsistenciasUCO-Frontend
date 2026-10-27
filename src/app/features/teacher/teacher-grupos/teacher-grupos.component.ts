@@ -23,6 +23,7 @@ import { TeacherProyeccionQrModalComponent } from './components/modals/teacher-p
 import { TeacherMatriculaModalComponent } from './components/modals/teacher-matricula-modal.component';
 import { TeacherSesionCancelarModalComponent } from './components/modals/teacher-sesion-cancelar-modal.component';
 import { TeacherSesionDetalleModalComponent } from './components/modals/teacher-sesion-detalle-modal.component';
+import { TeacherRetiroEstudianteModalComponent } from './components/modals/teacher-retiro-estudiante-modal.component';
 import { getSessionNameError } from '../../../core/validation/session-name.util';
 import { environment } from '../../../../environments/environment';
 import { SessionTimeZoneService } from '../../../core/services/session-timezone.service';
@@ -43,6 +44,7 @@ type VistaGrupos = 'LISTA' | 'FORM_GRUPO' | 'HUB_GRUPO' | 'FORM_SESION';
     TeacherMatriculaModalComponent,
     TeacherSesionCancelarModalComponent,
     TeacherSesionDetalleModalComponent,
+    TeacherRetiroEstudianteModalComponent,
   ],
   template: `
     <div class="space-y-6 animate-fade-in">
@@ -96,6 +98,7 @@ type VistaGrupos = 'LISTA' | 'FORM_GRUPO' | 'HUB_GRUPO' | 'FORM_SESION';
           (verDetalleSesion)="abrirDetalleSesionModal($event)"
           (ajustarHorarioSesion)="abrirEditarSesion($event)"
           (cancelarSesion)="abrirModalCancelarSesion($event)"
+          (retirarEstudiante)="abrirModalRetiro($event)"
           (irReclamos)="irAGestionReclamos()"
         />
       }
@@ -135,6 +138,14 @@ type VistaGrupos = 'LISTA' | 'FORM_GRUPO' | 'HUB_GRUPO' | 'FORM_SESION';
         [sesion]="sesionACancelar()"
         (cancelar)="confirmarCancelarSesionConMotivo($event)"
         (closed)="cerrarModalCancelar()"
+      />
+
+      <app-teacher-retiro-estudiante-modal
+        [isOpen]="estudianteARetirar() !== null"
+        [grupoId]="selectedCourse()?.id ?? null"
+        [estudiante]="estudianteARetirar()"
+        (retirado)="onEstudianteRetirado()"
+        (closed)="estudianteARetirar.set(null)"
       />
 
       <app-teacher-sesion-detalle-modal
@@ -188,6 +199,8 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
   // Cancelar Sesión
   modalCancelarVisible = signal<boolean>(false);
   sesionACancelar = signal<ClassSession | null>(null);
+  /** HU051: estudiante cuyo retiro se está confirmando (null = modal cerrado). */
+  estudianteARetirar = signal<{ idEstudiante: string; nombreCompleto?: string } | null>(null);
 
   // Formularios
   modoFormGrupo: 'CREAR' | 'EDITAR' = 'CREAR';
@@ -552,6 +565,24 @@ export class TeacherGruposComponent implements OnInit, OnDestroy {
           },
           error: (err: unknown) => this.toast.error(getApiErrorMessage(err)),
         });
+    }
+  }
+
+  abrirModalRetiro(estudiante: any): void {
+    const idEstudiante = estudiante?.idEstudiante ?? estudiante?.studentId;
+    if (!idEstudiante) {
+      this.toast.warning('No se pudo identificar al estudiante a retirar.');
+      return;
+    }
+    this.estudianteARetirar.set({ idEstudiante, nombreCompleto: estudiante?.nombreCompleto ?? estudiante?.studentName });
+  }
+
+  /** Tras el retiro se recarga el padrón (el estudiante aparece inactivo y el cupo queda libre). */
+  onEstudianteRetirado(): void {
+    this.estudianteARetirar.set(null);
+    const curso = this.selectedCourse();
+    if (curso) {
+      this.cargarEstudiantesGrupo(curso.id);
     }
   }
 

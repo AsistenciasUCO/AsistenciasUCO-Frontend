@@ -201,6 +201,7 @@ import { TeacherGrupoSabanaComponent } from './teacher-grupo-sabana.component';
             [estudiantes]="estudiantes()"
             [cargando]="cargandoEstudiantes()"
             [curso]="selectedCourse()"
+            (retirar)="retirarEstudiante.emit($event)"
           />
         }
 
@@ -242,6 +243,8 @@ export class TeacherGrupoHubComponent {
   tomarAsistenciaSesion = output<ClassSession>();
   proyectarQr = output<Course>();
   matricular = output<Course>();
+  /** HU051: el docente pide retirar a un estudiante activo del padrón. */
+  retirarEstudiante = output<any>();
   programarExtraordinaria = output<void>();
   proyectarSesion = output<ClassSession>();
   verDetalleSesion = output<ClassSession>();

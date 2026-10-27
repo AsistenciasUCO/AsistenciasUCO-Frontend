@@ -58,4 +58,17 @@ describe('TeacherGrupoHubComponent', () => {
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Proyectar Auto-Registro');
   });
+
+  it('HU051 RT-10 propaga Retirar del padrón al padre', () => {
+    const retirar = jasmine.createSpy('retirarEstudiante');
+    fixture.componentInstance.retirarEstudiante.subscribe(retirar);
+    fixture.componentRef.setInput('selectedCourse', course);
+    fixture.componentRef.setInput('estudiantes', [{ idEstudiante: 'est-1', nombreCompleto: 'Ana Gómez', codigoEstado: 'A' }]);
+    fixture.componentInstance.subPestanaHub.set('ESTUDIANTES');
+    fixture.detectChanges();
+
+    (fixture.nativeElement.querySelector('button[data-accion="retirar"]') as HTMLButtonElement).click();
+
+    expect(retirar).toHaveBeenCalledWith(jasmine.objectContaining({ idEstudiante: 'est-1' }));
+  });
 });

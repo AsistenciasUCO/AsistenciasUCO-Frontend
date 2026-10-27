@@ -52,6 +52,7 @@ Control centralizado de sesiones y registro de asistencia en aula.
   - **Ruta:** `/app/docente/grupos`
   - **Componente:** [`TeacherGruposComponent`](file:///c:/Proyectos/GestioAsistencia/GestioAsistenciaFrontend/src/app/features/teacher/teacher-grupos/teacher-grupos.component.ts)
   - **Función:** Lista todos los cursos del docente; al hacer clic en un grupo navega de inmediato a `/app/asistencia?courseId=<id>` (Vista Bento Grid).
+  - **Padrón del grupo (HU051):** en el hub del grupo, `TeacherGrupoEstudiantesComponent` muestra el estado de cada matrícula y el botón "Retirar" (solo activas), que abre `TeacherRetiroEstudianteModalComponent` (motivo obligatorio; `POST /api/v1/docente/grupos/{grupoId}/estudiantes/{estudianteId}/retiro`).
 - **Horarios del Docente:**
   - **Ruta:** `/app/docente/horarios`
   - **Componente:** `TeacherScheduleComponent`
