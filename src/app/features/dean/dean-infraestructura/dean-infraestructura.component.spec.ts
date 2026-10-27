@@ -69,3 +69,40 @@ describe('DeanInfraestructuraComponent', () => {
     expect(component.sedesFiltradas().length).toBe(0);
   });
 });
+
+
+// UX-09 / AUTH-04: un 403/501 de áreas o sedes no es «0».
+describe('DeanInfraestructuraComponent con errores HTTP', () => {
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [DeanInfraestructuraComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting(), { provide: Router, useValue: { navigate: () => Promise.resolve(true) } }],
+    });
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('sedes no disponibles (501) se informan y las áreas cargadas se conservan', () => {
+    const fixture = TestBed.createComponent(DeanInfraestructuraComponent);
+    fixture.detectChanges();
+    http.expectOne(`${environment.apiUrl}/admin/areas`).flush({
+      exitoso: true,
+      datos: [{ id: 'area-1', codigo: 'AREA-SOFT', nombre: 'Ingeniería de Software', activa: true }],
+    });
+    http.expectOne(`${environment.apiUrl}/admin/sedes`).flush(
+      { exitoso: false, codigo: 'FEATURE_UNAVAILABLE', mensajeUsuario: 'No disponible.' },
+      { status: 501, statusText: 'Not Implemented' }
+    );
+    fixture.detectChanges();
+
+    const text = (fixture.nativeElement as HTMLElement).textContent || '';
+    expect(fixture.componentInstance.sedesTotal()).toBe('—');
+    expect(fixture.componentInstance.areasTotal()).toBe('1');
+    expect(text).toContain('No fue posible cargar las sedes.');
+    expect(text).not.toContain('No se encontraron sedes registradas.');
+    expect(text).not.toContain('Espacios Físicos0');
+  });
+});
