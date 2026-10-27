@@ -93,6 +93,16 @@ export const environment = {
       const explicit = (window as any)['env']?.['SECURITY_BASELINE_URL'];
       return String(explicit || 'http://localhost:18080').replace(/\/+$/, '');
     },
+    /** Origen del bundle ESM público de Security UI; no se comparte el runtime Vue. */
+    get securityUiUrl(): string {
+      const explicit = (window as any)['env']?.['SECURITY_BASELINE_UI_URL'];
+      return String(explicit || 'http://localhost:5175').replace(/\/+$/, '');
+    },
+    /** Identificador estable de la aplicación AsistenciasUCO en el PDP. */
+    get applicationId(): string {
+      const explicit = (window as any)['env']?.['SECURITY_BASELINE_APPLICATION_ID'];
+      return String(explicit || 'a0b42637-39f8-4ddd-bec2-0781ba08e779');
+    },
     /** Emisor OIDC central (realm security-baseline). */
     get baselineIssuerUrl(): string {
       const explicit = (window as any)['env']?.['SECURITY_BASELINE_ISSUER_URL'];

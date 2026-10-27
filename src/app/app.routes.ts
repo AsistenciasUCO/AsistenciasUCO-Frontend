@@ -134,6 +134,15 @@ export const routes: Routes = [
             (m) => m.AdminSystemComponent
           ),
       },
+      {
+        path: 'admin/seguridad',
+        canActivate: [roleGuard],
+        data: { roles: ['ADMINISTRADOR', 'ADMIN'] },
+        loadComponent: () =>
+          import('./features/security/security-administration/security-administration.component').then(
+            (m) => m.SecurityAdministrationComponent
+          ),
+      },
       // Rutas Decano
       {
         path: 'decano/facultad',

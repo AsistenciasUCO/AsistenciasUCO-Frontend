@@ -6,8 +6,10 @@
   window.env['KEYCLOAK_REALM'] = 'asistencias-uco';
   window.env['KEYCLOAK_CLIENT_ID'] = 'asistencias-uco-frontend';
   window.env['USE_MOCKS'] = 'false';
-  window.env['SECURITY_PROVIDER'] = 'legacy';
+  window.env['SECURITY_PROVIDER'] = 'baseline';
   window.env['SECURITY_BASELINE_URL'] = 'http://' + host + ':18080';
+  window.env['SECURITY_BASELINE_UI_URL'] = 'http://' + host + ':5175';
+  window.env['SECURITY_BASELINE_APPLICATION_ID'] = 'a0b42637-39f8-4ddd-bec2-0781ba08e779';
   window.env['SECURITY_BASELINE_ISSUER_URL'] = 'http://keycloak.localhost:19090/realms/security-baseline';
   window.env['SECURITY_BASELINE_CLIENT_ID'] = 'asistencias-uco-spa';
 })(this);
