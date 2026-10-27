@@ -632,6 +632,27 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
     mockStore.solicitudesRevision = mockStore.solicitudesRevision.filter((r) => r.id !== id);
     return of(okResponse(true, 'Solicitud de revisión eliminada.')).pipe(delay(200));
   }
+  // HU008: oferta de grupos del estudiante (misma forma que el backend); refleja las solicitudes abiertas del mock.
+  if (url.endsWith('/estudiante/oferta-academica') && method === 'GET') {
+    const abierta = (grupoId: string) =>
+      solicitudesIngresoMock.find((s) => s.grupoId === grupoId && (s.estado === 'PENDIENTE' || s.estado === 'EN_ESPERA'));
+    const oferta = [
+      { idGrupo: 'grp-oferta-1', codigoGrupo: 1, nombreGrupo: 'Grupo 1', idAsignatura: 'asg-of-1', codigoAsignatura: 'MAT301',
+        nombreAsignatura: 'Matemática Avanzada III', nombreDocente: 'Docente Mock', idPeriodoAcademico: 'PER-2026-2',
+        nombrePeriodoAcademico: '2026-2', fechaInicioPeriodo: '2026-07-20', fechaFinPeriodo: '2026-12-10', estadoPeriodo: 'VIGENTE',
+        horario: 'Lunes 08:00-10:00; Miercoles 08:00-10:00', capacidadMaxima: 35, estudiantesActivos: 30, cuposDisponibles: 5,
+        matriculado: false, tipoAsignatura: 'ESPECIFICA', transversal: false },
+      { idGrupo: 'grp-oferta-2', codigoGrupo: 2, nombreGrupo: 'Grupo 2', idAsignatura: 'asg-of-2', codigoAsignatura: 'FIS201',
+        nombreAsignatura: 'Física II', nombreDocente: 'Docente Mock', idPeriodoAcademico: 'PER-2027-1',
+        nombrePeriodoAcademico: '2027-1', fechaInicioPeriodo: '2027-01-20', fechaFinPeriodo: '2027-06-10', estadoPeriodo: 'PROXIMO',
+        horario: null, capacidadMaxima: 30, estudiantesActivos: 30, cuposDisponibles: 0, matriculado: false,
+        tipoAsignatura: 'INSTITUCIONAL', transversal: true },
+    ].map((g) => {
+      const solicitud = abierta(g.idGrupo);
+      return { ...g, idSolicitudAbierta: solicitud?.id ?? null, estadoSolicitud: solicitud?.estado ?? null };
+    });
+    return of(okResponse(oferta, undefined, oferta.length)).pipe(delay(250));
+  }
   // HU053-HU055: solicitudes de ingreso a grupo (misma forma que el backend; estado en memoria de la sesión mock).
   if (url.endsWith('/estudiante/solicitudes-matricula') && method === 'POST') {
     const grupoId = (req.body as { grupoId?: string } | null)?.grupoId ?? '';
