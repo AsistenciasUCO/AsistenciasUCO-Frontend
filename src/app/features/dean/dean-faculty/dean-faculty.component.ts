@@ -2,11 +2,12 @@ import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } 
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { CourseService } from '../../../core/services/course.service';
-import { SessionService } from '../../../core/services/session.service';
 import { AdminManagementService } from '../../../core/services/admin-management.service';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
+import { DeanFacultadService, planesDeLaEstructura } from '../../../core/services/dean-facultad.service';
 import { Course } from '../../../core/models/course.model';
-import { ClassSession } from '../../../core/models/attendance.model';
+import { FacultadNodo } from '../../../core/models/facultad-decano.model';
+import { PeriodoAcademicoItem, PlanEstudioItem } from '../../../core/models/role-management.model';
 import { BadgeComponent } from '../../../shared/components/badge/badge.component';
 
 @Component({
@@ -36,14 +37,18 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
         </div>
 
         <div class="flex items-center gap-3">
-          <span class="px-3.5 py-1.5 rounded-xl bg-warm-100 text-xs font-bold text-warm-800 border border-warm-200 font-mono">
-            {{ codigoFacultad() }}
-          </span>
           <app-badge variant="success" size="sm">
             {{ estadoFacultad() }}
           </app-badge>
         </div>
       </div>
+
+      @if (seccionesConError().length > 0) {
+        <div class="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-800" role="alert">
+          <p class="font-semibold">No fue posible cargar: {{ seccionesConError().join(', ') }}.</p>
+          <p class="mt-1">Las tarjetas afectadas muestran «—» en lugar de cero. Recargue la página o consulte con el administrador si persiste.</p>
+        </div>
+      }
 
       <!-- KPIs Bento Globales -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -63,7 +68,7 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
         <div class="p-5 rounded-2xl bg-white border border-warm-200 shadow-warm-sm flex items-center justify-between">
           <div>
             <span class="text-xs font-bold uppercase tracking-wider text-warm-500">Planes de Estudio</span>
-            <p class="text-2xl font-serif font-bold text-primary-800 mt-1">{{ planes().length }}</p>
+            <p class="text-2xl font-serif font-bold text-primary-800 mt-1">{{ planesTotal() }}</p>
             <span class="text-[11px] text-warm-500">Mallas curriculares adscritas</span>
           </div>
           <div class="w-11 h-11 rounded-xl bg-accent-100 text-accent-800 flex items-center justify-center shrink-0">
@@ -76,7 +81,7 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
         <div class="p-5 rounded-2xl bg-white border border-warm-200 shadow-warm-sm flex items-center justify-between">
           <div>
             <span class="text-xs font-bold uppercase tracking-wider text-warm-500">Áreas de Conocimiento</span>
-            <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ areas().length }}</p>
+            <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ areasTotal() }}</p>
             <span class="text-[11px] text-warm-500">Departamentos y núcleos</span>
           </div>
           <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
@@ -89,8 +94,8 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
         <div class="p-5 rounded-2xl bg-white border border-warm-200 shadow-warm-sm flex items-center justify-between">
           <div>
             <span class="text-xs font-bold uppercase tracking-wider text-warm-500">Sedes y Espacios</span>
-            <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ sedes().length }} sedes</p>
-            <span class="text-[11px] text-warm-500">{{ espacios().length }} aulas y laboratorios</span>
+            <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ sedesTotal() }} sedes</p>
+            <span class="text-[11px] text-warm-500">Aulas y laboratorios: sin consulta de lectura para la decanatura</span>
           </div>
           <div class="w-11 h-11 rounded-xl bg-warm-100 text-warm-700 flex items-center justify-center shrink-0">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -130,11 +135,11 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
         <div class="space-y-3 bg-warm-50 p-4 rounded-xl border border-warm-100 text-xs">
           <div class="flex justify-between pb-1.5 border-b border-warm-200/60">
             <span class="text-warm-500">Total Áreas Temáticas:</span>
-            <span class="font-bold text-warm-900">{{ areas().length }}</span>
+            <span class="font-bold text-warm-900">{{ areasTotal() }}</span>
           </div>
           <div class="flex justify-between pb-1.5 border-b border-warm-200/60">
             <span class="text-warm-500">Total Espacios Físicos:</span>
-            <span class="font-bold text-warm-900">{{ espacios().length }} aulas/labs</span>
+            <span class="font-bold text-warm-900">No disponible</span>
           </div>
           <div class="flex justify-between">
             <span class="text-warm-500">Estado de Facultad:</span>
@@ -177,7 +182,7 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
             <div class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-bold px-2.5 py-1 rounded-lg bg-accent-100 text-accent-900">Mallas Curriculares</span>
-                <span class="text-xs font-mono font-bold text-warm-600">{{ planes().length }} planes</span>
+                <span class="text-xs font-mono font-bold text-warm-600">{{ planesTotal() }} planes</span>
               </div>
               <h3 class="font-serif font-bold text-base text-warm-900">Programas y Planes de Estudio</h3>
               <p class="text-xs text-warm-600">
@@ -198,7 +203,7 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
             <div class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800">Calendario</span>
-                <span class="text-xs font-mono font-bold text-warm-600">{{ periodos().length }} períodos</span>
+                <span class="text-xs font-mono font-bold text-warm-600">{{ periodosTotal() }} períodos</span>
               </div>
               <h3 class="font-serif font-bold text-base text-warm-900">Períodos Académicos</h3>
               <p class="text-xs text-warm-600">
@@ -219,7 +224,7 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
             <div class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-bold px-2.5 py-1 rounded-lg bg-warm-100 text-warm-800">Infraestructura</span>
-                <span class="text-xs font-mono font-bold text-warm-600">{{ areas().length }} áreas • {{ sedes().length }} sedes</span>
+                <span class="text-xs font-mono font-bold text-warm-600">{{ areasTotal() }} áreas • {{ sedesTotal() }} sedes</span>
               </div>
               <h3 class="font-serif font-bold text-base text-warm-900">Áreas de Conocimiento y Sedes</h3>
               <p class="text-xs text-warm-600">
@@ -262,9 +267,9 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
 })
 export class DeanFacultyComponent implements OnInit {
   private courseService = inject(CourseService);
-  private sessionService = inject(SessionService);
   private adminService = inject(AdminManagementService);
   private coordService = inject(CoordinatorManagementService);
+  private deanService = inject(DeanFacultadService);
   private router = inject(Router);
 
   private searchGroupSignal = signal('');
@@ -276,44 +281,51 @@ export class DeanFacultyComponent implements OnInit {
   }
 
   courses = signal<Course[]>([]);
+  /** Sedes y áreas: lecturas autorizadas al DECANO (GET /admin/sedes y /admin/areas). */
   sedes = this.adminService.sedes;
-  espacios = this.adminService.espacios;
-  facultades = this.adminService.facultades;
   areas = this.adminService.areas;
-  planes = this.coordService.planes;
-  periodos = this.coordService.periodos;
+  /** Facultad del decano autenticado (GET /decano/estructura); el ámbito lo fuerza el backend. */
+  facultad = signal<FacultadNodo | null>(null);
+  planes = signal<PlanEstudioItem[]>([]);
+  periodos = signal<PeriodoAcademicoItem[]>([]);
+
+  errorGrupos = signal(false);
+  errorEstructura = signal(false);
+  errorPeriodos = signal(false);
+  errorSedes = signal(false);
+  errorAreas = signal(false);
 
   selectedCourse = signal<Course | null>(null);
-  sessions = signal<ClassSession[]>([]);
 
-  nombreFacultad = computed(() => {
-    const lista = this.facultades();
-    return lista.length > 0 ? lista[0].nombre : 'Facultad de Ingeniería';
+  seccionesConError = computed(() => {
+    const secciones: string[] = [];
+    if (this.errorGrupos()) secciones.push('grupos');
+    if (this.errorEstructura()) secciones.push('facultad y planes');
+    if (this.errorPeriodos()) secciones.push('períodos');
+    if (this.errorSedes()) secciones.push('sedes');
+    if (this.errorAreas()) secciones.push('áreas');
+    return secciones;
   });
 
-  codigoFacultad = computed(() => {
-    const lista = this.facultades();
-    return lista.length > 0 ? lista[0].codigo : 'FAC-ING';
-  });
+  planesTotal = computed(() => (this.errorEstructura() ? '—' : String(this.planes().length)));
+  periodosTotal = computed(() => (this.errorPeriodos() ? '—' : String(this.periodos().length)));
+  sedesTotal = computed(() => (this.errorSedes() ? '—' : String(this.sedes().length)));
+  areasTotal = computed(() => (this.errorAreas() ? '—' : String(this.areas().length)));
+
+  nombreFacultad = computed(() => this.facultad()?.nombre ?? 'Mi Facultad');
 
   estadoFacultad = computed(() => {
-    const lista = this.facultades();
-    return lista.length > 0 ? lista[0].estado : 'ACTIVO';
+    const facultad = this.facultad();
+    return facultad ? (facultad.activa ? 'ACTIVA' : 'INACTIVA') : '—';
   });
 
-  decanoResponsable = computed(() => {
-    const lista = this.facultades();
-    return lista.length > 0 && lista[0].decanoNombre ? lista[0].decanoNombre : 'Decanatura Titular';
-  });
+  decanoResponsable = computed(() => this.facultad()?.nombreDecano ?? '—');
 
-  sedePrincipalNombre = computed(() => {
-    const lista = this.sedes();
-    return lista.length > 0 ? lista[0].nombre : 'Campus Principal Rionegro';
-  });
+  sedePrincipalNombre = computed(() => this.sedes()[0]?.nombre ?? '—');
 
   periodoActualCodigo = computed(() => {
     const actual = this.periodos().find((p) => p.esActual || p.estado === 'ACTIVO');
-    return actual ? actual.codigo : 'Vigente';
+    return actual ? actual.codigo : '—';
   });
 
   filteredCourses = computed(() => {
@@ -331,28 +343,36 @@ export class DeanFacultyComponent implements OnInit {
     this.courses().reduce((sum: number, c: Course) => sum + (c.enrolledStudentsCount || 0), 0)
   );
 
-  totalCupos = computed(() =>
-    this.courses().reduce((sum: number, c: Course) => sum + (c.cupoMaximo || 30), 0)
-  );
+  totalCupos = computed(() => this.courses().reduce((sum: number, c: Course) => sum + (c.cupoMaximo ?? 0), 0));
 
+  /**
+   * Solo rutas de lectura autorizadas al DECANO. Espacios físicos, facultades, parámetros y auditoría son del
+   * ADMINISTRADOR y los planes de /coordinador/** exigen alcance de programa: el decano obtiene sus planes de su
+   * estructura de facultad.
+   */
   ngOnInit(): void {
-    this.coordService.cargarDatosAcademicosBase();
     this.courseService.getDeanCourses().subscribe({
       next: (res) => this.courses.set(res.datos || []),
+      error: () => this.errorGrupos.set(true),
     });
-    this.adminService.cargarSedes().subscribe();
-    this.adminService.cargarEspacios().subscribe();
-    this.adminService.cargarFacultades().subscribe();
-    this.adminService.cargarAreas().subscribe();
-    this.adminService.cargarParametros().subscribe();
-    this.adminService.cargarAuditoria().subscribe();
+    this.deanService.getEstructura().subscribe({
+      next: (res) => {
+        const estructura = res.datos || [];
+        this.facultad.set(estructura[0] ?? null);
+        this.planes.set(planesDeLaEstructura(estructura));
+      },
+      error: () => this.errorEstructura.set(true),
+    });
+    this.coordService.getPeriodosAcademicos().subscribe({
+      next: (res) => this.periodos.set(res.datos || []),
+      error: () => this.errorPeriodos.set(true),
+    });
+    this.adminService.cargarSedes().subscribe({ error: () => this.errorSedes.set(true) });
+    this.adminService.cargarAreas().subscribe({ error: () => this.errorAreas.set(true) });
   }
 
   abrirDetalleGrupo(curso: Course): void {
     this.selectedCourse.set(curso);
-    this.sessionService.getSessionsByGroup(curso.id).subscribe({
-      next: (res) => this.sessions.set(res.datos || []),
-    });
     void this.router.navigate(['/app/decano/grupos', curso.id]);
   }
 
