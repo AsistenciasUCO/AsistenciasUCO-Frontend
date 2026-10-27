@@ -102,6 +102,15 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'admin/indicadores',
+        canActivate: [roleGuard],
+        data: { roles: ['ADMINISTRADOR', 'ADMIN'] },
+        loadComponent: () =>
+          import('./features/admin/admin-indicators/admin-indicators.component').then(
+            (m) => m.AdminIndicatorsComponent
+          ),
+      },
+      {
         // HU096-HU098: el período es único por institución; solo el administrador lo gestiona.
         path: 'admin/periodos',
         canActivate: [roleGuard],
@@ -290,6 +299,24 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/coordinator/coordinator-periods/coordinator-periods.component').then(
             (m) => m.CoordinatorPeriodsComponent
+          ),
+      },
+      {
+        path: 'coordinador/indicadores',
+        canActivate: [roleGuard],
+        data: { roles: ['COORDINADOR'] },
+        loadComponent: () =>
+          import(
+            './features/coordinator/coordinator-indicators/coordinator-indicators.component'
+          ).then((m) => m.CoordinatorIndicatorsComponent),
+      },
+      {
+        path: 'decano/indicadores',
+        canActivate: [roleGuard],
+        data: { roles: ['DECANO'] },
+        loadComponent: () =>
+          import('./features/dean/dean-indicators/dean-indicators.component').then(
+            (m) => m.DeanIndicatorsComponent
           ),
       },
       {

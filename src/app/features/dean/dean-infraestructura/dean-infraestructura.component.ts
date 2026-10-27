@@ -113,14 +113,11 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
                   <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-warm-100 text-warm-700 w-fit">
                     {{ a.codigo }}
                   </span>
-                  <app-badge [variant]="a.estado === 'ACTIVO' ? 'success' : 'neutral'" size="sm">
-                    {{ a.estado }}
+                  <app-badge [variant]="a.activa ? 'success' : 'neutral'" size="sm">
+                    {{ a.activa ? 'ACTIVO' : 'INACTIVO' }}
                   </app-badge>
                 </div>
                 <h3 class="font-bold text-sm text-warm-900">{{ a.nombre }}</h3>
-                <p class="text-xs text-warm-500">
-                  Líder: <strong class="text-warm-800">{{ a.coordinadorArea || 'Por asignar' }}</strong>
-                </p>
               </div>
             }
           </div>
@@ -173,8 +170,7 @@ export class DeanInfraestructuraComponent implements OnInit {
     return this.areas().filter(
       (a) =>
         a.codigo.toLowerCase().includes(q) ||
-        a.nombre.toLowerCase().includes(q) ||
-        (a.coordinadorArea && a.coordinadorArea.toLowerCase().includes(q))
+        a.nombre.toLowerCase().includes(q)
     );
   });
 

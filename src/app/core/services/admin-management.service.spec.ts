@@ -348,7 +348,7 @@ describe('AdminManagementService', () => {
     expect(service.decanos()[0].nombreCompleto).toBe('Juan Carlos Gomez Perez');
   });
 
-  it('cargarAreas, crearArea, actualizarArea y cambiarEstadoArea interactúan correctamente con el backend', () => {
+  it('cargarAreas obtiene el catalogo y actualiza la señal (las escrituras se prueban en admin-management.areas.spec.ts)', () => {
     service.cargarAreas().subscribe((res) => {
       expect(res.exitoso).toBeTrue();
       expect(res.datos?.length).toBe(1);
@@ -358,40 +358,10 @@ describe('AdminManagementService', () => {
     expect(getReq.request.method).toBe('GET');
     getReq.flush({
       exitoso: true,
-      datos: [{ id: 'area-1', codigo: 'IS', nombre: 'Ingeniería de Software', facultadId: 'fac-1', estado: 'ACTIVO' }],
+      datos: [{ id: 'area-1', codigo: 'IS', nombre: 'Ingeniería de Software', activa: true }],
     });
 
     expect(service.areas().length).toBe(1);
-
-    // crearArea
-    service.crearArea({ codigo: 'IA', nombre: 'Inteligencia Artificial', facultadId: 'fac-1', estado: 'ACTIVO' });
-    const postReq = http.expectOne(`${environment.apiUrl}/admin/areas`);
-    expect(postReq.request.method).toBe('POST');
-    postReq.flush({
-      exitoso: true,
-      datos: { id: 'area-2', codigo: 'IA', nombre: 'Inteligencia Artificial', facultadId: 'fac-1', estado: 'ACTIVO' },
-    });
-    expect(service.areas().length).toBe(2);
-
-    // actualizarArea
-    service.actualizarArea('area-1', { nombre: 'Ingeniería de Software Avanzada' });
-    const putReq = http.expectOne(`${environment.apiUrl}/admin/areas/area-1`);
-    expect(putReq.request.method).toBe('PUT');
-    putReq.flush({
-      exitoso: true,
-      datos: { id: 'area-1', codigo: 'IS', nombre: 'Ingeniería de Software Avanzada', facultadId: 'fac-1', estado: 'ACTIVO' },
-    });
-    expect(service.areas().find((a) => a.id === 'area-1')?.nombre).toBe('Ingeniería de Software Avanzada');
-
-    // cambiarEstadoArea
-    service.cambiarEstadoArea('area-1');
-    const patchReq = http.expectOne(`${environment.apiUrl}/admin/areas/area-1/estado`);
-    expect(patchReq.request.method).toBe('PATCH');
-    patchReq.flush({
-      exitoso: true,
-      datos: { id: 'area-1', nombre: 'Ingeniería de Software Avanzada', descripcion: 'Área técnica', estado: 'INACTIVO' },
-    });
-    expect(service.areas().find((a) => a.id === 'area-1')?.estado).toBe('INACTIVO');
   });
 
   it('cargarParametros y actualizarParametro gestionan parámetros institucionales', () => {
@@ -569,22 +539,7 @@ describe('AdminManagementService', () => {
     patchReq.flush({ exitoso: true, datos: { id: 'inst-1' } });
   });
 
-  it('crearArea, actualizarArea, cambiarEstadoArea y actualizarParametro funcionan', () => {
-    service.crearArea({ codigo: 'A1', nombre: 'Ciencias Básicas', facultadId: 'fac-1', estado: 'ACTIVO' });
-    const postArea = http.expectOne(`${environment.apiUrl}/admin/areas`);
-    expect(postArea.request.method).toBe('POST');
-    postArea.flush({ exitoso: true, datos: { id: 'area-1', codigo: 'A1', nombre: 'Ciencias Básicas' } });
-
-    service.actualizarArea('area-1', { nombre: 'Ciencias Básicas y Aplicadas' });
-    const putArea = http.expectOne(`${environment.apiUrl}/admin/areas/area-1`);
-    expect(putArea.request.method).toBe('PUT');
-    putArea.flush({ exitoso: true, datos: { id: 'area-1', nombre: 'Ciencias Básicas y Aplicadas' } });
-
-    service.cambiarEstadoArea('area-1');
-    const patchArea = http.expectOne(`${environment.apiUrl}/admin/areas/area-1/estado`);
-    expect(patchArea.request.method).toBe('PATCH');
-    patchArea.flush({ exitoso: true, datos: { id: 'area-1', estado: 'INACTIVO' } });
-
+  it('actualizarParametro funciona', () => {
     service.actualizarParametro('param-1', '25');
     const patchParam = http.expectOne(`${environment.apiUrl}/admin/parametros/param-1`);
     expect(patchParam.request.method).toBe('PATCH');
