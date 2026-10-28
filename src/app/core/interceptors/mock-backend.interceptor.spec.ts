@@ -399,6 +399,22 @@ describe('mockBackendInterceptor', () => {
     expect(retirada?.exitoso).toBeTrue();
   }));
 
+  it('HU008 MK-08 simula la oferta de grupos y refleja la solicitud abierta del estudiante', fakeAsync(() => {
+    auth.setMockMode(true);
+    let oferta: any;
+    httpClient.get(`${environment.apiUrl}/estudiante/oferta-academica`).subscribe((r) => (oferta = r));
+    tick(300);
+    expect(oferta.datos.length).toBe(2);
+    expect(oferta.datos[0].cuposDisponibles).toBe(5);
+
+    httpClient.post(`${environment.apiUrl}/estudiante/solicitudes-matricula`, { grupoId: 'grp-oferta-1' }).subscribe();
+    tick(300);
+    httpClient.get(`${environment.apiUrl}/estudiante/oferta-academica`).subscribe((r) => (oferta = r));
+    tick(300);
+    expect(oferta.datos[0].estadoSolicitud).toBe('PENDIENTE');
+    expect(oferta.datos[1].estadoSolicitud).toBeNull();
+  }));
+
   it('HU051 RT-09 simula el retiro de un estudiante por el docente', fakeAsync(() => {
     auth.setMockMode(true);
     let res: any;
