@@ -404,6 +404,12 @@ export class DashboardLayoutComponent {
       icon: 'reclamos',
     },
     {
+      label: 'Oferta de Grupos',
+      route: '/app/estudiante/oferta',
+      roles: ['ESTUDIANTE'],
+      icon: 'grupos',
+    },
+    {
       label: 'Solicitudes de Ingreso',
       route: '/app/estudiante/solicitudes',
       roles: ['ESTUDIANTE'],
