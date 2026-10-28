@@ -266,6 +266,12 @@ export class DashboardLayoutComponent {
       icon: 'sistema',
     },
     {
+      label: 'Seguridad UCO',
+      route: '/app/admin/seguridad',
+      roles: ['ADMINISTRADOR', 'ADMIN'],
+      icon: 'sistema',
+    },
+    {
       label: 'Indicadores',
       route: '/app/decano/indicadores',
       roles: ['DECANO'],

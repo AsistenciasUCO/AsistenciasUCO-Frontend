@@ -105,6 +105,9 @@ jobs:
       - name: Docker build
         run: docker build -t asistencias-uco-frontend-ci .
 
+      - name: Validate runtime env.js and Compose security wiring
+        run: npm run test:docker-runtime -- asistencias-uco-frontend-ci
+
       - name: Trivy image inventory
         uses: aquasecurity/trivy-action@v0.36.0
         with:

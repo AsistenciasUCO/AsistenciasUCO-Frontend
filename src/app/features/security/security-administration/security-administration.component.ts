@@ -1,0 +1,191 @@
+import {
+  AfterViewInit,
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  InjectionToken,
+  OnDestroy,
+  ViewChild,
+  inject,
+  signal,
+} from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { AuthService } from '../../../core/services/auth.service';
+import { hasAnyRole } from '../../../core/models/user.model';
+import { environment } from '../../../../environments/environment';
+
+interface SecurityUiOptions {
+  applicationId: string;
+  applicationName: string;
+  apiBaseUrl: string;
+  allowApplicationLifecycleManagement?: boolean;
+  theme?: {
+    accent?: string;
+    fontFamily?: string;
+    radius?: string;
+  };
+}
+
+interface SecurityUiHandle {
+  unmount: () => void;
+}
+
+interface SecurityUiModule {
+  mount: (container: Element, options: SecurityUiOptions) => SecurityUiHandle;
+}
+
+export interface SecurityUiModuleLoader {
+  load: (url: string) => Promise<SecurityUiModule>;
+}
+
+export const SECURITY_UI_LOADER = new InjectionToken<SecurityUiModuleLoader>('SECURITY_UI_LOADER', {
+  providedIn: 'root',
+  factory: () => ({
+    load: (url: string) => import(/* @vite-ignore */ url) as Promise<SecurityUiModule>,
+  }),
+});
+
+type ViewState = 'loading' | 'ready' | 'error' | 'unauthorized' | 'forbidden';
+
+@Component({
+  selector: 'app-security-administration',
+  standalone: true,
+  imports: [CommonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <section class="rounded-2xl border border-warm-200 bg-white p-6 shadow-warm-sm">
+      <div class="mb-5">
+        <p class="text-xs font-bold uppercase tracking-wider text-primary-700">Security Baseline</p>
+        <h1 class="mt-1 text-2xl font-bold text-warm-900">Administración de seguridad</h1>
+        <p class="mt-2 text-sm text-warm-600">
+          Recursos, roles, perfiles y asignaciones de <strong>AsistenciasUCO</strong>.
+        </p>
+      </div>
+
+      @if (state() === 'loading') {
+        <p class="rounded-xl bg-warm-50 p-4 text-sm text-warm-700" role="status">
+          Validando la sesión BFF y cargando Security UI…
+        </p>
+      }
+
+      @if (state() === 'unauthorized' || state() === 'forbidden' || state() === 'error') {
+        <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert">
+          <p>{{ message() }}</p>
+          <div class="mt-3 flex gap-2">
+            @if (state() === 'unauthorized') {
+              <button type="button" class="rounded-lg bg-primary-700 px-3 py-2 font-semibold text-white" (click)="signInBff()">
+                Iniciar sesión Security Baseline
+              </button>
+            }
+            <button type="button" class="rounded-lg border border-rose-300 px-3 py-2 font-semibold" (click)="load()">
+              Reintentar
+            </button>
+          </div>
+        </div>
+      }
+
+      <div #mountPoint class="mt-4" [hidden]="state() !== 'ready'"></div>
+    </section>
+  `,
+})
+export class SecurityAdministrationComponent implements AfterViewInit, OnDestroy {
+  @ViewChild('mountPoint', { static: true }) private readonly mountPoint?: ElementRef<HTMLElement>;
+
+  readonly state = signal<ViewState>('loading');
+  readonly message = signal('');
+  private handle?: SecurityUiHandle;
+  private loadInFlight?: Promise<void>;
+  private readonly authService = inject(AuthService);
+  private readonly securityUiLoader = inject(SECURITY_UI_LOADER);
+
+  ngAfterViewInit(): void {
+    void this.load();
+  }
+
+  ngOnDestroy(): void {
+    this.handle?.unmount();
+    this.handle = undefined;
+  }
+
+  async load(): Promise<void> {
+    if (this.loadInFlight) return this.loadInFlight;
+    this.loadInFlight = this.loadInternal().finally(() => {
+      this.loadInFlight = undefined;
+    });
+    return this.loadInFlight;
+  }
+
+  signInBff(): void {
+    this.authService.startBaselineLogin('/app/admin/seguridad');
+  }
+
+  private async loadInternal(): Promise<void> {
+    this.handle?.unmount();
+    this.handle = undefined;
+    this.state.set('loading');
+    this.message.set('');
+
+    if (!this.authService.isBaselineMode()) {
+      this.fail('forbidden', 'Esta pantalla requiere SECURITY_PROVIDER=baseline. El modo legacy se conserva para compatibilidad, pero no monta Security UI.');
+      return;
+    }
+
+    const user = this.authService.currentUser();
+    if (!user || !hasAnyRole(user, ['ADMINISTRADOR', 'ADMIN'])) {
+      this.fail('forbidden', 'La ruta está reservada a ADMINISTRADOR. La interfaz no concede permisos por sí sola.');
+      return;
+    }
+
+    let sessionResponse: Response;
+    try {
+      sessionResponse = await fetch(`${environment.security.baselineUrl}/api/v1/session`, {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      });
+    } catch {
+      this.fail('error', 'No fue posible contactar la sesión BFF del PDP en el puerto 18080.');
+      return;
+    }
+
+    if (sessionResponse.status === 401) {
+      this.fail('unauthorized', 'La sesión BFF de Security Baseline no está activa. Inicia sesión para continuar.');
+      return;
+    }
+    if (sessionResponse.status === 403) {
+      this.fail('forbidden', 'El PDP rechazó la sesión BFF para esta operación administrativa.');
+      return;
+    }
+    if (!sessionResponse.ok) {
+      this.fail('error', `El PDP no pudo validar la sesión BFF (HTTP ${sessionResponse.status}).`);
+      return;
+    }
+
+    try {
+      const module = await this.securityUiLoader.load(`${environment.security.securityUiUrl}/security-administration.js`);
+      if (typeof module.mount !== 'function') {
+        throw new TypeError('El bundle no expone mount().');
+      }
+      const mountPoint = this.mountPoint?.nativeElement;
+      if (!mountPoint) throw new Error('No existe el contenedor de montaje.');
+      this.handle = module.mount(mountPoint, {
+        applicationId: environment.security.applicationId,
+        applicationName: 'AsistenciasUCO',
+        apiBaseUrl: environment.security.baselineUrl,
+        allowApplicationLifecycleManagement: false,
+        theme: {
+          accent: '#087443',
+          fontFamily: 'Inter, sans-serif',
+          radius: '12px',
+        },
+      });
+      this.state.set('ready');
+    } catch {
+      this.fail('error', 'No se pudo cargar Security UI desde http://localhost:5175/security-administration.js. Verifica que su preview esté activo y que CORS permita el origen Angular.');
+    }
+  }
+
+  private fail(state: Exclude<ViewState, 'loading' | 'ready'>, message: string): void {
+    this.state.set(state);
+    this.message.set(message);
+  }
+}
