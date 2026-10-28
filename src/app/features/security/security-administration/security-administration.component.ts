@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  InjectionToken,
   OnDestroy,
   ViewChild,
   inject,
@@ -32,6 +33,17 @@ interface SecurityUiHandle {
 interface SecurityUiModule {
   mount: (container: Element, options: SecurityUiOptions) => SecurityUiHandle;
 }
+
+export interface SecurityUiModuleLoader {
+  load: (url: string) => Promise<SecurityUiModule>;
+}
+
+export const SECURITY_UI_LOADER = new InjectionToken<SecurityUiModuleLoader>('SECURITY_UI_LOADER', {
+  providedIn: 'root',
+  factory: () => ({
+    load: (url: string) => import(/* @vite-ignore */ url) as Promise<SecurityUiModule>,
+  }),
+});
 
 type ViewState = 'loading' | 'ready' | 'error' | 'unauthorized' | 'forbidden';
 
@@ -77,13 +89,14 @@ type ViewState = 'loading' | 'ready' | 'error' | 'unauthorized' | 'forbidden';
   `,
 })
 export class SecurityAdministrationComponent implements AfterViewInit, OnDestroy {
-  @ViewChild('mountPoint', { static: true }) private mountPoint?: ElementRef<HTMLElement>;
+  @ViewChild('mountPoint', { static: true }) private readonly mountPoint?: ElementRef<HTMLElement>;
 
   readonly state = signal<ViewState>('loading');
   readonly message = signal('');
   private handle?: SecurityUiHandle;
   private loadInFlight?: Promise<void>;
   private readonly authService = inject(AuthService);
+  private readonly securityUiLoader = inject(SECURITY_UI_LOADER);
 
   ngAfterViewInit(): void {
     void this.load();
@@ -148,9 +161,9 @@ export class SecurityAdministrationComponent implements AfterViewInit, OnDestroy
     }
 
     try {
-      const module = (await import(/* @vite-ignore */ `${environment.security.securityUiUrl}/security-administration.js`)) as SecurityUiModule;
+      const module = await this.securityUiLoader.load(`${environment.security.securityUiUrl}/security-administration.js`);
       if (typeof module.mount !== 'function') {
-        throw new Error('El bundle no expone mount().');
+        throw new TypeError('El bundle no expone mount().');
       }
       const mountPoint = this.mountPoint?.nativeElement;
       if (!mountPoint) throw new Error('No existe el contenedor de montaje.');
