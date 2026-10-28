@@ -388,6 +388,42 @@ export const mockBackendInterceptor: HttpInterceptorFn = (req, next) => {
     mockStore.docentes = [nuevo, ...mockStore.docentes];
     return of(okResponse(nuevo, 'Docente registrado en el programa exitosamente.')).pipe(delay(300));
   }
+  // HU095: consolidado del directorio docente (activos, inactivos y por tipo de vinculacion).
+  if (url.endsWith('/coordinador/docentes/resumen') && method === 'GET') {
+    const activos = mockStore.docentes.filter((d) => d.estado === 'ACTIVO').length;
+    const inactivos = mockStore.docentes.length - activos;
+    return of(okResponse({
+      totalDocentes: mockStore.docentes.length,
+      totalActivos: activos,
+      totalInactivos: inactivos,
+      porTipoVinculacion: [
+        { idTipoVinculacion: 'TV-CAT', codigoTipoVinculacion: 'CAT', nombreTipoVinculacion: 'Cátedra',
+          totalActivos: activos, totalInactivos: inactivos, total: mockStore.docentes.length },
+      ],
+    })).pipe(delay(200));
+  }
+  // HU094: ficha del docente con historial de grupos y resumen de carga.
+  if (url.includes('/coordinador/docentes/') && url.endsWith('/ficha') && method === 'GET') {
+    const segments = url.split('/');
+    const id = segments[segments.length - 2];
+    const doc = mockStore.docentes.find((d) => d.id === id);
+    const historial = [
+      { idGrupo: `${id}-G1`, codigoGrupo: 1, nombreGrupo: 'Grupo 1', idAsignatura: 'ASG-1', nombreAsignatura: 'Matemática Avanzada III',
+        idPeriodoAcademico: 'PER-2026-1', codigoPeriodoAcademico: 20261, nombrePeriodoAcademico: '2026-1', fechaInicioPeriodo: '2026-01-20',
+        fechaFinPeriodo: '2026-12-10', estadoPeriodo: 'VIGENTE', capacidadMaxima: 35, estudiantesActivos: 32, estudiantesFinalizados: 0,
+        estudiantesCanceladosVoluntad: 1, estudiantesCanceladosInasistencia: 0 },
+      { idGrupo: `${id}-G2`, codigoGrupo: 2, nombreGrupo: 'Grupo 2', idAsignatura: 'ASG-2', nombreAsignatura: 'Cálculo Integral',
+        idPeriodoAcademico: 'PER-2025-2', codigoPeriodoAcademico: 20252, nombrePeriodoAcademico: '2025-2', fechaInicioPeriodo: '2025-07-20',
+        fechaFinPeriodo: '2025-12-05', estadoPeriodo: 'FINALIZADO', capacidadMaxima: 30, estudiantesActivos: 0, estudiantesFinalizados: 26,
+        estudiantesCanceladosVoluntad: 2, estudiantesCanceladosInasistencia: 2 },
+    ];
+    return of(okResponse({
+      docente: doc,
+      resumen: { totalGrupos: 2, totalPeriodos: 2, gruposVigentes: 1, estudiantesActivosVigentes: 32 },
+      historial,
+      totalHistorial: historial.length,
+    })).pipe(delay(250));
+  }
   if (url.includes('/coordinador/docentes/') && url.endsWith('/toggle') && method === 'PATCH') {
     const segments = url.split('/');
     const id = segments[segments.length - 2];

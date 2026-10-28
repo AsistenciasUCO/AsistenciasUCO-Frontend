@@ -284,6 +284,17 @@ describe('mockBackendInterceptor', () => {
     expect(postDocRes?.exitoso).toBeTrue();
 
     const docId = mockStore.docentes[0].id;
+    let resumenDocRes: any;
+    httpClient.get(`${environment.apiUrl}/coordinador/docentes/resumen`).subscribe((r) => (resumenDocRes = r));
+    tick(250);
+    expect(resumenDocRes?.datos.totalDocentes).toBe(mockStore.docentes.length);
+
+    let fichaDocRes: any;
+    httpClient.get(`${environment.apiUrl}/coordinador/docentes/${docId}/ficha`).subscribe((r) => (fichaDocRes = r));
+    tick(300);
+    expect(fichaDocRes?.datos.historial.length).toBe(2);
+    expect(fichaDocRes?.datos.resumen.gruposVigentes).toBe(1);
+
     let toggleDocRes: any;
     httpClient.patch(`${environment.apiUrl}/coordinador/docentes/${docId}/toggle`, {}).subscribe((r) => (toggleDocRes = r));
     tick(250);
