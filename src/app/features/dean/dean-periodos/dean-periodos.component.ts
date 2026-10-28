@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { CoordinatorManagementService } from '../../../core/services/coordinator-management.service';
 import { PeriodoAcademicoItem } from '../../../core/models/role-management.model';
 import { BadgeComponent } from '../../../shared/components/badge/badge.component';
+import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
 
 @Component({
   selector: 'app-dean-periodos',
@@ -41,7 +42,7 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
             ← Resumen de Facultad
           </button>
           <span class="px-3.5 py-2 rounded-xl bg-warm-100 text-xs font-bold text-warm-800 border border-warm-200">
-            {{ periodos().length }} Períodos
+            {{ errorPeriodos() ? '—' : periodos().length }} Períodos
           </span>
         </div>
       </div>
@@ -61,7 +62,15 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
       </div>
 
       <!-- Grid de Períodos -->
-      @if (periodosFiltrados().length === 0) {
+      @if (errorPeriodos()) {
+        <div class="bg-white rounded-2xl border border-red-200 p-12 text-center shadow-warm-sm" role="alert">
+          <p class="text-sm font-semibold text-red-700">No fue posible cargar los períodos académicos.</p>
+          <p class="text-xs text-red-700 mt-1">{{ errorPeriodos() }}</p>
+          <button type="button" (click)="cargar()" class="mt-3 text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-200 hover:bg-red-50">
+            Reintentar
+          </button>
+        </div>
+      } @else if (periodosFiltrados().length === 0) {
         <div class="bg-white rounded-2xl border border-warm-200 p-12 text-center shadow-warm-sm">
           <p class="text-sm text-warm-500">No se encontraron períodos académicos registrados.</p>
         </div>
@@ -103,6 +112,8 @@ export class DeanPeriodosComponent implements OnInit {
 
   periodos = signal<PeriodoAcademicoItem[]>(this.coordService.periodos());
   filtroTexto = signal('');
+  /** Mensaje del último error HTTP; `null` si la última carga fue exitosa (aunque vacía). */
+  errorPeriodos = signal<string | null>(null);
 
   periodosFiltrados = computed(() => {
     const q = this.filtroTexto().toLowerCase().trim();
@@ -113,8 +124,17 @@ export class DeanPeriodosComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.cargar();
+  }
+
+  cargar(): void {
+    this.errorPeriodos.set(null);
     this.coordService.getPeriodosAcademicos().subscribe({
       next: (res) => this.periodos.set(res.datos || []),
+      error: (error: unknown) => {
+        this.periodos.set([]);
+        this.errorPeriodos.set(getApiErrorMessage(error));
+      },
     });
   }
 

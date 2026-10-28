@@ -124,4 +124,21 @@ describe('DeanEstudiantesComponent (HU104/HU105)', () => {
     expect(component.ficha()).toBeNull();
     expect(toastSpy.error).toHaveBeenCalled();
   });
+
+  // UX-11: la ficha aparece bajo la tabla; debe recibir foco y desplazarse hasta ella.
+  it('al abrir la ficha se desplaza hasta ella y le da foco', async () => {
+    component.verFicha(estudiante);
+    http.expectOne(`${BASE}/est-1`).flush({
+      exitoso: true,
+      datos: { idEstudiante: 'est-1', numeroIdentificacion: '1017000111', nombreCompleto: 'Ana Ruiz', activo: true, matriculas: [] },
+    });
+    fixture.detectChanges();
+    const panel = (fixture.nativeElement as HTMLElement).querySelector('[aria-label="Ficha del estudiante"]') as HTMLElement;
+    expect(panel).not.toBeNull();
+    const scroll = spyOn(panel, 'scrollIntoView');
+    const focus = spyOn(panel, 'focus');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(scroll).toHaveBeenCalled();
+    expect(focus).toHaveBeenCalled();
+  });
 });

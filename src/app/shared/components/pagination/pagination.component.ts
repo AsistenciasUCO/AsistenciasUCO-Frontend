@@ -31,7 +31,7 @@ import { CommonModule } from '@angular/common';
                 class="bg-warm-50 border border-warm-200 rounded-lg px-2 py-0.5 text-xs font-semibold text-warm-800 focus:outline-none focus:ring-1 focus:ring-primary-500"
               >
                 @for (opt of pageSizeOptions(); track opt) {
-                  <option [value]="opt">{{ opt }}</option>
+                  <option [value]="opt" [selected]="opt === pageSize()">{{ opt }}</option>
                 }
               </select>
             </div>

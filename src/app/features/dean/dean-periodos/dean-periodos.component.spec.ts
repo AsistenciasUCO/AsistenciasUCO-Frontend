@@ -60,3 +60,41 @@ describe('DeanPeriodosComponent', () => {
     expect(component.periodosFiltrados().length).toBe(1);
   });
 });
+
+
+// UX-09 / AUTH-03: un 403 o 500 de períodos no es «0 períodos».
+describe('DeanPeriodosComponent con errores HTTP', () => {
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [DeanPeriodosComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting(), { provide: Router, useValue: { navigate: () => Promise.resolve(true) } }],
+    });
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('muestra el error y permite reintentar en lugar de «No se encontraron períodos»', () => {
+    const fixture = TestBed.createComponent(DeanPeriodosComponent);
+    fixture.detectChanges();
+    http.expectOne(`${environment.apiUrl}/coordinador/periodos-academicos`).flush(
+      { exitoso: false, codigo: 'FORBIDDEN', mensajeUsuario: 'Acceso denegado.' },
+      { status: 403, statusText: 'Forbidden' }
+    );
+    fixture.detectChanges();
+
+    const text = (fixture.nativeElement as HTMLElement).textContent || '';
+    expect(fixture.componentInstance.errorPeriodos()).toBeTruthy();
+    expect(text).toContain('No fue posible cargar los períodos académicos.');
+    expect(text).not.toContain('No se encontraron períodos académicos registrados.');
+    expect(text).not.toContain('0 Períodos');
+
+    fixture.componentInstance.cargar();
+    http.expectOne(`${environment.apiUrl}/coordinador/periodos-academicos`).flush({ exitoso: true, datos: [] });
+    fixture.detectChanges();
+    expect(fixture.componentInstance.errorPeriodos()).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('No se encontraron períodos académicos registrados.');
+  });
+});

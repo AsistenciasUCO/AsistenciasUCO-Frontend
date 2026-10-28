@@ -40,17 +40,24 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
             ← Resumen de Facultad
           </button>
           <span class="px-3.5 py-2 rounded-xl bg-warm-100 text-xs font-bold text-warm-800 border border-warm-200">
-            {{ areas().length }} Áreas • {{ sedes().length }} Sedes
+            {{ areasTotal() }} Áreas • {{ sedesTotal() }} Sedes
           </span>
         </div>
       </div>
+
+      @if (errorAreas() || errorSedes()) {
+        <div class="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-800" role="alert">
+          <p class="font-semibold">No fue posible cargar: {{ errorAreas() ? 'áreas' : '' }}{{ errorAreas() && errorSedes() ? ' y ' : '' }}{{ errorSedes() ? 'sedes' : '' }}.</p>
+          <p class="mt-1">Los totales afectados muestran «—». No equivalen a cero registros.</p>
+        </div>
+      }
 
       <!-- KPIs Bento -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div class="p-4 rounded-2xl bg-white border border-warm-200 shadow-warm-sm flex items-center justify-between">
           <div>
             <span class="text-xs text-warm-500 font-medium">Áreas de Conocimiento</span>
-            <p class="text-2xl font-serif font-bold text-warm-900">{{ areas().length }}</p>
+            <p class="text-2xl font-serif font-bold text-warm-900">{{ areasTotal() }}</p>
           </div>
           <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center shrink-0">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -62,7 +69,7 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
         <div class="p-4 rounded-2xl bg-white border border-warm-200 shadow-warm-sm flex items-center justify-between">
           <div>
             <span class="text-xs text-warm-500 font-medium">Sedes Operativas</span>
-            <p class="text-2xl font-serif font-bold text-emerald-700">{{ sedes().length }}</p>
+            <p class="text-2xl font-serif font-bold text-emerald-700">{{ sedesTotal() }}</p>
           </div>
           <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -74,7 +81,8 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
         <div class="p-4 rounded-2xl bg-white border border-warm-200 shadow-warm-sm flex items-center justify-between">
           <div>
             <span class="text-xs text-warm-500 font-medium">Espacios Físicos</span>
-            <p class="text-2xl font-serif font-bold text-primary-800">{{ espacios().length }}</p>
+            <p class="text-2xl font-serif font-bold text-primary-800">—</p>
+            <span class="text-[11px] text-warm-500">Sin consulta de lectura para la decanatura</span>
           </div>
           <div class="w-11 h-11 rounded-xl bg-accent-100 text-accent-800 flex items-center justify-center shrink-0">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -101,7 +109,11 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
       <!-- Áreas de Conocimiento -->
       <div>
         <h2 class="font-serif font-bold text-lg text-warm-900 mb-3">Áreas Temáticas y de Conocimiento</h2>
-        @if (areasFiltradas().length === 0) {
+        @if (errorAreas()) {
+          <div class="bg-white rounded-2xl border border-red-200 p-8 text-center shadow-warm-sm" role="alert">
+            <p class="text-sm text-red-700">No fue posible cargar las áreas de conocimiento.</p>
+          </div>
+        } @else if (areasFiltradas().length === 0) {
           <div class="bg-white rounded-2xl border border-warm-200 p-8 text-center shadow-warm-sm">
             <p class="text-sm text-warm-500">No se encontraron áreas de conocimiento.</p>
           </div>
@@ -127,7 +139,11 @@ import { BadgeComponent } from '../../../shared/components/badge/badge.component
       <!-- Sedes y Campus Operativos -->
       <div>
         <h2 class="font-serif font-bold text-lg text-warm-900 mb-3">Sedes Universitarias donde Opera la Facultad</h2>
-        @if (sedesFiltradas().length === 0) {
+        @if (errorSedes()) {
+          <div class="bg-white rounded-2xl border border-red-200 p-8 text-center shadow-warm-sm" role="alert">
+            <p class="text-sm text-red-700">No fue posible cargar las sedes.</p>
+          </div>
+        } @else if (sedesFiltradas().length === 0) {
           <div class="bg-white rounded-2xl border border-warm-200 p-8 text-center shadow-warm-sm">
             <p class="text-sm text-warm-500">No se encontraron sedes registradas.</p>
           </div>
@@ -160,7 +176,12 @@ export class DeanInfraestructuraComponent implements OnInit {
 
   areas = this.adminService.areas;
   sedes = this.adminService.sedes;
-  espacios = this.adminService.espacios;
+
+  /** Un error HTTP (403/501/500) no es «0 registros»: se conserva aparte para mostrar «—» y un aviso. */
+  errorAreas = signal(false);
+  errorSedes = signal(false);
+  areasTotal = computed(() => (this.errorAreas() ? '—' : String(this.areas().length)));
+  sedesTotal = computed(() => (this.errorSedes() ? '—' : String(this.sedes().length)));
 
   filtroTexto = signal('');
 
@@ -186,8 +207,8 @@ export class DeanInfraestructuraComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    this.adminService.cargarAreas().subscribe();
-    this.adminService.cargarSedes().subscribe();
+    this.adminService.cargarAreas().subscribe({ error: () => this.errorAreas.set(true) });
+    this.adminService.cargarSedes().subscribe({ error: () => this.errorSedes.set(true) });
   }
 
   volverAFacultad(): void {

@@ -25,12 +25,12 @@ import { CoordinadorItem } from '../../../../core/models/role-management.model';
         <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
           <span class="text-xs text-warm-500 font-medium">Docentes de Facultad</span>
           <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ totalDocentes() }}</p>
-          <span class="text-[11px] text-warm-500 font-medium">Planta vinculada</span>
+          <span class="text-[11px] text-warm-500 font-medium">Asignados a los coordinadores</span>
         </div>
         <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
           <span class="text-xs text-warm-500 font-medium">Grupos en Curso</span>
-          <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ totalGrupos() }}</p>
-          <span class="text-[11px] text-warm-500 font-medium">Semestre 2026-II</span>
+          <p class="text-2xl font-serif font-bold text-warm-900 mt-1">{{ totalGrupos() ?? '—' }}</p>
+          <span class="text-[11px] text-warm-500 font-medium">{{ periodo() ?? 'Sin período vigente' }}</span>
         </div>
         <div class="bg-white p-5 rounded-2xl border border-warm-200 shadow-warm-sm flex flex-col justify-between h-full min-h-[120px]">
           <span class="text-xs text-warm-500 font-medium">Asistencia Promedio</span>
@@ -94,6 +94,9 @@ import { CoordinadorItem } from '../../../../core/models/role-management.model';
 export class OverviewDeanComponent {
   coordinadores = input<CoordinadorItem[]>([]);
   totalDocentes = input<number>(0);
-  totalGrupos = input<number>(0);
+  /** Grupos activos del período vigente (GET /decano/indicadores); `null` si la consulta no está disponible. */
+  totalGrupos = input<number | null>(null);
+  /** Nombre del período al que corresponden los indicadores. */
+  periodo = input<string | null>(null);
   porcentajeAsistencia = input<number | null>(null);
 }

@@ -90,7 +90,8 @@ import { OverviewStudentComponent } from './components/overview-student.componen
           <app-overview-dean
             [coordinadores]="coordinadores()"
             [totalDocentes]="totalDocentesFacultad()"
-            [totalGrupos]="totalGruposFacultad()"
+            [totalGrupos]="gruposActivosFacultad()"
+            [periodo]="periodoFacultad()"
             [porcentajeAsistencia]="porcentajeAsistenciaFacultad()"
           />
         }
@@ -165,9 +166,12 @@ export class OverviewComponent implements OnInit {
   totalDocentesFacultad = computed<number>(() => {
     return this.coordinadores().reduce((acc, c) => acc + (c.totalDocentes || 0), 0);
   });
-  totalGruposFacultad = computed<number>(() => {
-    return this.coordinadores().reduce((acc, c) => acc + (c.totalGrupos || 0), 0);
-  });
+  /**
+   * DASH-13: «Grupos en curso» sale de los indicadores de la facultad (grupos activos del período vigente) y no de la
+   * suma por coordinador, que daba 0 cuando el coordinador no tenía grupos propios aunque la facultad sí.
+   */
+  gruposActivosFacultad = signal<number | null>(null);
+  periodoFacultad = signal<string | null>(null);
 
   // Datos Coordinador
   docentes = signal<DocenteItem[]>([]);
@@ -212,8 +216,16 @@ export class OverviewComponent implements OnInit {
 
       case 'DECANO':
         this.deanIndicators.consultarKpis().subscribe({
-          next: (res) => this.porcentajeAsistenciaFacultad.set(res.datos?.porcentajeAsistencia ?? null),
-          error: () => this.porcentajeAsistenciaFacultad.set(null),
+          next: (res) => {
+            this.porcentajeAsistenciaFacultad.set(res.datos?.porcentajeAsistencia ?? null);
+            this.gruposActivosFacultad.set(res.datos?.gruposActivos ?? null);
+            this.periodoFacultad.set(res.datos?.nombrePeriodoAcademico ?? null);
+          },
+          error: () => {
+            this.porcentajeAsistenciaFacultad.set(null);
+            this.gruposActivosFacultad.set(null);
+            this.periodoFacultad.set(null);
+          },
         });
         this.deanService.getCoordinadores().subscribe({
           next: (res) => {

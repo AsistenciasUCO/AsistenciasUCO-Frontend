@@ -103,8 +103,9 @@ describe('AdminFacultadesComponent', () => {
     component = fixture.componentInstance;
   });
   const flushCoordinatorCatalogs = () => {
-    http.expectOne(`${environment.apiUrl}/coordinador/planes-estudio`).flush({ exitoso: true, datos: [] });
-    http.expectOne(`${environment.apiUrl}/coordinador/periodos-academicos`).flush({ exitoso: true, datos: [] });
+    // ADM-16: el administrador no consulta rutas de coordinador (planes-estudio responde 403 sin alcance de programa).
+    http.expectNone(`${environment.apiUrl}/coordinador/planes-estudio`);
+    http.expectNone(`${environment.apiUrl}/coordinador/periodos-academicos`);
   };
 
   afterEach(() => {

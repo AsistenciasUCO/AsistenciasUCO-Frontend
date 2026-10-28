@@ -91,4 +91,19 @@ describe('PaginationComponent', () => {
     component.onPageSizeChange(mockEvent);
     expect(newSize).toBe(25);
   });
+
+  // UX-10: el selector debe reflejar el pageSize real (antes mostraba 5 mientras la consulta enviaba tamano=10).
+  it('el selector de tamaño muestra el pageSize actual y no la primera opción', () => {
+    fixture.componentRef.setInput('totalItems', 5002);
+    fixture.componentRef.setInput('pageSize', 10);
+    fixture.componentRef.setInput('currentPage', 1);
+    fixture.detectChanges();
+    const select = (fixture.nativeElement as HTMLElement).querySelector('select') as HTMLSelectElement;
+    expect(select).not.toBeNull();
+    expect(select.value).toBe('10');
+
+    fixture.componentRef.setInput('pageSize', 20);
+    fixture.detectChanges();
+    expect(select.value).toBe('20');
+  });
 });

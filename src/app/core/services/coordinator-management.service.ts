@@ -132,6 +132,14 @@ export class CoordinatorManagementService {
     this.getPeriodosAcademicos().subscribe({ error: () => undefined });
   }
 
+  /**
+   * Solo periodos academicos (GET /coordinador/periodos-academicos, lectura compartida). Para el ADMINISTRADOR:
+   * /coordinador/planes-estudio exige alcance de programa o facultad y le responde 403 (ADM-16).
+   */
+  cargarPeriodosAcademicosBase(): void {
+    this.getPeriodosAcademicos().subscribe({ error: () => undefined });
+  }
+
   // --- DOCENTES DEL PROGRAMA (HU062/HU063/HU089/HU090/HU091) ---
   getDocentesPrograma(filtro: DocentesProgramaFiltro): Observable<ApiResponse<DocentePrograma[]>> {
     let params = new HttpParams().set('pagina', filtro.pagina).set('tamano', filtro.tamano);

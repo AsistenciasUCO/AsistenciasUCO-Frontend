@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ElementRef, OnInit, inject, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DeanFacultadService } from '../../../core/services/dean-facultad.service';
@@ -105,7 +105,13 @@ type FiltroEstado = 'TODOS' | 'ACTIVO' | 'INACTIVO';
       </section>
 
       @if (ficha(); as f) {
-        <section class="bg-white p-6 rounded-2xl border border-warm-200 shadow-warm-sm space-y-4">
+        <section
+          #fichaPanel
+          tabindex="-1"
+          role="region"
+          aria-label="Ficha del estudiante"
+          class="bg-white p-6 rounded-2xl border border-warm-200 shadow-warm-sm space-y-4 outline-none focus:ring-2 focus:ring-primary-500/30"
+        >
           <div class="flex items-start justify-between gap-3">
             <div>
               <h2 class="font-serif font-bold text-lg text-warm-900">{{ f.nombreCompleto }}</h2>
@@ -152,6 +158,7 @@ export class DeanEstudiantesComponent implements OnInit {
   busqueda = signal('');
   estado = signal<FiltroEstado>('TODOS');
   ficha = signal<FichaEstudianteFacultad | null>(null);
+  private readonly fichaPanel = viewChild<ElementRef<HTMLElement>>('fichaPanel');
 
   ngOnInit(): void {
     this.cargar();
@@ -179,11 +186,25 @@ export class DeanEstudiantesComponent implements OnInit {
 
   verFicha(estudiante: EstudianteFacultadItem): void {
     this.service.getFichaEstudiante(estudiante.idEstudiante).subscribe({
-      next: (res) => this.ficha.set(res.datos ?? null),
+      next: (res) => {
+        this.ficha.set(res.datos ?? null);
+        this.enfocarFicha();
+      },
       error: (error: unknown) => {
         this.ficha.set(null);
         this.toast.error(getApiErrorMessage(error));
       },
+    });
+  }
+
+  /** UX-11: la ficha se abre bajo la tabla; se desplaza hasta ella y se enfoca para lectores de pantalla. */
+  private enfocarFicha(): void {
+    setTimeout(() => {
+      const panel = this.fichaPanel()?.nativeElement;
+      if (panel) {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        panel.focus({ preventScroll: true });
+      }
     });
   }
 
