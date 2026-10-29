@@ -14,6 +14,7 @@ import { AccountAccessStatusComponent } from '../../../shared/components/account
 import { getApiErrorMessage } from '../../../core/api/errors/api-error.util';
 import { parseIdentificationNumber, validateInstitutionalEmail } from '../../../core/validation/request-form-validation.util';
 import { SessionTimeZoneService } from '../../../core/services/session-timezone.service';
+import { finalize } from 'rxjs';
 
 type VistaAdmin = 'LISTA' | 'REGISTRO';
 
@@ -343,7 +344,7 @@ type VistaAdmin = 'LISTA' | 'REGISTRO';
               <app-button variant="secondary" size="md" type="button" (clicked)="volverALista()">
                 Cancelar
               </app-button>
-              <app-button variant="primary" size="md" type="submit" [disabled]="!formData.primerNombre || !formData.primerApellido || !formData.correo || !formData.numeroIdentificacion">
+              <app-button variant="primary" size="md" type="submit" [loading]="isSubmitting()" [disabled]="!formData.primerNombre || !formData.primerApellido || !formData.correo || !formData.numeroIdentificacion">
                 Guardar Decano
               </app-button>
             </div>
@@ -378,8 +379,10 @@ export class AdminDecanosComponent implements OnInit {
   tiposIdentificacion = signal<TipoIdentificacionItem[]>([]);
   facultades = signal<FacultadItem[]>([]);
   isLoading = signal<boolean>(true);
+  isSubmitting = signal<boolean>(false);
   searchQuery = '';
   selectedEstado = 'TODOS';
+  private decanosRequestVersion = 0;
 
   formData: Omit<DecanoItem, 'id'> & { password?: string } = {
     tipoIdentificacionId: 'A1B2C3D4-0000-0000-0000-000000000001',
@@ -464,14 +467,27 @@ export class AdminDecanosComponent implements OnInit {
     }
   }
 
-  cargarDecanos(): void {
+  cargarDecanos(identidadEsperada?: { numeroIdentificacion: string; correo: string }): void {
+    const requestVersion = ++this.decanosRequestVersion;
     this.isLoading.set(true);
     this.adminService.getDecanos().subscribe({
       next: (res) => {
-        this.decanos.set(res.datos || []);
+        if (requestVersion !== this.decanosRequestVersion) {
+          return;
+        }
+        const datos = res.datos || [];
+        this.decanos.set(datos);
         this.isLoading.set(false);
+        if (identidadEsperada && !datos.some((decano) =>
+          String(decano.numeroIdentificacion) === identidadEsperada.numeroIdentificacion
+          || decano.correo?.trim().toLowerCase() === identidadEsperada.correo.toLowerCase())) {
+          this.toast.warning('El backend confirmó el registro, pero la lista aún no devuelve la persona. No repita el alta; verifique el estado de acceso.');
+        }
       },
       error: () => {
+        if (requestVersion !== this.decanosRequestVersion) {
+          return;
+        }
         this.isLoading.set(false);
         this.toast.error('Error al cargar la lista de decanos.');
       },
@@ -524,6 +540,9 @@ export class AdminDecanosComponent implements OnInit {
   }
 
   guardarDecano(): void {
+    if (this.isSubmitting()) {
+      return;
+    }
     if (!this.formData.tipoIdentificacionId) {
       this.toast.warning('El campo Tipo de Documento es obligatorio.');
       return;
@@ -592,12 +611,13 @@ export class AdminDecanosComponent implements OnInit {
       idFacultad: null,
     };
 
-    this.adminService.createDecano(payload).subscribe({
+    this.isSubmitting.set(true);
+    this.adminService.createDecano(payload).pipe(finalize(() => this.isSubmitting.set(false))).subscribe({
       next: (res) => {
         if (res.exitoso) {
           this.toast.success(res.mensajeUsuario || 'Decano registrado exitosamente.');
           this.ultimaCuentaRegistrada.set(payload.correo);
-          this.cargarDecanos();
+          this.cargarDecanos({ numeroIdentificacion: String(payload.numeroIdentificacion), correo: payload.correo });
           this.cargarFacultades();
           this.volverALista();
         }
